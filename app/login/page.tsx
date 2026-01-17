@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
-import { Heart, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react"
+import { Heart, Mail, Lock, Eye, EyeOff, ArrowRight, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,10 +13,20 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [selectedRole, setSelectedRole] = useState<"admin" | "health-worker" | "researcher" | null>(null)
+  const [loginSuccess, setLoginSuccess] = useState(false)
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
-    // Handle login logic
+    if (!selectedRole) {
+      alert("Please select a role to continue")
+      return
+    }
+    setLoginSuccess(true)
+    setTimeout(() => {
+      // Handle navigation based on role
+      console.log(`[v0] Logging in as ${selectedRole} with email ${email}`)
+    }, 2000)
   }
 
   return (
@@ -39,90 +49,116 @@ export default function LoginPage() {
 
         {/* Glass Container */}
         <div className="glass-lg space-y-6 p-8">
-          <div className="space-y-2 text-center">
-            <h1 className="text-3xl font-bold text-foreground">Welcome Back</h1>
-            <p className="text-muted-foreground">Sign in to your healthcare dashboard</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            {/* Email Field */}
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-foreground">
-                Email
-              </Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="health.worker@clinic.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 glass-sm border-white/10 bg-white/10"
-                />
+          {!loginSuccess ? (
+            <>
+              <div className="space-y-2 text-center">
+                <h1 className="text-3xl font-bold text-foreground">Welcome Back</h1>
+                <p className="text-muted-foreground">Sign in to your healthcare dashboard</p>
               </div>
-            </div>
 
-            {/* Password Field */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-foreground">
-                  Password
-                </Label>
-                <Link href="/forgot-password" className="text-xs text-primary hover:text-accent transition-colors">
-                  Forgot?
-                </Link>
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10 glass-sm border-white/10 bg-white/10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-muted-foreground hover:text-foreground transition-colors"
+              <form onSubmit={handleLogin} className="space-y-4">
+                {/* Email Field */}
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-foreground">
+                    Email
+                  </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="health.worker@clinic.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10 glass-sm border-white/10 bg-white/10"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Password Field */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password" className="text-foreground">
+                      Password
+                    </Label>
+                    <Link href="/forgot-password" className="text-xs text-primary hover:text-accent transition-colors">
+                      Forgot?
+                    </Link>
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-10 pr-10 glass-sm border-white/10 bg-white/10"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-2">
+                  <p className="text-sm font-medium text-foreground">Select your role:</p>
+                  <div className="flex gap-2">
+                    {[
+                      { id: "admin", label: "Admin", description: "System administrator" },
+                      { id: "health-worker", label: "Health Worker", description: "Clinical staff" },
+                      { id: "researcher", label: "Researcher", description: "Data analysis" },
+                    ].map((role) => (
+                      <button
+                        key={role.id}
+                        type="button"
+                        onClick={() => setSelectedRole(role.id as typeof selectedRole)}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                          selectedRole === role.id
+                            ? "bg-primary text-white shadow-lg shadow-primary/30"
+                            : "glass-sm border-white/10 bg-white/10 text-foreground hover:bg-white/20"
+                        }`}
+                      >
+                        <div className="text-xs">{role.label}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white font-semibold py-2 rounded-lg flex items-center justify-center gap-2 group"
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
+                  Sign In
+                  <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              </form>
+            </>
+          ) : (
+            <>
+              <div className="space-y-4 text-center py-8">
+                <CheckCircle className="h-16 w-16 text-primary mx-auto animate-bounce" />
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold text-foreground">
+                    Welcome, {selectedRole?.replace("-", " ").charAt(0).toUpperCase() + selectedRole?.substring(1)}!
+                  </h2>
+                  <p className="text-muted-foreground">Redirecting to your dashboard...</p>
+                </div>
               </div>
-            </div>
+            </>
+          )}
 
-            <Button
-              type="submit"
-              className="w-full bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-white font-semibold py-2 rounded-lg flex items-center justify-center gap-2 group"
-            >
-              Sign In
-              <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-            </Button>
-          </form>
-
-          {/* Role Selection */}
-          <div className="space-y-2 pt-4">
-            <p className="text-sm text-muted-foreground text-center">Login as:</p>
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1 glass-sm border-white/10 bg-transparent">
-                Admin
-              </Button>
-              <Button variant="outline" className="flex-1 glass-sm border-white/10 bg-transparent">
-                Health Worker
-              </Button>
-              <Button variant="outline" className="flex-1 glass-sm border-white/10 bg-transparent">
-                Researcher
-              </Button>
-            </div>
-          </div>
+          {/* Footer */}
+          <p className="text-center text-xs text-muted-foreground">
+            Demo credentials: admin@biotrack.com | health.worker@clinic.com | researcher@study.com
+          </p>
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-sm text-muted-foreground">
-          Demo credentials available for testing. Contact admin for access.
-        </p>
       </div>
     </div>
   )
