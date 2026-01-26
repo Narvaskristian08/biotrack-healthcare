@@ -1,6 +1,17 @@
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+### Clone the repository
+
+```bash
+git clone https://github.com/dev-jsc0f1eld/biotrack-healthcare.git
+cd biotrack-healthcare
+```
+
+### Checkout mobile branch
+
+```bash
+git checkout mobile
+```
 
 A few resources to get you started if this is your first Flutter project:
 
