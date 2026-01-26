@@ -1,0 +1,27 @@
+{
+  "name": "biotrack-healthcare",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dev-jsc0f1eld/biotrack-healthcare.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/dev-jsc0f1eld/biotrack-healthcare/issues"
+  },
+  "homepage": "https://github.com/dev-jsc0f1eld/biotrack-healthcare#readme",
+  "dependencies": {
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
