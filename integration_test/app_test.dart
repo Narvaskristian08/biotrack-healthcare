@@ -12,7 +12,7 @@ import 'package:biotrack_healthcare/main.dart';
 void main() {
   testWidgets('Login and navigate to Scan screen', (WidgetTester tester) async {
     // Build the app and trigger the first frame.
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(const BioTrackApp());
 
     // Verify that the login screen appears.
     expect(find.text('Login'), findsOneWidget);
