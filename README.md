@@ -20,7 +20,6 @@
 - **core/**: App-wide infrastructure, configuration, services, and routing.
 - **common/**: Shared widgets, models, and extensions reused across features.
 - **features/**: Feature-based modules following clean architecture.
-- **l10n/**: Localization files for internationalization.
 - **main.dart**: Main entry point that initializes the app, routing, themes, and providers.
 
 ### lib/common/
