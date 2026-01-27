@@ -1,9 +1,5 @@
 ## Getting Started
 
-### root
-- **.env**: Stores environment variables (API keys, secrets).
-- **.gitignore**: Specifies files and folders Git should ignore.
-
 ### src/
 - **config/**: Configuration files including database, blockchain, and environment-specific settings.  
 - **controllers/**: Handles incoming HTTP requests and sends responses. Keep controllers thin, delegate logic to services.
@@ -13,6 +9,10 @@
 - **services/**: Business logic including AI, blockchain integration, and analytics.  
 - **utils/**: Generic helper functions used across the project.  
 - **index.js**: Main entry point that initializes the server and connects middleware and routes.
+
+### root
+- **.env**: Stores environment variables (API keys, secrets).
+- **.gitignore**: Specifies files and folders Git should ignore.
 
 ## Quick Setup 
 
