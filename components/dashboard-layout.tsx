@@ -26,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import RoleSelector from '@/components/role-selector'
 
 const navigationItems = [
   { label: 'Dashboard', href: '/', icon: Home },
@@ -84,7 +85,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="border-t border-border p-4 space-y-3">
+          <SidebarFooter className="border-t border-border p-4 space-y-4">
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
@@ -95,7 +96,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
-            <Button variant="outline" className="w-full justify-start bg-transparent">
+            <Button variant="outline" className="w-full justify-start bg-transparent h-10">
               <LogOut className="h-4 w-4 mr-2" />
               Logout
             </Button>
@@ -126,6 +127,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
               {/* Right Section */}
               <div className="flex items-center gap-4">
+                {/* Role Selector */}
+                <div className="hidden md:block">
+                  <RoleSelector />
+                </div>
+
                 {/* Notifications */}
                 <Button variant="ghost" size="icon" className="relative">
                   <Bell className="h-5 w-5" />
