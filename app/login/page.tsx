@@ -1,163 +1,216 @@
-"use client"
+'use client'
 
-import type React from "react"
-
-import { useState } from "react"
-import { Heart, Mail, Lock, Eye, EyeOff, ArrowRight, CheckCircle } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import Link from "next/link"
+import { useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { Heart, Mail, Lock, ArrowRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 
 export default function LoginPage() {
-  const [showPassword, setShowPassword] = useState(false)
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [selectedRole, setSelectedRole] = useState<"admin" | "health-worker" | "researcher" | null>(null)
-  const [loginSuccess, setLoginSuccess] = useState(false)
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  })
+  const [error, setError] = useState('')
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedRole) {
-      alert("Please select a role to continue")
-      return
+    setError('')
+    setIsLoading(true)
+
+    // Simulate API call
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Demo: Accept any credentials for testing
+    if (formData.email && formData.password) {
+      // Determine role based on email pattern (for demo)
+      const role = formData.email.includes('provider')
+        ? 'provider'
+        : formData.email.includes('admin')
+          ? 'admin'
+          : 'patient'
+
+      // Store session info
+      localStorage.setItem('userSession', JSON.stringify({
+        email: formData.email,
+        role: role,
+        loginTime: new Date(),
+      }))
+
+      router.push('/')
+    } else {
+      setError('Please enter both email and password')
+      setIsLoading(false)
     }
-    setLoginSuccess(true)
-    setTimeout(() => {
-      // Handle navigation based on role
-      console.log(`[v0] Logging in as ${selectedRole} with email ${email}`)
-    }, 2000)
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4 overflow-hidden relative">
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-0 -left-40 w-80 h-80 bg-primary/20 rounded-full blur-3xl opacity-50 animate-pulse"></div>
-        <div className="absolute bottom-0 -right-40 w-80 h-80 bg-secondary/20 rounded-full blur-3xl opacity-50 animate-pulse"></div>
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 flex items-center justify-center p-4">
+      {/* Background decoration */}
+      <div className="fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute top-20 right-20 w-72 h-72 bg-primary/20 rounded-full blur-3xl opacity-50" />
+        <div className="absolute bottom-40 left-20 w-72 h-72 bg-accent/20 rounded-full blur-3xl opacity-50" />
       </div>
 
-      <div className="relative z-10 w-full max-w-md space-y-8">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-12 h-12 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center">
-            <Heart className="h-6 w-6 text-white" />
+      <div className="w-full max-w-md">
+        {/* Logo Section */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center shadow-lg">
+              <Heart className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                BioTrack
+              </h1>
+              <p className="text-xs text-muted-foreground">Healthcare Platform</p>
+            </div>
           </div>
-          <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            BioTrack
-          </span>
         </div>
 
-        {/* Glass Container */}
-        <div className="glass-lg space-y-6 p-8">
-          {!loginSuccess ? (
-            <>
-              <div className="space-y-2 text-center">
-                <h1 className="text-3xl font-bold text-foreground">Welcome Back</h1>
-                <p className="text-muted-foreground">Sign in to your healthcare dashboard</p>
+        {/* Login Card */}
+        <Card className="glass glow-green border-border/50 backdrop-blur-sm">
+          <CardHeader className="space-y-2">
+            <CardTitle className="text-2xl">Welcome Back</CardTitle>
+            <CardDescription>
+              Sign in to your account to access your health dashboard
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent>
+            {error && (
+              <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Email Field */}
+              <div className="space-y-2">
+                <Label htmlFor="email">Email or Username</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="your@email.com"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="pl-10"
+                    required
+                  />
+                </div>
               </div>
 
-              <form onSubmit={handleLogin} className="space-y-4">
-                {/* Email Field */}
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-foreground">
-                    Email
-                  </Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="health.worker@clinic.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 glass-sm border-white/10 bg-white/10"
-                      required
-                    />
-                  </div>
+              {/* Password Field */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Forgot?
+                  </Link>
                 </div>
-
-                {/* Password Field */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password" className="text-foreground">
-                      Password
-                    </Label>
-                    <Link href="/forgot-password" className="text-xs text-primary hover:text-accent transition-colors">
-                      Forgot?
-                    </Link>
-                  </div>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 pr-10 glass-sm border-white/10 bg-white/10"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-3 text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-3 pt-2">
-                  <p className="text-sm font-medium text-foreground">Select your role:</p>
-                  <div className="flex gap-2">
-                    {[
-                      { id: "admin", label: "Admin", description: "System administrator" },
-                      { id: "health-worker", label: "Health Worker", description: "Clinical staff" },
-                      { id: "researcher", label: "Researcher", description: "Data analysis" },
-                    ].map((role) => (
-                      <button
-                        key={role.id}
-                        type="button"
-                        onClick={() => setSelectedRole(role.id as typeof selectedRole)}
-                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                          selectedRole === role.id
-                            ? "bg-primary text-white shadow-lg shadow-primary/30"
-                            : "glass-sm border-white/10 bg-white/10 text-foreground hover:bg-white/20"
-                        }`}
-                      >
-                        <div className="text-xs">{role.label}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white font-semibold py-2 rounded-lg flex items-center justify-center gap-2 group"
-                >
-                  Sign In
-                  <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              </form>
-            </>
-          ) : (
-            <>
-              <div className="space-y-4 text-center py-8">
-                <CheckCircle className="h-16 w-16 text-primary mx-auto animate-bounce" />
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-bold text-foreground">
-                    Welcome, {selectedRole?.replace("-", " ").charAt(0).toUpperCase() + selectedRole?.substring(1)}!
-                  </h2>
-                  <p className="text-muted-foreground">Redirecting to your dashboard...</p>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="pl-10"
+                    required
+                  />
                 </div>
               </div>
-            </>
-          )}
 
-          {/* Footer */}
-          <p className="text-center text-xs text-muted-foreground">
-            Demo credentials: admin@biotrack.com | health.worker@clinic.com | researcher@study.com
+              {/* Demo Credentials Hint */}
+              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs text-muted-foreground">
+                <p className="font-semibold mb-1">Demo Credentials:</p>
+                <ul className="space-y-1">
+                  <li>• Patient: patient@example.com</li>
+                  <li>• Provider: provider@example.com</li>
+                  <li>• Password: any password</li>
+                </ul>
+              </div>
+
+              {/* Submit Button */}
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full gap-2"
+              >
+                {isLoading ? 'Signing in...' : 'Sign In'}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </form>
+
+            {/* Divider */}
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">Or</span>
+              </div>
+            </div>
+
+            {/* Social Login Buttons */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              <Button variant="outline" disabled>
+                Google
+              </Button>
+              <Button variant="outline" disabled>
+                Apple
+              </Button>
+            </div>
+
+            {/* Register Link */}
+            <p className="text-center text-sm text-muted-foreground">
+              Don't have an account?{' '}
+              <Link href="/register" className="text-primary hover:underline font-medium">
+                Create account
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Footer */}
+        <div className="mt-6 text-center text-xs text-muted-foreground space-y-2">
+          <p>
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('openPolicy', { detail: { mode: 'privacy' } }))}
+              className="hover:underline"
+            >
+              Privacy Policy
+            </button>
+            {' • '}
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('openPolicy', { detail: { mode: 'terms' } }))}
+              className="hover:underline"
+            >
+              Terms of Service
+            </button>
           </p>
+          <p>© 2026 BioTrack. All rights reserved.</p>
         </div>
       </div>
     </div>

@@ -1,207 +1,280 @@
-"use client"
+'use client'
 
-import type React from "react"
-
-import { useState } from "react"
-import { Heart, Mail, ArrowLeft, CheckCircle } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import Link from "next/link"
+import { useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { Heart, Mail, ArrowRight, ArrowLeft } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("")
-  const [submitted, setSubmitted] = useState(false)
-  const [resetCode, setResetCode] = useState("")
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [stage, setStage] = useState<"email" | "verify" | "reset" | "complete">("email")
+  const router = useRouter()
+  const [step, setStep] = useState<'email' | 'verify' | 'reset'>('email')
+  const [isLoading, setIsLoading] = useState(false)
+  const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
+  const [formData, setFormData] = useState({
+    password: '',
+    confirmPassword: '',
+  })
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setStage("verify")
-  }
+    setError('')
 
-  const handleVerifySubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setStage("reset")
-  }
-
-  const handleResetSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (newPassword !== confirmPassword) {
-      alert("Passwords do not match")
+    if (!email.includes('@')) {
+      setError('Please enter a valid email address')
       return
     }
-    setStage("complete")
+
+    setIsLoading(true)
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    setIsLoading(false)
+
+    // Demo: always show verification step
+    setSuccess('Verification code sent to your email')
+    setStep('verify')
+  }
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+
+    if (!code || code.length !== 6) {
+      setError('Please enter a valid 6-digit code')
+      return
+    }
+
+    setIsLoading(true)
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    setIsLoading(false)
+
+    // Demo: any 6-digit code works
+    setSuccess('Code verified successfully')
+    setStep('reset')
+  }
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+
+    if (!formData.password || !formData.confirmPassword) {
+      setError('Please enter password')
+      return
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters')
+      return
+    }
+
+    setIsLoading(true)
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Password reset successful
+    router.push('/login?reset=success')
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4 overflow-hidden relative">
-      {/* Background gradient */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-0 -left-40 w-80 h-80 bg-primary/20 rounded-full blur-3xl opacity-50 animate-pulse"></div>
-        <div className="absolute bottom-0 -right-40 w-80 h-80 bg-secondary/20 rounded-full blur-3xl opacity-50 animate-pulse"></div>
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 flex items-center justify-center p-4">
+      {/* Background decoration */}
+      <div className="fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute top-20 right-20 w-72 h-72 bg-primary/20 rounded-full blur-3xl opacity-50" />
+        <div className="absolute bottom-40 left-20 w-72 h-72 bg-accent/20 rounded-full blur-3xl opacity-50" />
       </div>
 
-      <div className="relative z-10 w-full max-w-md space-y-8">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-12 h-12 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center">
-            <Heart className="h-6 w-6 text-white" />
+      <div className="w-full max-w-md">
+        {/* Logo Section */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center shadow-lg">
+              <Heart className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                BioTrack
+              </h1>
+              <p className="text-xs text-muted-foreground">Healthcare Platform</p>
+            </div>
           </div>
-          <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            BioTrack
-          </span>
         </div>
 
-        {/* Glass Container */}
-        <div className="glass-lg space-y-6 p-8">
-          {stage === "email" && (
-            <>
-              <div className="space-y-2 text-center">
-                <h1 className="text-3xl font-bold text-foreground">Reset Password</h1>
-                <p className="text-muted-foreground">Enter your email to receive reset instructions</p>
-              </div>
+        {/* Forgot Password Card */}
+        <Card className="glass glow-green border-border/50 backdrop-blur-sm">
+          <CardHeader className="space-y-2">
+            <CardTitle className="text-2xl">Reset Password</CardTitle>
+            <CardDescription>
+              {step === 'email'
+                ? 'Enter your email to receive a verification code'
+                : step === 'verify'
+                  ? 'Enter the code sent to your email'
+                  : 'Create your new password'}
+            </CardDescription>
+          </CardHeader>
 
+          <CardContent>
+            {error && (
+              <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-sm text-green-600">
+                {success}
+              </div>
+            )}
+
+            {/* Step 1: Email */}
+            {step === 'email' && (
               <form onSubmit={handleEmailSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-foreground">
-                    Email Address
-                  </Label>
+                  <Label htmlFor="email">Email Address</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="email"
                       type="email"
-                      placeholder="your.email@clinic.com"
+                      placeholder="your@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 glass-sm border-white/10 bg-white/10"
+                      className="pl-10"
                       required
                     />
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    We'll send a verification code to this email address
+                  </p>
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white font-semibold py-2 rounded-lg"
-                >
-                  Send Reset Link
+                <Button type="submit" disabled={isLoading} className="w-full gap-2">
+                  {isLoading ? 'Sending...' : 'Send Code'}
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
               </form>
-            </>
-          )}
+            )}
 
-          {stage === "verify" && (
-            <>
-              <div className="space-y-2 text-center">
-                <h1 className="text-3xl font-bold text-foreground">Verify Email</h1>
-                <p className="text-muted-foreground">Enter the verification code sent to {email}</p>
-              </div>
-
-              <form onSubmit={handleVerifySubmit} className="space-y-4">
+            {/* Step 2: Verify Code */}
+            {step === 'verify' && (
+              <form onSubmit={handleVerifyCode} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="code" className="text-foreground">
-                    Verification Code
-                  </Label>
+                  <Label htmlFor="code">Verification Code</Label>
                   <Input
                     id="code"
                     type="text"
                     placeholder="000000"
-                    value={resetCode}
-                    onChange={(e) => setResetCode(e.target.value)}
-                    className="glass-sm border-white/10 bg-white/10 text-center text-2xl tracking-widest"
                     maxLength={6}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                    className="text-center text-2xl tracking-widest font-mono"
                     required
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Enter the 6-digit code sent to {email}
+                  </p>
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white font-semibold py-2 rounded-lg"
-                >
-                  Verify Code
-                </Button>
+                <div className="space-y-3">
+                  <Button type="submit" disabled={isLoading} className="w-full gap-2">
+                    {isLoading ? 'Verifying...' : 'Verify Code'}
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setStep('email')
+                      setCode('')
+                      setSuccess('')
+                    }}
+                    className="w-full gap-2"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back
+                  </Button>
+                </div>
+
+                <p className="text-center text-xs text-muted-foreground">
+                  Didn't receive the code?{' '}
+                  <button
+                    type="button"
+                    onClick={handleEmailSubmit}
+                    className="text-primary hover:underline"
+                  >
+                    Resend
+                  </button>
+                </p>
               </form>
-            </>
-          )}
+            )}
 
-          {stage === "reset" && (
-            <>
-              <div className="space-y-2 text-center">
-                <h1 className="text-3xl font-bold text-foreground">Create New Password</h1>
-                <p className="text-muted-foreground">Enter a strong password for your account</p>
-              </div>
-
-              <form onSubmit={handleResetSubmit} className="space-y-4">
+            {/* Step 3: Reset Password */}
+            {step === 'reset' && (
+              <form onSubmit={handleResetPassword} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="new-password" className="text-foreground">
-                    New Password
-                  </Label>
+                  <Label htmlFor="password">New Password</Label>
                   <Input
-                    id="new-password"
+                    id="password"
                     type="password"
                     placeholder="••••••••"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="glass-sm border-white/10 bg-white/10"
+                    value={formData.password}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        password: e.target.value,
+                      }))
+                    }
                     required
                   />
+                  <p className="text-xs text-muted-foreground">
+                    At least 6 characters recommended
+                  </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="confirm-password" className="text-foreground">
-                    Confirm Password
-                  </Label>
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
                   <Input
-                    id="confirm-password"
+                    id="confirmPassword"
                     type="password"
                     placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="glass-sm border-white/10 bg-white/10"
+                    value={formData.confirmPassword}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        confirmPassword: e.target.value,
+                      }))
+                    }
                     required
                   />
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white font-semibold py-2 rounded-lg"
-                >
-                  Reset Password
+                <Button type="submit" disabled={isLoading} className="w-full gap-2">
+                  {isLoading ? 'Updating...' : 'Update Password'}
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
               </form>
-            </>
-          )}
+            )}
 
-          {stage === "complete" && (
-            <div className="space-y-4 text-center py-4">
-              <CheckCircle className="h-16 w-16 text-primary mx-auto" />
-              <div className="space-y-2">
-                <h2 className="text-xl font-semibold text-foreground">Password Reset Successful</h2>
-                <p className="text-muted-foreground">Your password has been updated successfully</p>
-              </div>
+            {/* Back to Login */}
+            <div className="mt-6 text-center">
+              <Link href="/login" className="text-sm text-primary hover:underline">
+                Back to login
+              </Link>
             </div>
-          )}
+          </CardContent>
+        </Card>
 
-          {stage !== "complete" && (
-            <Link
-              href="/login"
-              className="flex items-center justify-center gap-2 text-primary hover:text-secondary transition-colors mt-4"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Login
-            </Link>
-          )}
-
-          {stage === "complete" && (
-            <Link href="/login">
-              <Button className="w-full bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white font-semibold py-2 rounded-lg">
-                Back to Login
-              </Button>
-            </Link>
-          )}
+        {/* Footer */}
+        <div className="mt-6 text-center text-xs text-muted-foreground">
+          <p>© 2026 BioTrack. All rights reserved.</p>
         </div>
       </div>
     </div>
