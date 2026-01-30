@@ -93,7 +93,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             Text(
               'Get important health alerts, understand your vital data '
               'through AI insights, and learn essential health information.',
-              textAlign: TextAlign.center,
+              textAlign: TextAlign.center,  
               style: TextStyle(
                 fontSize: 15,
                 height: 1.5,

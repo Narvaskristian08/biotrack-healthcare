@@ -24,7 +24,7 @@ class AuthChoicePage extends StatelessWidget {
 
             // ✅ Bottom green card (buttons INSIDE)
             Container(
-              width: double.infinity,
+              width: double.infinity, 
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
               decoration: BoxDecoration(
                 color: AppColors.lightGreen,

@@ -119,9 +119,12 @@ class HealthDetailsPage extends StatelessWidget {
               const Spacer(),
 
               PrimaryButton(
-                text: 'Continue',
-                onTap: () {},
-              ),
+  text: 'Continue',
+  onTap: () {
+    Navigator.pushReplacementNamed(context, '/main');
+  },
+),
+
             ],
           ),
         ),
