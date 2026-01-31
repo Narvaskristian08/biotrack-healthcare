@@ -41,10 +41,29 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
         onPageChanged: (i) => setState(() => index = i),
         children: [
-          OnboardingSlide(
-            content: logo(200),
-            bottom: const SizedBox(),
-          ),
+         OnboardingSlide(
+  content: logo(200),
+  bottom: Column(
+    mainAxisSize: MainAxisSize.min,
+    children: const [
+      Icon(
+        Icons.swipe,
+        size: 28,
+        color: Colors.grey,
+      ),
+      SizedBox(height: 8),
+      Text(
+        'Swipe to continue',
+        style: TextStyle(
+          fontSize: 13,
+          color: Colors.grey,
+        ),
+      ),
+      SizedBox(height: 24),
+    ],
+  ),
+),
+
 
           OnboardingSlide(
   content: Column(
@@ -54,7 +73,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       // LOGO
       Image.asset(
         'assets/images/logo.png',
-        height: 140, // bigger, matches reference
+        height: 200, // bigger, matches reference
       ),
 
       const SizedBox(height: 32),
@@ -133,7 +152,7 @@ OnboardingSlide(
         Center(
           child: Image.asset(
             'assets/images/logo.png',
-            height: 120,
+            height: 200,
           ),
         ),
 
@@ -189,7 +208,7 @@ OnboardingSlide(
       Center(
         child: Image.asset(
           'assets/images/logo.png',
-          height: 160, // ⬅️ bigger, matches reference
+          height: 2300, // ⬅️ bigger, matches reference
         ),
       ),
 
@@ -200,7 +219,7 @@ OnboardingSlide(
           margin: const EdgeInsets.symmetric(horizontal: 20),
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
           decoration: BoxDecoration(
-            color: AppColors.lightGreen,
+            color: const Color.fromARGB(255, 255, 255, 255),
             borderRadius: const BorderRadius.vertical(
               top: Radius.circular(24),
             ),

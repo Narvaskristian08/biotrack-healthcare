@@ -17,7 +17,7 @@ class AuthChoicePage extends StatelessWidget {
             // ✅ Big centered logo (matches reference)
             Image.asset(
               'assets/images/logo.png',
-              height: 170,
+              height: 250,
             ),
 
             const Spacer(),

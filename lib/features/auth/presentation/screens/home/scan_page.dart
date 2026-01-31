@@ -9,6 +9,7 @@ class ScanPage extends StatelessWidget {
       backgroundColor: const Color(0xFFF4F8EF),
 
 appBar: AppBar(
+  automaticallyImplyLeading: false,
   backgroundColor: const Color(0xFFF4F8EF),
   elevation: 0,
   title: const Text(

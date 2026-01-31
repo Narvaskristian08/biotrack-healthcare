@@ -82,7 +82,7 @@ class HomePage extends StatelessWidget {
                             height: 36,
                             child: ElevatedButton(
                               onPressed: () {
-                                Navigator.pushNamed(context, '/scan-vitals');
+                                Navigator.pushNamed(context, '/scan');
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF4C9F38),

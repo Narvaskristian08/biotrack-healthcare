@@ -27,7 +27,7 @@ class LoginPage extends StatelessWidget {
                 // 🔹 Bigger logo
                 Image.asset(
                   'assets/images/logo.png',
-                  height: 120,
+                  height: 250,
                 ),
 
                 const SizedBox(height: 24),
