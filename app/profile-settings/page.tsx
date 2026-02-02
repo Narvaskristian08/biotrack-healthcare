@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { Mail, Lock, Eye, EyeOff, Phone, MapPin, Calendar, Shield, LogOut, Trash2, Save, Edit2, CheckCircle } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, Phone, MapPin, Calendar, LogOut, Trash2, Save, Edit2, CheckCircle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import DashboardLayout from '@/components/dashboard-layout'
 
 export default function ProfileSettingsPage() {
   const [isEditingProfile, setIsEditingProfile] = useState(false)
@@ -52,29 +53,26 @@ export default function ProfileSettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Profile & Settings</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage your personal information, privacy preferences, and account security
-        </p>
-      </div>
+    <DashboardLayout>
+      <div className="space-y-8 max-w-5xl">
+        <header className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Profile & Settings</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">
+            Manage your personal information, privacy preferences, and account security
+          </p>
+        </header>
 
-      {/* Tabs */}
-      <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="profile">Personal Info</TabsTrigger>
-          <TabsTrigger value="privacy">Privacy & Consent</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-        </TabsList>
+        <Tabs defaultValue="profile" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto p-1 gap-1">
+            <TabsTrigger value="profile" className="rounded-md">Personal Info</TabsTrigger>
+            <TabsTrigger value="privacy" className="rounded-md">Privacy & Consent</TabsTrigger>
+            <TabsTrigger value="security" className="rounded-md">Security</TabsTrigger>
+          </TabsList>
 
-        {/* Personal Information Tab */}
-        <TabsContent value="profile" className="space-y-4">
-          {/* Profile Header Card */}
+        <TabsContent value="profile" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <CardTitle>Personal Information</CardTitle>
                   <CardDescription>Your account profile details</CardDescription>
@@ -82,30 +80,20 @@ export default function ProfileSettingsPage() {
                 <Button
                   variant={isEditingProfile ? 'destructive' : 'default'}
                   onClick={() => (isEditingProfile ? setIsEditingProfile(false) : setIsEditingProfile(true))}
-                  className="gap-2"
+                  className="gap-2 w-full sm:w-auto"
                 >
-                  {isEditingProfile ? (
-                    <>
-                      <span>Cancel</span>
-                    </>
-                  ) : (
-                    <>
-                      <Edit2 className="h-4 w-4" />
-                      <span>Edit</span>
-                    </>
-                  )}
+                  {isEditingProfile ? <span>Cancel</span> : <><Edit2 className="h-4 w-4" /><span>Edit</span></>}
                 </Button>
               </div>
             </CardHeader>
           </Card>
 
-          {/* Basic Information */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Basic Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="firstName">First Name</Label>
                   <Input
@@ -154,13 +142,12 @@ export default function ProfileSettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Medical Information */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Medical Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="dob">Date of Birth</Label>
                   <div className="relative">
@@ -182,7 +169,7 @@ export default function ProfileSettingsPage() {
                     value={formData.gender}
                     onChange={(e) => handleProfileChange('gender', e.target.value)}
                     disabled={!isEditingProfile}
-                    className="w-full px-3 py-2 border border-border rounded-lg text-sm disabled:opacity-50"
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm disabled:opacity-50"
                   >
                     <option>Male</option>
                     <option>Female</option>
@@ -196,7 +183,7 @@ export default function ProfileSettingsPage() {
                     value={formData.bloodType}
                     onChange={(e) => handleProfileChange('bloodType', e.target.value)}
                     disabled={!isEditingProfile}
-                    className="w-full px-3 py-2 border border-border rounded-lg text-sm disabled:opacity-50"
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm disabled:opacity-50"
                   >
                     <option>O+</option>
                     <option>O-</option>
@@ -221,7 +208,7 @@ export default function ProfileSettingsPage() {
               <div className="space-y-2">
                 <Label htmlFor="address">Address</Label>
                 <div className="relative">
-                  <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="address"
                     className="pl-10"
@@ -232,7 +219,7 @@ export default function ProfileSettingsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="emergencyContact">Emergency Contact Name</Label>
                   <Input
@@ -268,8 +255,7 @@ export default function ProfileSettingsPage() {
           )}
         </TabsContent>
 
-        {/* Privacy & Consent Tab */}
-        <TabsContent value="privacy" className="space-y-4">
+        <TabsContent value="privacy" className="space-y-4 mt-4">
           {/* Privacy Overview */}
           <Card>
             <CardHeader>
@@ -280,8 +266,8 @@ export default function ProfileSettingsPage() {
               {/* Data Sharing Consent */}
               <div className="space-y-4">
                 {Object.entries(consents).map(([key, value]) => (
-                  <div key={key} className="flex items-center justify-between p-3 rounded-lg border border-border">
-                    <div>
+                  <div key={key} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
+                    <div className="min-w-0">
                       <p className="font-medium text-sm capitalize">
                         {key === 'dataSharing'
                           ? 'Healthcare Provider Data Sharing'
@@ -306,9 +292,10 @@ export default function ProfileSettingsPage() {
                       </p>
                     </div>
                     <button
+                      type="button"
                       onClick={() => setConsents((prev) => ({ ...prev, [key]: !prev[key as keyof typeof consents] }))}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        value ? 'bg-green-600' : 'bg-gray-300'
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                        value ? 'bg-primary' : 'bg-muted'
                       }`}
                     >
                       <span
@@ -330,26 +317,33 @@ export default function ProfileSettingsPage() {
               <CardDescription>Review our privacy policy and terms of service</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button variant="outline" className="w-full justify-start">
-                Privacy Policy
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => window.dispatchEvent(new CustomEvent('openPolicy', { detail: { mode: 'privacy' } }))}
+              >
+                Privacy policy
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => window.dispatchEvent(new CustomEvent('openPolicy', { detail: { mode: 'terms' } }))}
+              >
+                Terms of service
               </Button>
               <Button variant="outline" className="w-full justify-start">
-                Terms of Service
-              </Button>
-              <Button variant="outline" className="w-full justify-start">
-                Data Processing Agreement
+                Data processing agreement
               </Button>
             </CardContent>
           </Card>
 
-          {/* GDPR & Data Rights */}
-          <Card className="border-blue-200 bg-blue-50">
+          <Card className="border-primary/30 bg-primary/5">
             <CardHeader>
-              <CardTitle className="text-base text-blue-900">Your Data Rights</CardTitle>
+              <CardTitle className="text-base">Your data rights</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-blue-900 space-y-2">
+            <CardContent className="text-sm space-y-2">
               <p>Under GDPR and similar regulations, you have the right to:</p>
-              <ul className="list-disc list-inside space-y-1">
+              <ul className="list-disc list-inside space-y-1 text-muted-foreground">
                 <li>Access your personal data</li>
                 <li>Request correction of inaccurate data</li>
                 <li>Request deletion of your data</li>
@@ -357,14 +351,13 @@ export default function ProfileSettingsPage() {
                 <li>Withdraw consent at any time</li>
               </ul>
               <Button variant="outline" size="sm" className="mt-3">
-                Request Data Export
+                Request data export
               </Button>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Security Tab */}
-        <TabsContent value="security" className="space-y-4">
+        <TabsContent value="security" className="space-y-4 mt-4">
           {/* Password Change */}
           <Card>
             <CardHeader>
@@ -442,12 +435,12 @@ export default function ProfileSettingsPage() {
               <CardDescription>Add an extra layer of security to your account</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-start justify-between p-3 rounded-lg border border-border">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 p-3 rounded-lg border border-border">
+                <div className="min-w-0">
                   <p className="font-medium text-sm">Authenticator App</p>
                   <p className="text-xs text-muted-foreground mt-1">Use an authentication app like Google Authenticator</p>
                 </div>
-                <Badge className="bg-amber-100 text-amber-800">Not Enabled</Badge>
+                <Badge variant="secondary" className="w-fit">Not enabled</Badge>
               </div>
               <Button variant="outline" className="w-full">
                 Enable 2FA
@@ -463,23 +456,23 @@ export default function ProfileSettingsPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-2">
-                <div className="flex items-start justify-between p-3 rounded-lg bg-muted border border-border">
-                  <div>
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+                  <div className="min-w-0">
                     <p className="font-medium text-sm">Chrome on Windows</p>
                     <p className="text-xs text-muted-foreground">192.168.1.100 • Last active 2 hours ago</p>
                   </div>
-                  <Badge className="bg-green-100 text-green-800 gap-1">
+                  <Badge className="bg-primary/10 text-primary gap-1 w-fit">
                     <CheckCircle className="h-3 w-3" />
                     Current
                   </Badge>
                 </div>
 
-                <div className="flex items-start justify-between p-3 rounded-lg border border-border">
-                  <div>
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 p-3 rounded-lg border border-border">
+                  <div className="min-w-0">
                     <p className="font-medium text-sm">Safari on iPhone</p>
                     <p className="text-xs text-muted-foreground">203.45.67.89 • Last active 1 day ago</p>
                   </div>
-                  <Button size="sm" variant="ghost">
+                  <Button size="sm" variant="ghost" className="w-fit">
                     <LogOut className="h-4 w-4" />
                   </Button>
                 </div>
@@ -491,22 +484,22 @@ export default function ProfileSettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Danger Zone */}
-          <Card className="border-red-200 bg-red-50">
+          <Card className="border-destructive/30 bg-destructive/5">
             <CardHeader>
-              <CardTitle className="text-red-900">Danger Zone</CardTitle>
-              <CardDescription className="text-red-800">Irreversible account actions</CardDescription>
+              <CardTitle className="text-destructive">Danger zone</CardTitle>
+              <CardDescription>Irreversible account actions</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button variant="outline" className="w-full border-red-300 text-red-600 hover:bg-red-100">
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete Account
+              <Button variant="outline" className="w-full border-destructive/50 text-destructive hover:bg-destructive/10 gap-2">
+                <Trash2 className="h-4 w-4" />
+                Delete account
               </Button>
-              <p className="text-xs text-red-800">This action cannot be undone. All your data will be permanently deleted.</p>
+              <p className="text-xs text-muted-foreground">This action cannot be undone. All your data will be permanently deleted.</p>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </DashboardLayout>
   )
 }

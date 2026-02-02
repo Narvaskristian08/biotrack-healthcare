@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import DashboardLayout from '@/components/dashboard-layout'
 
 interface Report {
   id: string
@@ -127,17 +128,18 @@ export default function ReportsDownloadsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <DashboardLayout>
+    <div className="space-y-8 max-w-5xl">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Reports & Downloads</h1>
-        <p className="text-muted-foreground mt-1">
+      <header className="space-y-1">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Reports & Downloads</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
           Download and export your health data in various formats for clinical use or personal records
         </p>
-      </div>
+      </header>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Reports</CardTitle>
@@ -190,20 +192,20 @@ export default function ReportsDownloadsPage() {
 
       {/* Reports Tabs */}
       <Tabs defaultValue="all" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="all">All Reports</TabsTrigger>
-          <TabsTrigger value="summaries">Summaries</TabsTrigger>
-          <TabsTrigger value="clinical">Clinical Data</TabsTrigger>
-          <TabsTrigger value="raw">Raw Data</TabsTrigger>
+        <TabsList className="flex flex-wrap gap-1 h-auto p-1">
+          <TabsTrigger value="all" className="rounded-md">All Reports</TabsTrigger>
+          <TabsTrigger value="summaries" className="rounded-md">Summaries</TabsTrigger>
+          <TabsTrigger value="clinical" className="rounded-md">Clinical Data</TabsTrigger>
+          <TabsTrigger value="raw" className="rounded-md">Raw Data</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="space-y-3">
+        <TabsContent value="all" className="space-y-4 mt-4">
           {reports.map((report) => (
             <ReportCard key={report.id} report={report} getTypeIcon={getTypeIcon} getTypeBadgeColor={getTypeBadgeColor} />
           ))}
         </TabsContent>
 
-        <TabsContent value="summaries" className="space-y-3">
+        <TabsContent value="summaries" className="space-y-4 mt-4">
           {reports
             .filter((r) => r.type === 'pdf' && r.title.includes('Summary'))
             .map((report) => (
@@ -211,7 +213,7 @@ export default function ReportsDownloadsPage() {
             ))}
         </TabsContent>
 
-        <TabsContent value="clinical" className="space-y-3">
+        <TabsContent value="clinical" className="space-y-4 mt-4">
           {reports
             .filter((r) => r.title.includes('Clinical') || r.title.includes('Evaluation'))
             .map((report) => (
@@ -219,7 +221,7 @@ export default function ReportsDownloadsPage() {
             ))}
         </TabsContent>
 
-        <TabsContent value="raw" className="space-y-3">
+        <TabsContent value="raw" className="space-y-4 mt-4">
           {reports
             .filter((r) => r.type === 'csv' || r.type === 'json')
             .map((report) => (
@@ -229,34 +231,34 @@ export default function ReportsDownloadsPage() {
       </Tabs>
 
       {/* Generate New Report */}
-      <Card className="border-primary/50 bg-primary/5">
+      <Card className="border-primary/30 bg-primary/5">
         <CardHeader>
-          <CardTitle>Generate New Report</CardTitle>
+          <CardTitle>Generate new report</CardTitle>
           <CardDescription>Create a custom report with selected data and date range</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm font-medium block mb-2">Report Type</label>
-                <select className="w-full px-3 py-2 border border-border rounded-lg text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Report type</label>
+                <select className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm">
                   <option>Health Summary</option>
                   <option>Clinical Data</option>
                   <option>Raw Vitals</option>
                   <option>Comprehensive Report</option>
                 </select>
               </div>
-              <div>
-                <label className="text-sm font-medium block mb-2">Format</label>
-                <select className="w-full px-3 py-2 border border-border rounded-lg text-sm">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Format</label>
+                <select className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm">
                   <option>PDF</option>
                   <option>CSV</option>
                   <option>JSON</option>
                 </select>
               </div>
-              <div>
-                <label className="text-sm font-medium block mb-2">Date Range</label>
-                <select className="w-full px-3 py-2 border border-border rounded-lg text-sm">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Date range</label>
+                <select className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm">
                   <option>Last 30 Days</option>
                   <option>Last 90 Days</option>
                   <option>Last Year</option>
@@ -266,7 +268,7 @@ export default function ReportsDownloadsPage() {
             </div>
             <Button className="w-full gap-2">
               <Download className="h-4 w-4" />
-              Generate Report
+              Generate report
             </Button>
           </div>
         </CardContent>
@@ -275,18 +277,18 @@ export default function ReportsDownloadsPage() {
       {/* Export to Third-Party */}
       <Card>
         <CardHeader>
-          <CardTitle>Export to Healthcare Providers</CardTitle>
+          <CardTitle>Export to healthcare providers</CardTitle>
           <CardDescription>Share your health data with medical professionals or clinics</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Button variant="outline" className="gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Button variant="outline" className="gap-2 w-full sm:w-auto">
               <Share2 className="h-4 w-4" />
-              Generate Share Link
+              Generate share link
             </Button>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2 w-full sm:w-auto">
               <Download className="h-4 w-4" />
-              Export Complete History
+              Export complete history
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -296,6 +298,7 @@ export default function ReportsDownloadsPage() {
         </CardContent>
       </Card>
     </div>
+    </DashboardLayout>
   )
 }
 
@@ -307,14 +310,14 @@ interface ReportCardProps {
 
 function ReportCard({ report, getTypeIcon, getTypeBadgeColor }: ReportCardProps) {
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className="hover:shadow-md transition-shadow overflow-hidden">
       <CardContent className="pt-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-4 flex-1">
-            <div className="mt-1">{getTypeIcon(report.type)}</div>
-            <div className="flex-1">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex items-start gap-4 flex-1 min-w-0">
+            <div className="mt-1 flex-shrink-0">{getTypeIcon(report.type)}</div>
+            <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-lg">{report.title}</h3>
-              <p className="text-sm text-muted-foreground mt-1">{report.description}</p>
+              <p className="text-sm text-muted-foreground mt-1 break-words">{report.description}</p>
 
               {/* Data Included */}
               <div className="mt-3 flex flex-wrap gap-2">
@@ -326,7 +329,7 @@ function ReportCard({ report, getTypeIcon, getTypeBadgeColor }: ReportCardProps)
               </div>
 
               {/* Details */}
-              <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
                   {report.date}
@@ -338,15 +341,15 @@ function ReportCard({ report, getTypeIcon, getTypeBadgeColor }: ReportCardProps)
           </div>
 
           {/* Actions */}
-          <div className="flex flex-col gap-2 flex-shrink-0">
-            <Badge className={getTypeBadgeColor(report.type)}>
+          <div className="flex flex-row sm:flex-col gap-2 flex-shrink-0">
+            <Badge className={getTypeBadgeColor(report.type) + ' w-fit'}>
               {report.type.toUpperCase()}
             </Badge>
-            <Button size="sm" gap-2 className="gap-2">
+            <Button size="sm" className="gap-2">
               <Download className="h-4 w-4" />
               Download
             </Button>
-            <Button size="sm" variant="outline" gap-2 className="gap-2">
+            <Button size="sm" variant="outline" className="gap-2">
               <Share2 className="h-4 w-4" />
               Share
             </Button>

@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Heart, Shield, Lock, CheckCircle2, AlertCircle, Download, Eye, EyeOff } from 'lucide-react'
+import { Shield, Lock, CheckCircle2, Download, Eye, EyeOff } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import DashboardLayout from '@/components/dashboard-layout'
 
 interface MedicalRecord {
   id: string
@@ -70,17 +71,18 @@ export default function MedicalRecordsPage() {
   ]
 
   return (
-    <div className="space-y-6">
+    <DashboardLayout>
+    <div className="space-y-8 max-w-5xl">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Medical Records</h1>
-        <p className="text-muted-foreground mt-1">
+      <header className="space-y-1">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Medical Records</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
           Your complete medical history with blockchain verification for authenticity
         </p>
-      </div>
+      </header>
 
       {/* Records Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Records</CardTitle>
@@ -116,20 +118,20 @@ export default function MedicalRecordsPage() {
 
       {/* Filter Tabs */}
       <Tabs defaultValue="all" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="all">All Records</TabsTrigger>
-          <TabsTrigger value="checkups">Checkups</TabsTrigger>
-          <TabsTrigger value="lab">Lab Work</TabsTrigger>
-          <TabsTrigger value="vaccines">Vaccines</TabsTrigger>
+        <TabsList className="flex flex-wrap gap-1 h-auto p-1">
+          <TabsTrigger value="all" className="rounded-md">All Records</TabsTrigger>
+          <TabsTrigger value="checkups" className="rounded-md">Checkups</TabsTrigger>
+          <TabsTrigger value="lab" className="rounded-md">Lab Work</TabsTrigger>
+          <TabsTrigger value="vaccines" className="rounded-md">Vaccines</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="space-y-3">
+        <TabsContent value="all" className="space-y-4 mt-4">
           {medicalRecords.map((record) => (
             <MedicalRecordCard key={record.id} record={record} showFullHash={showFullHash} setShowFullHash={setShowFullHash} />
           ))}
         </TabsContent>
 
-        <TabsContent value="checkups" className="space-y-3">
+        <TabsContent value="checkups" className="space-y-4 mt-4">
           {medicalRecords
             .filter((r) => r.type === 'Annual Checkup' || r.type === 'Specialist Consultation')
             .map((record) => (
@@ -137,7 +139,7 @@ export default function MedicalRecordsPage() {
             ))}
         </TabsContent>
 
-        <TabsContent value="lab" className="space-y-3">
+        <TabsContent value="lab" className="space-y-4 mt-4">
           {medicalRecords
             .filter((r) => r.type === 'Blood Work')
             .map((record) => (
@@ -145,7 +147,7 @@ export default function MedicalRecordsPage() {
             ))}
         </TabsContent>
 
-        <TabsContent value="vaccines" className="space-y-3">
+        <TabsContent value="vaccines" className="space-y-4 mt-4">
           {medicalRecords
             .filter((r) => r.type === 'Vaccination Record')
             .map((record) => (
@@ -155,13 +157,13 @@ export default function MedicalRecordsPage() {
       </Tabs>
 
       {/* Read-Only Access Note */}
-      <Card className="border-blue-200 bg-blue-50">
+      <Card className="border-primary/30 bg-primary/5">
         <CardHeader>
           <div className="flex gap-3">
-            <Lock className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <Lock className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
             <div>
-              <CardTitle className="text-base text-blue-900">Read-Only Access</CardTitle>
-              <CardDescription className="text-blue-800 mt-2">
+              <CardTitle className="text-base">Read-Only Access</CardTitle>
+              <CardDescription className="mt-2">
                 Your medical records are stored securely and displayed in read-only format to ensure data integrity. To make
                 changes or add new records, contact your healthcare provider.
               </CardDescription>
@@ -170,6 +172,7 @@ export default function MedicalRecordsPage() {
         </CardHeader>
       </Card>
     </div>
+    </DashboardLayout>
   )
 }
 
@@ -183,22 +186,22 @@ function MedicalRecordCard({ record, showFullHash, setShowFullHash }: MedicalRec
   const isExpanded = showFullHash === record.id
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className="hover:shadow-md transition-shadow overflow-hidden">
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
               <CardTitle className="text-lg">{record.type}</CardTitle>
               {record.verified && (
-                <Badge className="bg-green-100 text-green-800 gap-1">
+                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 gap-1 w-fit">
                   <CheckCircle2 className="h-3 w-3" />
                   Verified
                 </Badge>
               )}
             </div>
-            <CardDescription>{record.provider}</CardDescription>
+            <CardDescription className="break-words">{record.provider}</CardDescription>
           </div>
-          <div className="text-right">
+          <div className="text-left sm:text-right flex-shrink-0">
             <p className="text-sm font-medium">{record.date}</p>
             <p className="text-xs text-muted-foreground">Record date</p>
           </div>

@@ -2,9 +2,27 @@
 
 import React from "react"
 
-import { Heart, Home, Users, BarChart3, FileText, Lock, Settings, LogOut, Search, Bell, HelpCircle } from 'lucide-react'
+import {
+  Heart,
+  Home,
+  Users,
+  BarChart3,
+  FileText,
+  Lock,
+  Settings,
+  LogOut,
+  Search,
+  Bell,
+  HelpCircle,
+  Activity,
+  LineChart,
+  Bot,
+  FileDown,
+  User,
+  Shield,
+} from 'lucide-react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   Sidebar,
   SidebarContent,
@@ -26,9 +44,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import RoleSelector from '@/components/role-selector'
+import { useDashboardRole, type UserRole } from '@/hooks/use-dashboard-role'
 
-const navigationItems = [
+type NavItem = { label: string; href: string; icon: React.ComponentType<{ className?: string }> }
+
+const PATIENT_NAV: NavItem[] = [
+  { label: 'Dashboard', href: '/', icon: Home },
+  { label: 'Health Monitoring', href: '/health-monitoring', icon: Activity },
+  { label: 'Medical Records', href: '/medical-records', icon: FileText },
+  { label: 'Vitals History', href: '/vitals-history', icon: LineChart },
+  { label: 'AI Health Advisory', href: '/ai-health-advisory', icon: Bot },
+  { label: 'Blockchain', href: '/blockchain', icon: Lock },
+  { label: 'Reports & Downloads', href: '/reports-downloads', icon: FileDown },
+]
+
+const PROVIDER_NAV: NavItem[] = [
   { label: 'Dashboard', href: '/', icon: Home },
   { label: 'Users', href: '/users', icon: Users },
   { label: 'Analytics', href: '/analytics', icon: BarChart3 },
@@ -36,19 +66,67 @@ const navigationItems = [
   { label: 'Blockchain', href: '/blockchain', icon: Lock },
 ]
 
+function getNavigationItems(role: UserRole): NavItem[] {
+  if (role === 'patient') return PATIENT_NAV
+  return PROVIDER_NAV
+}
+
+function getRoleLabel(role: UserRole): string {
+  switch (role) {
+    case 'patient':
+      return 'Patient'
+    case 'provider':
+      return 'Healthcare Provider'
+    case 'admin':
+      return 'Admin'
+    default:
+      return 'Patient'
+  }
+}
+
+function getRoleInitials(role: UserRole): string {
+  switch (role) {
+    case 'patient':
+      return 'P'
+    case 'provider':
+      return 'HP'
+    case 'admin':
+      return 'A'
+    default:
+      return 'P'
+  }
+}
+
+function getInitialsFromName(name?: string): string {
+  if (!name?.trim()) return ''
+  const parts = name.trim().split(/\s+/)
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  return parts[0].slice(0, 2).toUpperCase()
+}
+
 interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { role, sessionUser } = useDashboardRole()
+  const navigationItems = getNavigationItems(role)
+  const roleLabel = getRoleLabel(role)
+  const displayInitials = sessionUser?.name ? getInitialsFromName(sessionUser.name) : getRoleInitials(role)
+
+  const handleLogout = () => {
+    localStorage.removeItem('userSession')
+    router.push('/login')
+  }
 
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full">
         {/* Sidebar */}
         <Sidebar className="border-r border-border">
-          <SidebarHeader className="border-b border-border p-4">
+          <SidebarHeader className="border-b border-border h-16 flex flex-col justify-center px-4 shrink-0">
             <Link href="/" className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center shadow-md">
                 <Heart className="h-6 w-6 text-white" />
@@ -57,7 +135,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <span className="font-bold text-lg bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                   BioTrack
                 </span>
-                <span className="text-xs text-muted-foreground">Healthcare</span>
+                <span className="text-xs text-muted-foreground">{roleLabel}</span>
               </div>
             </Link>
           </SidebarHeader>
@@ -96,7 +174,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
-            <Button variant="outline" className="w-full justify-start bg-transparent h-10">
+            <Button
+              variant="outline"
+              className="w-full justify-start bg-transparent h-10"
+              onClick={handleLogout}
+            >
               <LogOut className="h-4 w-4 mr-2" />
               Logout
             </Button>
@@ -112,6 +194,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <div className="flex items-center gap-4">
                 <SidebarTrigger className="-ml-1" />
                 <div className="h-6 w-px bg-border hidden sm:block" />
+                <span className="hidden sm:inline-flex text-sm font-medium text-muted-foreground">
+                  {roleLabel}
+                </span>
               </div>
 
               {/* Center Section - Search */}
@@ -119,7 +204,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <div className="relative w-full">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search patients, records..."
+                    placeholder={role === 'patient' ? 'Search my records...' : 'Search patients, records...'}
                     className="pl-10 bg-muted border-0 focus-visible:ring-1"
                   />
                 </div>
@@ -127,11 +212,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
               {/* Right Section */}
               <div className="flex items-center gap-4">
-                {/* Role Selector */}
-                <div className="hidden md:block">
-                  <RoleSelector />
-                </div>
-
                 {/* Notifications */}
                 <Button variant="ghost" size="icon" className="relative">
                   <Bell className="h-5 w-5" />
@@ -139,19 +219,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </Button>
 
                 {/* Help */}
-                <Button variant="ghost" size="icon" className="hidden sm:flex">
-                  <HelpCircle className="h-5 w-5" />
+                <Button variant="ghost" size="icon" className="hidden sm:flex" asChild>
+                  <Link href="/help-support">
+                    <HelpCircle className="h-5 w-5" />
+                  </Link>
                 </Button>
 
-                {/* User Profile Dropdown */}
+                {/* User Profile Dropdown - shows current role (Patient / Healthcare Provider / Admin) */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="flex items-center gap-3 pl-2 pr-3">
                       <div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center">
-                        <span className="text-xs font-semibold text-primary">HW</span>
+                        <span className="text-xs font-semibold text-primary">{displayInitials || 'P'}</span>
                       </div>
                       <div className="hidden sm:flex flex-col items-start text-left">
-                        <span className="text-sm font-medium">Health Worker</span>
+                        <span className="text-sm font-medium">{roleLabel}</span>
                         <span className="text-xs text-muted-foreground">Online</span>
                       </div>
                     </Button>
@@ -159,11 +241,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuLabel>My Account</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem>Profile</DropdownMenuItem>
-                    <DropdownMenuItem>Settings</DropdownMenuItem>
-                    <DropdownMenuItem>Help & Support</DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/profile-settings">Profile</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/settings">Settings</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/help-support">Help & Support</Link>
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-red-600">Logout</DropdownMenuItem>
+                    <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
+                      Logout
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
