@@ -34,26 +34,18 @@ class _MainShellState extends State<MainShell> {
         onTap: (i) => setState(() => _index = i),
         type: BottomNavigationBarType.fixed,
 
-        selectedItemColor: Colors.green,          // ✅ active = green
-        unselectedItemColor: Colors.white70,      // ✅ inactive = white
+        selectedItemColor: Colors.green, // ✅ active = green
+        unselectedItemColor: Colors.white70, // ✅ inactive = white
 
         selectedLabelStyle: const TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 12,
         ),
-        unselectedLabelStyle: const TextStyle(
-          fontSize: 12,
-        ),
+        unselectedLabelStyle: const TextStyle(fontSize: 12),
 
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.favorite),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.camera_alt),
-            label: 'Scan',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.camera_alt), label: 'Scan'),
           BottomNavigationBarItem(
             icon: Icon(Icons.insights),
             label: 'AI Insights',
@@ -62,10 +54,7 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(Icons.bar_chart),
             label: 'Records',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
     );

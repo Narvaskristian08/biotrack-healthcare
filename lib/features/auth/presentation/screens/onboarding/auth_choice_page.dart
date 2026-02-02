@@ -15,16 +15,13 @@ class AuthChoicePage extends StatelessWidget {
             const Spacer(),
 
             // ✅ Big centered logo (matches reference)
-            Image.asset(
-              'assets/images/logo.png',
-              height: 250,
-            ),
+            Image.asset('assets/images/logo.png', height: 250),
 
             const Spacer(),
 
             // ✅ Bottom green card (buttons INSIDE)
             Container(
-              width: double.infinity, 
+              width: double.infinity,
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
               decoration: BoxDecoration(
                 color: AppColors.lightGreen,

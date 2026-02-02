@@ -14,10 +14,7 @@ class AiInsightsPage extends StatelessWidget {
         elevation: 0,
         title: const Text(
           'AI Insights',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
       ),
@@ -27,9 +24,8 @@ class AiInsightsPage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Column(
             children: [
-
               /// HEALTH INSIGHTS CARD
-              Container (
+              Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -39,7 +35,6 @@ class AiInsightsPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     /// TITLE
                     const Text(
                       'Health Insights',
@@ -53,31 +48,30 @@ class AiInsightsPage extends StatelessWidget {
 
                     /// QUESTION (LEFT-ALIGNED)
                     /// QUESTION (FORCED LEFT ALIGN)
-SizedBox(
-  width: double.infinity, // gives left reference
-  child: Align(
-    alignment: Alignment.centerRight,
-    child: Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 8,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2F6CF6),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Text(
-        'What is my recent heart rate readings?',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    ),
-  ),
-),
-
+                    SizedBox(
+                      width: double.infinity, // gives left reference
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2F6CF6),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'What is my recent heart rate readings?',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
 
                     const SizedBox(height: 12),
 
@@ -94,20 +88,16 @@ SizedBox(
                         'It\'s important to stay hydrated, stretch periodically, and maintain '
                         'moderate physical activity throughout the day to support overall '
                         'cardiovascular health.\n\n'
-
                         'Your heart rate patterns appear stable based on recent sensor data, '
                         'with no significant fluctuations detected during normal activity. '
                         'This suggests that your current activity level and rest balance are '
                         'well maintained.\n\n'
-
                         'Remember, this is not a medical diagnosis. If you experience symptoms '
                         'such as dizziness, shortness of breath, or prolonged fatigue, please '
                         'consult a qualified healthcare professional.\n\n'
-
                         'Maintaining regular movement, proper hydration, adequate sleep, and '
                         'balanced nutrition can help support consistent heart rate patterns '
                         'throughout the day.\n\n'
-
                         'No unusual activity or fall events were detected. Your movement and '
                         'activity patterns appear normal based on recent sensor and motion data.',
                         style: TextStyle(

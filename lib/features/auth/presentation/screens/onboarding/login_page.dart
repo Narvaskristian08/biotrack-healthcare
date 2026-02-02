@@ -25,10 +25,7 @@ class LoginPage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min, // 🔹 centers vertically
               children: [
                 // 🔹 Bigger logo
-                Image.asset(
-                  'assets/images/logo.png',
-                  height: 250,
-                ),
+                Image.asset('assets/images/logo.png', height: 250),
 
                 const SizedBox(height: 24),
 
@@ -79,8 +76,7 @@ class LoginPage extends StatelessWidget {
                 // 🔹 Continue button
                 PrimaryButton(
                   text: 'Continue',
-                  onTap: () =>
-                      Navigator.pushNamed(context, '/health-details'),
+                  onTap: () => Navigator.pushNamed(context, '/health-details'),
                 ),
               ],
             ),

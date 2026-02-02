@@ -27,10 +27,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
           children: [
             const Text(
               'Data Protection',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
 
@@ -56,10 +53,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
 
             const Text(
               'Customize Notifications',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
 
@@ -67,8 +61,9 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
               value: healthAlerts,
               onChanged: (v) => setState(() => healthAlerts = v),
               title: const Text('Health Alerts'),
-              subtitle:
-                  const Text('Receive alerts for unusual heart rate or activity changes'),
+              subtitle: const Text(
+                'Receive alerts for unusual heart rate or activity changes',
+              ),
               activeColor: AppColors.primaryBlue,
             ),
 
@@ -76,8 +71,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
               value: generalNotifications,
               onChanged: (v) => setState(() => generalNotifications = v),
               title: const Text('General Notifications'),
-              subtitle:
-                  const Text('Share anonymized data for research'),
+              subtitle: const Text('Share anonymized data for research'),
               activeColor: AppColors.primaryBlue,
             ),
 
@@ -85,8 +79,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
               value: exportHealthData,
               onChanged: (v) => setState(() => exportHealthData = v),
               title: const Text('Export Health Data'),
-              subtitle:
-                  const Text('Download your health records securely'),
+              subtitle: const Text('Download your health records securely'),
               activeColor: AppColors.primaryBlue,
             ),
           ],
@@ -122,10 +115,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            description,
-            style: const TextStyle(color: Colors.grey),
-          ),
+          Text(description, style: const TextStyle(color: Colors.grey)),
         ],
       ),
     );

@@ -21,10 +21,7 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        leading: BackButton(),
-        title: const Text('Scan Vitals'),
-      ),
+      appBar: AppBar(leading: BackButton(), title: const Text('Scan Vitals')),
       body: Center(
         child: loading
             ? const Text('Measuring...')

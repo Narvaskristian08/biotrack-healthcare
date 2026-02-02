@@ -4,10 +4,7 @@ import 'package:biotrack_healthcare/core/constants/widgets/primary_button.dart';
 class HealthDetailsPage extends StatelessWidget {
   const HealthDetailsPage({super.key});
 
-  Widget _fieldRow({
-    required String label,
-    required String hint,
-  }) {
+  Widget _fieldRow({required String label, required String hint}) {
     return Column(
       children: [
         Row(
@@ -34,8 +31,10 @@ class HealthDetailsPage extends StatelessWidget {
                   hintText: hint,
                   filled: true,
                   fillColor: Colors.grey.shade200,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -76,10 +75,7 @@ class HealthDetailsPage extends StatelessWidget {
             children: [
               const Text(
                 'Set up Health Details',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
               ),
 
               const SizedBox(height: 12),
@@ -87,11 +83,7 @@ class HealthDetailsPage extends StatelessWidget {
               const Text(
                 'Your health details are the basic information the app needs to provide you relevant information.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                  height: 1.5,
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
               ),
 
               const SizedBox(height: 24),
@@ -118,12 +110,11 @@ class HealthDetailsPage extends StatelessWidget {
               const Spacer(),
 
               PrimaryButton(
-  text: 'Continue',
-  onTap: () {
-    Navigator.pushReplacementNamed(context, '/main');
-  },
-),
-
+                text: 'Continue',
+                onTap: () {
+                  Navigator.pushReplacementNamed(context, '/main');
+                },
+              ),
             ],
           ),
         ),

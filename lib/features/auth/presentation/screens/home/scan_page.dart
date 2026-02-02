@@ -8,20 +8,16 @@ class ScanPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F8EF),
 
-appBar: AppBar(
-  automaticallyImplyLeading: false,
-  backgroundColor: const Color(0xFFF4F8EF),
-  elevation: 0,
-  title: const Text(
-    'Scan Vitals',
-    style: TextStyle(
-      color: Colors.black,
-      fontWeight: FontWeight.w600,
-    ),
-  ),
-  centerTitle: true,
-),
-
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: const Color(0xFFF4F8EF),
+        elevation: 0,
+        title: const Text(
+          'Scan Vitals',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+      ),
 
       body: Column(
         children: [
@@ -50,20 +46,14 @@ appBar: AppBar(
           /// MEASURING TEXT (ALWAYS VISIBLE)
           const Text(
             'Measuring...',
-            style: TextStyle(
-              fontSize: 35,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(fontSize: 35, fontWeight: FontWeight.w700),
           ),
 
           const SizedBox(height: 6),
 
           const Text(
             'About 15s',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey),
           ),
 
           const SizedBox(height: 16),
@@ -107,7 +97,7 @@ appBar: AppBar(
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white
+                    color: Colors.white,
                   ),
                 ),
               ),

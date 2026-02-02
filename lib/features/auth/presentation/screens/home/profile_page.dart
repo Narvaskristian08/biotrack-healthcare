@@ -1,6 +1,6 @@
 import 'package:biotrack_healthcare/features/auth/presentation/screens/home/app_settings_page.dart';
 import 'package:biotrack_healthcare/features/auth/presentation/screens/home/health_permission_page.dart';
-  
+
 import 'package:flutter/material.dart';
 
 class ProfilePage extends StatelessWidget {
@@ -18,10 +18,7 @@ class ProfilePage extends StatelessWidget {
         centerTitle: true,
         title: const Text(
           'Profile',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
         ),
       ),
 
@@ -30,7 +27,6 @@ class ProfilePage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           child: Column(
             children: [
-
               /// USER INFO CARD
               Container(
                 width: double.infinity,
@@ -51,10 +47,7 @@ class ProfilePage extends StatelessWidget {
                     SizedBox(height: 6),
                     Text(
                       'Male | Age 32',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -77,31 +70,28 @@ class ProfilePage extends StatelessWidget {
               ),
 
               _profileItem(
-  icon: Icons.check_box_outlined,
-  title: 'Health Permission',
-  onTap: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const HealthPermissionPage(),
-      ),
-    );
-  },
-),
+                icon: Icons.check_box_outlined,
+                title: 'Health Permission',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const HealthPermissionPage(),
+                    ),
+                  );
+                },
+              ),
 
-_profileItem(
-  icon: Icons.settings,
-  title: 'Privacy and App Settings',
-  onTap: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const AppSettingsPage(),
-      ),
-    );
-  },
-),
-
+              _profileItem(
+                icon: Icons.settings,
+                title: 'Privacy and App Settings',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AppSettingsPage()),
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -126,25 +116,14 @@ _profileItem(
         leading: Icon(icon, color: Colors.black),
         title: Text(
           title,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
-          ),
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
         ),
         subtitle: subtitle != null
-            ? Text(
-                subtitle,
-                style: const TextStyle(fontSize: 13),
-              )
+            ? Text(subtitle, style: const TextStyle(fontSize: 13))
             : null,
-        trailing: const Icon(
-          Icons.chevron_right,
-          color: Colors.grey,
-        ),
+        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
         onTap: onTap,
       ),
     );
   }
 }
-
-

@@ -22,9 +22,9 @@ class HealthPermissionPage extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('$title enabled')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('$title enabled')));
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color.fromARGB(255, 169, 238, 152),
@@ -75,10 +75,7 @@ class HealthPermissionPage extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   description,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 13,
-                  ),
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 Align(
@@ -131,11 +128,7 @@ class HealthPermissionPage extends StatelessWidget {
             const Text(
               'To accurately monitor your health, BioTrack needs access to the following features. '
               'Your data is encrypted, private, and always under your control.',
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 13,
-                height: 1.4,
-              ),
+              style: TextStyle(color: Colors.grey, fontSize: 13, height: 1.4),
             ),
             const SizedBox(height: 24),
 

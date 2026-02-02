@@ -19,12 +19,7 @@ class OnboardingSlide extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Center(child: content),
           ),
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: 32,
-            child: bottom,
-          ),
+          Positioned(left: 24, right: 24, bottom: 32, child: bottom),
         ],
       ),
     );

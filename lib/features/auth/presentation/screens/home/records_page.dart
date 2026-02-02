@@ -14,10 +14,7 @@ class RecordsPage extends StatelessWidget {
         elevation: 0,
         title: const Text(
           'Records',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
       ),
@@ -26,7 +23,6 @@ class RecordsPage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           children: [
-
             /// FILTER + EXPORT
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -42,10 +38,7 @@ class RecordsPage extends StatelessWidget {
                   ),
                   child: const Row(
                     children: [
-                      Text(
-                        'Monthly',
-                        style: TextStyle(fontSize: 13),
-                      ),
+                      Text('Monthly', style: TextStyle(fontSize: 13)),
                       SizedBox(width: 4),
                       Icon(Icons.keyboard_arrow_down, size: 18),
                     ],
@@ -58,9 +51,7 @@ class RecordsPage extends StatelessWidget {
                   },
                   icon: const Icon(Icons.upload, size: 18),
                   label: const Text('EXPORT'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.green,
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: Colors.green),
                 ),
               ],
             ),
@@ -91,11 +82,7 @@ class RecordsPage extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(
-                    Icons.favorite,
-                    color: Colors.green,
-                    size: 59,
-                  ),
+                  const Icon(Icons.favorite, color: Colors.green, size: 59),
                   const SizedBox(width: 14),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,10 +95,7 @@ class RecordsPage extends StatelessWidget {
                         ),
                       ),
                       SizedBox(height: 4),
-                      Text(
-                        'Monitoring',
-                        style: TextStyle(color: Colors.grey),
-                      ),
+                      Text('Monitoring', style: TextStyle(color: Colors.grey)),
                       SizedBox(height: 4),
                       Text(
                         'No falls detected\nMonthly summary',
@@ -128,10 +112,7 @@ class RecordsPage extends StatelessWidget {
             /// RECENT RECORDS
             const Text(
               'Recent Records',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
 
             const SizedBox(height: 12),
@@ -171,14 +152,8 @@ class RecordsPage extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: const Icon(Icons.favorite, color: Colors.green),
-      title: Text(
-        title,
-        style: const TextStyle(fontSize: 15),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(fontSize: 13),
-      ),
+      title: Text(title, style: const TextStyle(fontSize: 15)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 13)),
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -186,20 +161,14 @@ class RecordsPage extends StatelessWidget {
           /// TIME
           Text(
             time,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 4),
 
           /// BLOCKCHAIN VERIFIED
           const Text(
             'Blockchain verified',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.green,
-            ),
+            style: TextStyle(fontSize: 12, color: Colors.green),
           ),
         ],
       ),

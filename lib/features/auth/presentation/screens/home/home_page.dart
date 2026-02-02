@@ -12,15 +12,11 @@ class HomePage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
           children: [
-
             /// HEADER (PUSHED LOWER)
             const SizedBox(height: 8),
             const Text(
               'Good day, John',
-              style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             const Text(
@@ -39,10 +35,7 @@ class HomePage extends StatelessWidget {
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFFFFFFFF),
-                    Color(0xFFA4D65E),
-                  ],
+                  colors: [Color(0xFFFFFFFF), Color(0xFFA4D65E)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -70,10 +63,7 @@ class HomePage extends StatelessWidget {
                         const SizedBox(height: 6),
                         const Text(
                           'Measure heart rate using\nyour camera',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black54,
-                          ),
+                          style: TextStyle(fontSize: 14, color: Colors.black54),
                         ),
                         const SizedBox(height: 16),
                         Align(
@@ -96,15 +86,20 @@ class HomePage extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: Color.fromARGB(255, 255, 255, 255), // 🔵 BLUE TEXT
+                                  color: Color.fromARGB(
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                  ), // 🔵 BLUE TEXT
                                 ),
-                                ),
+                              ),
                             ),
                           ),
                         ),
                       ],
                     ),
-                  )
+                  ),
                 ],
               ),
             ),
@@ -152,19 +147,13 @@ class HomePage extends StatelessWidget {
                 children: [
                   const Text(
                     'AI Health Insights',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 10),
                   const Text(
                     'No incident detected. Your recent heart rate readings are within a healthy range. '
                     'Maintain hydration and regular movement throughout the day.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.black54,
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.black54),
                   ),
                   const SizedBox(height: 12),
                   Align(
@@ -192,10 +181,7 @@ class HomePage extends StatelessWidget {
             /// RECENT RECORDS
             const Text(
               'Recent Records',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 10),
 
@@ -204,11 +190,7 @@ class HomePage extends StatelessWidget {
               subtitle: 'Today',
               time: '10:42 AM',
             ),
-            _recordItem(
-              title: 'Activity',
-              subtitle: 'Today',
-              time: '10:42 AM',
-            ),
+            _recordItem(title: 'Activity', subtitle: 'Today', time: '10:42 AM'),
             _recordItem(
               title: 'AI Health Insights',
               subtitle: 'Wellness summary generated',
@@ -259,10 +241,7 @@ class HomePage extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey,
-                  ),
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
                 ),
               ],
             ),
@@ -280,10 +259,7 @@ class HomePage extends StatelessWidget {
               if (trailingSubtitle.isNotEmpty)
                 Text(
                   trailingSubtitle,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey,
-                  ),
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
                 ),
             ],
           ),
@@ -301,29 +277,16 @@ class HomePage extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: const Icon(Icons.favorite, color: Colors.green),
-      title: Text(
-        title,
-        style: const TextStyle(fontSize: 15),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(fontSize: 13),
-      ),
+      title: Text(title, style: const TextStyle(fontSize: 15)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 13)),
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (time != null)
-            Text(
-              time,
-              style: const TextStyle(fontSize: 13),
-            ),
+          if (time != null) Text(time, style: const TextStyle(fontSize: 13)),
           const Text(
             'Blockchain verified',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.green,
-            ),
+            style: TextStyle(fontSize: 12, color: Colors.green),
           ),
         ],
       ),
