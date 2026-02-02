@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+// import 'package:go_router/go_router.dart';
 
 class ScanPage extends StatelessWidget {
   const ScanPage({super.key});
@@ -83,7 +84,7 @@ class ScanPage extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: () {
                   // TODO: Open phone camera here
-                  // Navigator.push(context, MaterialPageRoute(builder: (_) => CameraPage()));
+                  // context.push('/camera');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4C9A2A),
