@@ -64,7 +64,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
               subtitle: const Text(
                 'Receive alerts for unusual heart rate or activity changes',
               ),
-              activeColor: AppColors.primaryBlue,
+              activeThumbColor: AppColors.primaryBlue,
             ),
 
             SwitchListTile(
@@ -72,7 +72,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
               onChanged: (v) => setState(() => generalNotifications = v),
               title: const Text('General Notifications'),
               subtitle: const Text('Share anonymized data for research'),
-              activeColor: AppColors.primaryBlue,
+              activeThumbColor: AppColors.primaryBlue,
             ),
 
             SwitchListTile(
@@ -80,7 +80,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
               onChanged: (v) => setState(() => exportHealthData = v),
               title: const Text('Export Health Data'),
               subtitle: const Text('Download your health records securely'),
-              activeColor: AppColors.primaryBlue,
+              activeThumbColor: AppColors.primaryBlue,
             ),
           ],
         ),
