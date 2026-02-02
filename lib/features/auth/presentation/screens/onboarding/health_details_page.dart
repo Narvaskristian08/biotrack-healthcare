@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:biotrack_healthcare/core/constants/widgets/primary_button.dart';
-import 'package:biotrack_healthcare/core/constants/app_colors.dart';
 
 class HealthDetailsPage extends StatelessWidget {
   const HealthDetailsPage({super.key});

@@ -1,6 +1,5 @@
-  import 'package:biotrack_healthcare/features/auth/presentation/screens/home/app_settings_page.dart';
+import 'package:biotrack_healthcare/features/auth/presentation/screens/home/app_settings_page.dart';
 import 'package:biotrack_healthcare/features/auth/presentation/screens/home/health_permission_page.dart';
-import 'package:biotrack_healthcare/features/auth/presentation/screens/home/profile_page.dart';
   
 import 'package:flutter/material.dart';
 
