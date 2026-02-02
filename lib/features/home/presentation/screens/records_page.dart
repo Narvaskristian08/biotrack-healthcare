@@ -23,7 +23,7 @@ class RecordsPage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           children: [
-            /// FILTER + EXPORT
+            // Filter + Export
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -47,7 +47,7 @@ class RecordsPage extends StatelessWidget {
 
                 TextButton.icon(
                   onPressed: () {
-                    // EXPORT ACTION (stub)
+                    // Export action
                   },
                   icon: const Icon(Icons.upload, size: 18),
                   label: const Text('EXPORT'),
@@ -58,7 +58,7 @@ class RecordsPage extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            /// CHART (IMAGE)
+            // Chart (Image)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -73,7 +73,7 @@ class RecordsPage extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            /// FALL DETECTION SUMMARY
+            // Fall Detection Summary
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -109,7 +109,7 @@ class RecordsPage extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            /// RECENT RECORDS
+            // Recent Records Title
             const Text(
               'Recent Records',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -143,7 +143,7 @@ class RecordsPage extends StatelessWidget {
     );
   }
 
-  /// SINGLE RECORD ROW
+  // Single Record Row
   static Widget _recordItem({
     required String title,
     required String subtitle,
@@ -158,14 +158,13 @@ class RecordsPage extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          /// TIME
+          // Time
           Text(
             time,
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 4),
-
-          /// BLOCKCHAIN VERIFIED
+          // Verified Tag
           const Text(
             'Blockchain verified',
             style: TextStyle(fontSize: 12, color: Colors.green),

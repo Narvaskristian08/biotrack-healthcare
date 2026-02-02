@@ -12,7 +12,7 @@ class HomePage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
           children: [
-            /// HEADER (PUSHED LOWER)
+            // Header
             const SizedBox(height: 8),
             const Text(
               'Good day, John',
@@ -30,7 +30,7 @@ class HomePage extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            /// START VITAL SCAN (GREEN GRADIENT, NO WHITE)
+            // Start Vital Scan Card
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
@@ -86,12 +86,7 @@ class HomePage extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: Color.fromARGB(
-                                    255,
-                                    255,
-                                    255,
-                                    255,
-                                  ), // 🔵 BLUE TEXT
+                                  color: Color.fromARGB(255, 255, 255, 255),
                                 ),
                               ),
                             ),
@@ -106,7 +101,7 @@ class HomePage extends StatelessWidget {
 
             const SizedBox(height: 22),
 
-            /// STAT CARDS (BIGGER + SHADOW)
+            // Stat Cards
             _statCard(
               title: 'Heart Rate',
               subtitle: 'Normal',
@@ -128,7 +123,7 @@ class HomePage extends StatelessWidget {
 
             const SizedBox(height: 22),
 
-            /// AI HEALTH INSIGHTS
+            // AI Health Insights
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
@@ -178,7 +173,7 @@ class HomePage extends StatelessWidget {
 
             const SizedBox(height: 22),
 
-            /// RECENT RECORDS
+            // Recent Records
             const Text(
               'Recent Records',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -202,7 +197,7 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  /// STAT CARD
+  // Stat Card Widget
   static Widget _statCard({
     required String title,
     required String subtitle,
@@ -268,7 +263,7 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  /// RECORD ITEM
+  // Record Item Widget
   static Widget _recordItem({
     required String title,
     required String subtitle,

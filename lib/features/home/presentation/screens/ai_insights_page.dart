@@ -24,7 +24,7 @@ class AiInsightsPage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Column(
             children: [
-              /// HEALTH INSIGHTS CARD
+              // Health insights card 
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -35,7 +35,7 @@ class AiInsightsPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    /// TITLE
+                    // Title
                     const Text(
                       'Health Insights',
                       style: TextStyle(
@@ -45,11 +45,8 @@ class AiInsightsPage extends StatelessWidget {
                     ),
 
                     const SizedBox(height: 12),
-
-                    /// QUESTION (LEFT-ALIGNED)
-                    /// QUESTION (FORCED LEFT ALIGN)
                     SizedBox(
-                      width: double.infinity, // gives left reference
+                      width: double.infinity, 
                       child: Align(
                         alignment: Alignment.centerRight,
                         child: Container(
@@ -75,7 +72,7 @@ class AiInsightsPage extends StatelessWidget {
 
                     const SizedBox(height: 12),
 
-                    /// AI FEEDBACK CONTAINER (SEPARATE)
+                    // AI Feedback container
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
@@ -113,7 +110,7 @@ class AiInsightsPage extends StatelessWidget {
 
               const Spacer(),
 
-              /// ASK QUESTION INPUT
+              // Ask question input field
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(

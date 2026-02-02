@@ -23,7 +23,7 @@ class ScanPage extends StatelessWidget {
         children: [
           const SizedBox(height: 24),
 
-          /// FINGER SCAN IMAGE
+          // Finger Scan Image
           Container(
             height: 260,
             width: 260,
@@ -43,7 +43,7 @@ class ScanPage extends StatelessWidget {
 
           const SizedBox(height: 28),
 
-          /// MEASURING TEXT (ALWAYS VISIBLE)
+          // Measuring Text (Always visible)
           const Text(
             'Measuring...',
             style: TextStyle(fontSize: 35, fontWeight: FontWeight.w700),
@@ -74,7 +74,7 @@ class ScanPage extends StatelessWidget {
 
           const Spacer(),
 
-          /// START SCAN BUTTON (OPENS CAMERA)
+          // Start Scan Button (Opens camera)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             child: SizedBox(

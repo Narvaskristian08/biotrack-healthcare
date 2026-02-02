@@ -1,5 +1,5 @@
-import 'package:biotrack_healthcare/features/auth/presentation/screens/home/app_settings_page.dart';
-import 'package:biotrack_healthcare/features/auth/presentation/screens/home/health_permission_page.dart';
+import 'package:biotrack_healthcare/features/settings/presentation/screens/app_settings_page.dart';
+import 'package:biotrack_healthcare/features/home/presentation/screens/health_permission_page.dart';
 
 import 'package:flutter/material.dart';
 
@@ -27,7 +27,7 @@ class ProfilePage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           child: Column(
             children: [
-              /// USER INFO CARD
+              // User Info Card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 20),
@@ -55,7 +55,7 @@ class ProfilePage extends StatelessWidget {
 
               const SizedBox(height: 24),
 
-              /// MENU ITEMS
+              // Menu Items
               _profileItem(
                 icon: Icons.edit,
                 title: 'Edit Profile',
@@ -99,7 +99,7 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  /// PROFILE ROW ITEM
+  // Profile Row Item
   static Widget _profileItem({
     required IconData icon,
     required String title,

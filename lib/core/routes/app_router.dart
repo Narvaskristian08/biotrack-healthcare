@@ -1,22 +1,77 @@
-import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../features/auth/presentation/screens/onboarding/onboarding_page.dart';
 import '../../features/auth/presentation/screens/onboarding/auth_choice_page.dart';
 import '../../features/auth/presentation/screens/onboarding/login_page.dart';
 import '../../features/auth/presentation/screens/onboarding/health_details_page.dart';
-import '../../features/auth/presentation/screens/home/main_shell.dart';
-import '../../features/auth/presentation/screens/home/scan_vitals_page.dart';
-import '../../features/auth/presentation/screens/home/health_permission_page.dart';
-import '../../features/auth/presentation/screens/home/app_settings_page.dart';
+
+import '../../features/home/presentation/shells/main_shell.dart';
+import '../../features/home/presentation/screens/home_page.dart';
+import '../../features/home/presentation/screens/scan_page.dart';
+import '../../features/home/presentation/screens/ai_insights_page.dart';
+import '../../features/home/presentation/screens/records_page.dart';
+import '../../features/home/presentation/screens/profile_page.dart';
 
 class AppRouter {
-  static final routes = <String, WidgetBuilder>{
-    '/': (_) => const OnboardingPage(),
-    '/auth': (_) => const AuthChoicePage(),
-    '/login': (_) => const LoginPage(),
-    '/health-details': (_) => const HealthDetailsPage(),
-    '/main': (_) => const MainShell(),
-    '/scan-vitals': (_) => const ScanVitalsPage(),
-    '/health-permission': (_) => const HealthPermissionPage(),
-    '/app-settings': (_) => const AppSettingsPage(),
-  };
+  // GoRouter instance used throughout the app.
+  // This handles all navigation including onboarding/auth flow and the main app shell.
+  static final GoRouter router = GoRouter(
+    initialLocation: '/',
+
+    // All routes in the app
+    routes: [
+      GoRoute(
+        path: '/',
+        name: 'onboarding',
+        builder: (context, state) => const OnboardingPage(),
+      ),
+      GoRoute(
+        path: '/auth',
+        name: 'authChoice',
+        builder: (context, state) => const AuthChoicePage(),
+      ),
+      GoRoute(
+        path: '/login',
+        name: 'login',
+        builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: '/health-details',
+        name: 'healthDetails',
+        builder: (context, state) => const HealthDetailsPage(),
+      ),
+
+      // Main App Shell (persistent BottomNavigationBar)
+      ShellRoute(
+        builder: (context, state, child) => MainShell(child: child),
+        routes: [
+          GoRoute(
+            path: '/home',
+            name: 'home',
+            builder: (context, state) => const HomePage(),
+          ),
+          GoRoute(
+            path: '/scan',
+            name: 'scan',
+            builder: (context, state) => const ScanPage(),
+          ),
+          GoRoute(
+            path: '/ai-insights',
+            name: 'aiInsights',
+            builder: (context, state) => const AiInsightsPage(),
+          ),
+          GoRoute(
+            path: '/records',
+            name: 'records',
+            builder: (context, state) => const RecordsPage(),
+          ),
+          GoRoute(
+            path: '/profile',
+            name: 'profile',
+            builder: (context, state) => const ProfilePage(),
+          ),
+        ],
+      ),
+    ],
+  );
 }

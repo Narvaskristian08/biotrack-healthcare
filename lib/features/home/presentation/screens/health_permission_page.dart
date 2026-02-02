@@ -1,30 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:biotrack_healthcare/core/theme/app_colors.dart';
 
 class HealthPermissionPage extends StatelessWidget {
   const HealthPermissionPage({super.key});
 
+  // Show confirmation dialog for a permission
   void _confirmPermission(
     BuildContext context, {
     required String title,
     required String description,
+    String? nextRoute,
   }) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: Text(title),
-        content: const Text('Are you sure you want to allow this permission?'),
+        content: const Text(
+            'Are you sure you want to allow this permission?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => context.pop(),
             child: const Text('No'),
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text('$title enabled')));
+              context.pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('$title enabled')),
+              );
+
+              // Navigate to next page if provided
+              if (nextRoute != null) {
+                context.go(nextRoute);
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color.fromARGB(255, 169, 238, 152),
@@ -49,11 +58,12 @@ class HealthPermissionPage extends StatelessWidget {
     required String title,
     required String description,
     required String buttonText,
+    String? nextRoute, 
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 255, 255, 255),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -85,6 +95,7 @@ class HealthPermissionPage extends StatelessWidget {
                       context,
                       title: title,
                       description: description,
+                      nextRoute: nextRoute,
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryBlue,
@@ -114,7 +125,7 @@ class HealthPermissionPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: const BackButton(),
+        leading: BackButton(onPressed: () => context.pop()), 
         title: const Text(
           'Enable Health Permission',
           style: TextStyle(fontWeight: FontWeight.w600),
@@ -139,6 +150,7 @@ class HealthPermissionPage extends StatelessWidget {
               description:
                   'Used to measure your heart rate by detecting subtle changes in blood flow.',
               buttonText: 'Allow Camera Access',
+              // nextRoute: '/scan', // navigate to scan page after allowing
             ),
 
             const SizedBox(height: 16),

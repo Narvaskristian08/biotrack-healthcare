@@ -1,48 +1,36 @@
 import 'package:flutter/material.dart';
-import 'home_page.dart';
-import 'scan_page.dart';
-import 'ai_insights_page.dart';
-import 'records_page.dart';
-import 'profile_page.dart';
+import 'package:go_router/go_router.dart';
 
-class MainShell extends StatefulWidget {
-  const MainShell({super.key});
-
-  @override
-  State<MainShell> createState() => _MainShellState();
-}
-
-class _MainShellState extends State<MainShell> {
-  int _index = 0;
-
-  final pages = const [
-    HomePage(),
-    ScanPage(),
-    AiInsightsPage(),
-    RecordsPage(),
-    ProfilePage(),
-  ];
+class MainShell extends StatelessWidget {
+  final Widget child;
+  const MainShell({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
+    // Map each tab to its route
+    final tabs = ['/home', '/scan', '/ai-insights', '/records', '/profile'];
+
+    // Get current location from GoRouter
+    final location = GoRouterState.of(context).uri.path;
+    int currentIndex = tabs.indexWhere((path) => location.startsWith(path));
+    if (currentIndex == -1) currentIndex = 0;
+
     return Scaffold(
-      body: pages[_index],
-
+      body: child,
       bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: const Color(0xFF2E3A44), // ✅ dark nav bg
-        currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
+        backgroundColor: const Color(0xFF2E3A44),
+        currentIndex: currentIndex,
         type: BottomNavigationBarType.fixed,
-
-        selectedItemColor: Colors.green, // ✅ active = green
-        unselectedItemColor: Colors.white70, // ✅ inactive = white
-
+        selectedItemColor: Colors.green,
+        unselectedItemColor: Colors.white70,
         selectedLabelStyle: const TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 12,
         ),
         unselectedLabelStyle: const TextStyle(fontSize: 12),
-
+        onTap: (i) {
+          context.go(tabs[i]); // navigate to the tab route
+        },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.camera_alt), label: 'Scan'),
