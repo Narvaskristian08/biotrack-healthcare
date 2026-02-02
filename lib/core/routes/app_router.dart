@@ -13,7 +13,7 @@ import '../../features/home/presentation/screens/records_page.dart';
 import '../../features/home/presentation/screens/profile_page.dart';
 
 class AppRouter {
-  // TODO: Implement riverpod integration for route management.
+  // TODO: Implement riverpod integration for state, and route management.
   // GoRouter instance used throughout the app.
   // This handles all navigation including onboarding/auth flow and the main app shell.
   static final GoRouter router = GoRouter(
