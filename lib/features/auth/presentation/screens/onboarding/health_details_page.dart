@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:biotrack_healthcare/common/widgets/primary_button.dart';
 
 class HealthDetailsPage extends StatelessWidget {
@@ -9,7 +10,6 @@ class HealthDetailsPage extends StatelessWidget {
       children: [
         Row(
           children: [
-            // Left label
             Expanded(
               flex: 2,
               child: Text(
@@ -20,10 +20,7 @@ class HealthDetailsPage extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(width: 12),
-
-            // Right input field
             Expanded(
               flex: 3,
               child: TextField(
@@ -44,12 +41,8 @@ class HealthDetailsPage extends StatelessWidget {
             ),
           ],
         ),
-
         const SizedBox(height: 16),
-
-        // Divider
         Divider(color: Colors.grey.shade400, height: 1),
-
         const SizedBox(height: 16),
       ],
     );
@@ -64,7 +57,7 @@ class HealthDetailsPage extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.pop(),
         ),
       ),
       body: SafeArea(
@@ -77,18 +70,13 @@ class HealthDetailsPage extends StatelessWidget {
                 'Set up Health Details',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
               ),
-
               const SizedBox(height: 12),
-
               const Text(
                 'Your health details are the basic information the app needs to provide you relevant information.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
               ),
-
               const SizedBox(height: 24),
-
-              // Grey card
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -106,13 +94,11 @@ class HealthDetailsPage extends StatelessWidget {
                   ],
                 ),
               ),
-
               const Spacer(),
-
               PrimaryButton(
                 text: 'Continue',
                 onTap: () {
-                  Navigator.pushReplacementNamed(context, '/main');
+                 // context.go('/main');
                 },
               ),
             ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart'; 
 import 'package:biotrack_healthcare/common/widgets/primary_button.dart';
 import 'package:biotrack_healthcare/core/theme/app_colors.dart';
 
@@ -14,7 +15,7 @@ class LoginPage extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.pop(), 
         ),
       ),
       body: SafeArea(
@@ -22,14 +23,12 @@ class LoginPage extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
-              mainAxisSize: MainAxisSize.min, // 🔹 centers vertically
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // 🔹 Bigger logo
                 Image.asset('assets/images/logo.png', height: 250),
 
                 const SizedBox(height: 24),
 
-                // 🔹 Title
                 const Text(
                   'Log in or Sign up',
                   style: TextStyle(
@@ -41,7 +40,6 @@ class LoginPage extends StatelessWidget {
 
                 const SizedBox(height: 8),
 
-                // 🔹 Subtitle
                 const SizedBox(
                   width: 300,
                   child: Text(
@@ -57,7 +55,6 @@ class LoginPage extends StatelessWidget {
 
                 const SizedBox(height: 24),
 
-                // 🔹 Email field
                 TextField(
                   decoration: InputDecoration(
                     hintText: 'Email',
@@ -73,10 +70,9 @@ class LoginPage extends StatelessWidget {
 
                 const SizedBox(height: 16),
 
-                // 🔹 Continue button
                 PrimaryButton(
                   text: 'Continue',
-                  onTap: () => Navigator.pushNamed(context, '/health-details'),
+                  onTap: () => context.go('/health-details'),
                 ),
               ],
             ),

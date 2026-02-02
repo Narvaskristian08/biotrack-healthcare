@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:biotrack_healthcare/common/widgets/primary_button.dart';
 import 'package:biotrack_healthcare/core/theme/app_colors.dart';
 import '../../widgets/onboarding_slide.dart';
@@ -13,7 +14,6 @@ class OnboardingPage extends StatefulWidget {
 class _OnboardingPageState extends State<OnboardingPage> {
   final controller = PageController();
   int index = 0;
-
   void next() {
     if (index < 3) {
       controller.nextPage(
@@ -21,7 +21,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
         curve: Curves.easeInOut,
       );
     } else {
-      Navigator.pushNamed(context, '/auth');
+      context.go('/auth');
     }
   }
 
@@ -36,7 +36,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
         physics: index == 0
             ? const PageScrollPhysics()
             : const NeverScrollableScrollPhysics(),
-
         onPageChanged: (i) => setState(() => index = i),
         children: [
           OnboardingSlide(
@@ -59,16 +58,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
             content: Column(
               children: [
                 const Spacer(flex: 2),
-
-                // LOGO
-                Image.asset(
-                  'assets/images/logo.png',
-                  height: 200, // bigger, matches reference
-                ),
-
+                Image.asset('assets/images/logo.png', height: 200),
                 const SizedBox(height: 32),
-
-                // TEXT BLOCK
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
@@ -82,9 +73,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           color: AppColors.darkText,
                         ),
                       ),
-
                       SizedBox(height: 12),
-
                       Text(
                         'BioTrack brings all your health data, insights, and records '
                         'together in one secure place.\n\n'
@@ -96,28 +85,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           color: AppColors.bodyText,
                         ),
                       ),
-
-                      SizedBox(height: 12),
-
-                      Text(
-                        'Get important health alerts, understand your vital data '
-                        'through AI insights, and learn essential health information.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 15,
-                          height: 1.5,
-                          color: AppColors.bodyText,
-                        ),
-                      ),
                     ],
                   ),
                 ),
-
                 const Spacer(flex: 3),
               ],
             ),
-
-            // BUTTON AREA (anchored, but NOT glued)
             bottom: Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
               child: PrimaryButton(text: 'Continue', onTap: next),
@@ -131,14 +104,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 120),
-
-                  // ✅ Centered logo
                   Center(
                     child: Image.asset('assets/images/logo.png', height: 200),
                   ),
-
                   const SizedBox(height: 32),
-
                   const Text(
                     'Your Health data is Private\nand Secure',
                     style: TextStyle(
@@ -147,9 +116,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       color: AppColors.darkText,
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
                   const Text(
                     'BioTrack encrypts your vital data on your device when locked, ensuring it stays private and protected at all times.\n\n'
                     'Your health records are never sold or misused. BioTrack uses blockchain verification to ensure data integrity and trust.\n\n'
@@ -160,9 +127,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       color: AppColors.bodyText,
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
                   const Text(
                     'Learn more...',
                     style: TextStyle(
@@ -180,23 +145,17 @@ class _OnboardingPageState extends State<OnboardingPage> {
           OnboardingSlide(
             content: Stack(
               children: [
-                // CENTERED, LARGE LOGO
                 Center(
-                  child: Image.asset(
-                    'assets/images/logo.png',
-                    height: 2300, // ⬅️ bigger, matches reference
-                  ),
+                  child: Image.asset('assets/images/logo.png', height: 2300),
                 ),
-
-                // BOTTOM-GLUED CARD
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 20),
                     padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-                    decoration: BoxDecoration(
-                      color: const Color.fromARGB(255, 255, 255, 255),
-                      borderRadius: const BorderRadius.vertical(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.vertical(
                         top: Radius.circular(24),
                       ),
                     ),
@@ -212,9 +171,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                             color: AppColors.darkText,
                           ),
                         ),
-
                         const SizedBox(height: 12),
-
                         const Text(
                           'Notifications help you stay on top of your vitals, '
                           'receive important health alerts, and get timely '
@@ -226,9 +183,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                             color: AppColors.bodyText,
                           ),
                         ),
-
                         const SizedBox(height: 20),
-
                         PrimaryButton(text: 'Continue', onTap: next),
                       ],
                     ),
