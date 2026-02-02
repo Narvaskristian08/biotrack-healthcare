@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:biotrack_healthcare/core/constants/app_colors.dart';
+import 'package:biotrack_healthcare/core/theme/app_colors.dart';
 
 class AppSettingsPage extends StatefulWidget {
   const AppSettingsPage({super.key});

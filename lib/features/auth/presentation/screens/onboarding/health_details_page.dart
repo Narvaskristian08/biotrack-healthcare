@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:biotrack_healthcare/core/constants/widgets/primary_button.dart';
+import 'package:biotrack_healthcare/common/widgets/primary_button.dart';
 
 class HealthDetailsPage extends StatelessWidget {
   const HealthDetailsPage({super.key});
