@@ -20,6 +20,7 @@ import {
   FileDown,
   User,
   Shield,
+  Building2,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -45,6 +46,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useDashboardRole, type UserRole } from '@/hooks/use-dashboard-role'
+import { Badge } from '@/components/ui/badge'
 
 type NavItem = { label: string; href: string; icon: React.ComponentType<{ className?: string }> }
 
@@ -84,24 +86,63 @@ function getRoleLabel(role: UserRole): string {
   }
 }
 
-function getRoleInitials(role: UserRole): string {
+function getRoleIcon(role: UserRole): React.ReactNode {
   switch (role) {
     case 'patient':
-      return 'P'
+      return <User className="h-3 w-3" />
     case 'provider':
-      return 'HP'
+      return <Building2 className="h-3 w-3" />
     case 'admin':
-      return 'A'
+      return <Shield className="h-3 w-3" />
     default:
-      return 'P'
+      return <User className="h-3 w-3" />
   }
 }
 
-function getInitialsFromName(name?: string): string {
+function getRoleBadgeColor(role: UserRole): string {
+  switch (role) {
+    case 'patient':
+      return 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+    case 'provider':
+      return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+    case 'admin':
+      return 'bg-purple-500/10 text-purple-600 border-purple-500/20'
+    default:
+      return 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+  }
+}
+
+function getInitialsFromName(name?: string, firstName?: string, lastName?: string): string {
+  // Try to get initials from firstName + lastName first
+  if (firstName && lastName) {
+    return (firstName[0] + lastName[0]).toUpperCase()
+  }
+  // Fall back to full name
   if (!name?.trim()) return ''
   const parts = name.trim().split(/\s+/)
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
   return parts[0].slice(0, 2).toUpperCase()
+}
+
+function getDisplayName(sessionUser: { name?: string; firstName?: string; lastName?: string; email?: string } | null, role: UserRole): string {
+  if (!sessionUser) return getRoleLabel(role)
+
+  // For patients, show "FirstName L." format
+  if (role === 'patient' && sessionUser.firstName && sessionUser.lastName) {
+    return `${sessionUser.firstName} ${sessionUser.lastName[0]}.`
+  }
+
+  // For providers/admins, show the name or fallback
+  if (sessionUser.name) {
+    return sessionUser.name
+  }
+
+  // Fallback to email prefix
+  if (sessionUser.email) {
+    return sessionUser.email.split('@')[0]
+  }
+
+  return getRoleLabel(role)
 }
 
 interface DashboardLayoutProps {
@@ -111,13 +152,14 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const { role, sessionUser } = useDashboardRole()
+  const { role, sessionUser, logout } = useDashboardRole()
   const navigationItems = getNavigationItems(role)
   const roleLabel = getRoleLabel(role)
-  const displayInitials = sessionUser?.name ? getInitialsFromName(sessionUser.name) : getRoleInitials(role)
+  const displayName = getDisplayName(sessionUser, role)
+  const displayInitials = getInitialsFromName(sessionUser?.name, sessionUser?.firstName, sessionUser?.lastName) || role[0].toUpperCase()
 
   const handleLogout = () => {
-    localStorage.removeItem('userSession')
+    logout()
     router.push('/login')
   }
 
@@ -194,9 +236,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <div className="flex items-center gap-4">
                 <SidebarTrigger className="-ml-1" />
                 <div className="h-6 w-px bg-border hidden sm:block" />
-                <span className="hidden sm:inline-flex text-sm font-medium text-muted-foreground">
-                  {roleLabel}
-                </span>
+                {/* RBAC Badge */}
+                <div className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(role)}`}>
+                  {getRoleIcon(role)}
+                  <span>{roleLabel}</span>
+                </div>
               </div>
 
               {/* Center Section - Search */}
@@ -225,21 +269,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   </Link>
                 </Button>
 
-                {/* User Profile Dropdown - shows current role (Patient / Healthcare Provider / Admin) */}
+                {/* User Profile Dropdown - shows user name and role */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="flex items-center gap-3 pl-2 pr-3">
                       <div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center">
-                        <span className="text-xs font-semibold text-primary">{displayInitials || 'P'}</span>
+                        <span className="text-xs font-semibold text-primary">{displayInitials}</span>
                       </div>
                       <div className="hidden sm:flex flex-col items-start text-left">
-                        <span className="text-sm font-medium">{roleLabel}</span>
-                        <span className="text-xs text-muted-foreground">Online</span>
+                        <span className="text-sm font-medium">{displayName}</span>
+                        <span className="text-xs text-muted-foreground">{roleLabel}</span>
                       </div>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                    <DropdownMenuLabel>
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium">{displayName}</p>
+                        <p className="text-xs text-muted-foreground">{sessionUser?.email || 'No email'}</p>
+                      </div>
+                    </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
                       <Link href="/profile-settings">Profile</Link>

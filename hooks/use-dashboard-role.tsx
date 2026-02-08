@@ -1,61 +1,80 @@
 'use client'
 
 import { createContext, useContext, ReactNode, useState, useEffect } from 'react'
+import { getSession, clearSession, type UserSession, type AuthRole } from '@/lib/auth'
 
 export type UserRole = 'patient' | 'provider' | 'admin'
+
+interface SessionUser {
+  email?: string
+  name?: string
+  firstName?: string
+  lastName?: string
+  role?: UserRole
+  id?: string
+}
 
 interface DashboardRoleContextType {
   role: UserRole
   setRole: (role: UserRole) => void
-  sessionUser: { email?: string; name?: string; role?: string } | null
+  sessionUser: SessionUser | null
+  isAuthenticated: boolean
+  logout: () => void
 }
 
 const DashboardRoleContext = createContext<DashboardRoleContextType | undefined>(undefined)
 
-function getSessionRole(): UserRole {
-  if (typeof window === 'undefined') return 'patient'
-  try {
-    const raw = localStorage.getItem('userSession')
-    if (!raw) return 'patient'
-    const session = JSON.parse(raw)
-    const r = session?.role?.toLowerCase()
-    if (r === 'patient' || r === 'provider' || r === 'admin') return r
-    return 'patient'
-  } catch {
-    return 'patient'
-  }
+function mapAuthRoleToUserRole(authRole?: AuthRole | string): UserRole {
+  if (authRole === 'patient') return 'patient'
+  if (authRole === 'provider' || authRole === 'staff') return 'provider'
+  if (authRole === 'admin') return 'admin'
+  return 'patient'
 }
 
 export function DashboardRoleProvider({ children }: { children: ReactNode }) {
   const [role, setRoleState] = useState<UserRole>('patient')
-  const [sessionUser, setSessionUser] = useState<{ email?: string; name?: string; role?: string } | null>(null)
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
-    const r = getSessionRole()
-    setRoleState(r)
-    try {
-      const raw = localStorage.getItem('userSession')
-      if (raw) setSessionUser(JSON.parse(raw))
-    } catch {
+    const session = getSession()
+    if (session) {
+      const mappedRole = mapAuthRoleToUserRole(session.role)
+      setRoleState(mappedRole)
+      setSessionUser({
+        email: session.email,
+        name: session.name,
+        firstName: session.firstName,
+        lastName: session.lastName,
+        role: mappedRole,
+        id: session.id,
+      })
+      setIsAuthenticated(true)
+    } else {
+      setIsAuthenticated(false)
       setSessionUser(null)
     }
   }, [])
 
   const setRole = (r: UserRole) => {
     setRoleState(r)
-    try {
-      const raw = localStorage.getItem('userSession')
-      if (raw) {
-        const session = JSON.parse(raw)
-        localStorage.setItem('userSession', JSON.stringify({ ...session, role: r }))
-      }
-    } catch {
-      // ignore
+    // Update localStorage if needed
+    const session = getSession()
+    if (session) {
+      session.role = r as AuthRole
+      localStorage.setItem('userSession', JSON.stringify(session))
     }
   }
 
+  const logout = () => {
+    clearSession()
+    setRoleState('patient')
+    setSessionUser(null)
+    setIsAuthenticated(false)
+  }
+
   return (
-    <DashboardRoleContext.Provider value={{ role, setRole, sessionUser }}>
+    <DashboardRoleContext.Provider value={{ role, setRole, sessionUser, isAuthenticated, logout }}>
       {children}
     </DashboardRoleContext.Provider>
   )

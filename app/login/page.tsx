@@ -3,19 +3,44 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Heart, Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react'
+import {
+  Heart,
+  Mail,
+  Lock,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  User,
+  Building2,
+  Shield,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import {
+  loginPatient,
+  loginHealthCenter,
+  loginAdmin,
+  type AuthRole,
+} from '@/lib/auth'
 
 // Password REGEX: min 8 chars, at least 1 uppercase, 1 lowercase, 1 number, 1 special char
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()\-_=+[\]{}|;:,.<>])[A-Za-z\d@$!%*?&#^()\-_=+[\]{}|;:,.<>]{8,}$/
+
+type LoginRole = 'patient' | 'provider' | 'admin'
+
+const ROLES: { value: LoginRole; label: string; icon: React.ReactNode }[] = [
+  { value: 'patient', label: 'Patient', icon: <User className="h-4 w-4" /> },
+  { value: 'provider', label: 'Provider', icon: <Building2 className="h-4 w-4" /> },
+  { value: 'admin', label: 'Admin', icon: <Shield className="h-4 w-4" /> },
+]
 
 export default function LoginPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [selectedRole, setSelectedRole] = useState<LoginRole>('patient')
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -33,40 +58,57 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setIsLoading(true)
 
-    if (!PASSWORD_REGEX.test(formData.password)) {
-      setError(
-        'Password must be at least 8 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special character (@$!%*?&#^()\-_=+[]{}|;:,.<>)'
-      )
-      setIsLoading(false)
+    if (!formData.email.trim()) {
+      setError('Please enter your email address')
       return
     }
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    // Demo: Accept any credentials for testing
-    if (formData.email && formData.password) {
-      // Determine role based on email pattern (for demo)
-      const role = formData.email.includes('provider')
-        ? 'provider'
-        : formData.email.includes('admin')
-          ? 'admin'
-          : 'patient'
-
-      // Store session info
-      localStorage.setItem('userSession', JSON.stringify({
-        email: formData.email,
-        role: role,
-        loginTime: new Date(),
-      }))
-
-      router.push('/')
-    } else {
-      setError('Please enter both email and password')
-      setIsLoading(false)
+    if (!formData.password) {
+      setError('Please enter your password')
+      return
     }
+
+    if (!PASSWORD_REGEX.test(formData.password)) {
+      setError(
+        'Password must be at least 8 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special character'
+      )
+      return
+    }
+
+    setIsLoading(true)
+
+    const loginData = {
+      email: formData.email.trim(),
+      password: formData.password,
+    }
+
+    let result: { session?: unknown; error?: string }
+
+    // Call the appropriate login function based on selected role
+    switch (selectedRole) {
+      case 'patient':
+        result = await loginPatient(loginData)
+        break
+      case 'provider':
+        result = await loginHealthCenter(loginData)
+        break
+      case 'admin':
+        result = await loginAdmin(loginData)
+        break
+      default:
+        result = { error: 'Invalid role selected' }
+    }
+
+    setIsLoading(false)
+
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+
+    // Navigate to dashboard on success
+    router.push('/')
   }
 
   return (
@@ -112,6 +154,26 @@ export default function LoginPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Role Selection */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Account Type</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {ROLES.map((r) => (
+                    <Button
+                      key={r.value}
+                      type="button"
+                      variant={selectedRole === r.value ? 'default' : 'outline'}
+                      size="sm"
+                      className="h-11 rounded-lg gap-1.5 text-xs font-medium"
+                      onClick={() => setSelectedRole(r.value)}
+                    >
+                      {r.icon}
+                      <span className="truncate">{r.label}</span>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
               {/* Email Field */}
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">Email</Label>
@@ -162,16 +224,6 @@ export default function LoginPage() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-              </div>
-
-              {/* Demo Credentials Hint */}
-              <div className="p-3.5 rounded-lg bg-primary/5 border border-primary/20 text-xs text-muted-foreground">
-                <p className="font-semibold text-foreground mb-1.5">Demo credentials</p>
-                <ul className="space-y-1">
-                  <li>• Patient: patient@example.com</li>
-                  <li>• Provider: provider@example.com</li>
-                  <li>• Password: e.g. Pass123!@</li>
-                </ul>
               </div>
 
               {/* Submit Button */}
