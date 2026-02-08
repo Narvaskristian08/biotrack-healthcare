@@ -298,6 +298,7 @@ Body:
   "email": "sanfabiam@gmail.com",
   "password": "StrongPassword123!",
   "name": "San Fabian Barangay Health Center",
+  "holderName": "Dr. John Doe",
   "address": "San Fabian, Pangasinan",
   "contactNumber": "09171234567"
 }
@@ -317,6 +318,7 @@ Body (raw JSON):
   "email": "sanfabiam@gmail.com",
   "password": "StrongPassword123!",
   "name": "San Fabian Barangay Health Center",
+  "holderName": "Dr. John Doe",
   "address": "San Fabian, Pangasinan",
   "contactNumber": "09171234567"
 }
@@ -373,7 +375,11 @@ Body:
 ```json
 {
   "mrn": "SF-0001",
-  "fullName": "Juan Dela Cruz",
+  "lastName": "Dela Cruz",
+  "firstName": "Juan",
+  "middleInitial": "D",
+  "email": "juan.cruz@example.com",
+  "password": "PatientPassword123!",
   "birthDate": "1992-03-10",
   "sex": "male",
   "address": "Purok 2, San Fabian",

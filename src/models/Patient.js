@@ -3,12 +3,27 @@ import mongoose from 'mongoose';
 const PatientSchema = new mongoose.Schema(
   {
     healthCenterId: { type: mongoose.Schema.Types.ObjectId, ref: 'HealthCenter', required: true, index: true },
-    mrn: { type: String, required: true, trim: true }, // medical record number, unique per health center
-    fullName: { type: String, required: true, trim: true },
+    // medical record number, unique per health center (Optional now as per diagram)
+    mrn: { type: String, trim: true },
+
+    // Split name fields
+    lastName: { type: String, required: true, trim: true },
+    firstName: { type: String, required: true, trim: true },
+    middleInitial: { type: String, required: true, trim: true, maxLength: 1 },
+    nameExtension: { type: String, default: '', trim: true },
+
+    email: { type: String, required: true, trim: true, lowercase: true },
+    passwordHash: { type: String, required: true },
+    token: { type: String, default: '' }, // For log times
+    role: { type: String, default: 'patient' },
+
+    // Removed BirthDate, Sex from required/diagram
     birthDate: { type: Date, default: null },
     sex: { type: String, enum: ['male', 'female', 'other', 'unknown'], default: 'unknown' },
-    address: { type: String, default: '', trim: true },
-    contactNumber: { type: String, default: '', trim: true },
+
+    address: { type: String, required: true, default: '', trim: true },
+    contactNumber: { type: String, required: true, default: '', trim: true },
+
     guardianName: { type: String, default: '', trim: true },
     tags: { type: [String], default: [] },
     status: { type: String, enum: ['active', 'archived'], default: 'active', index: true },
@@ -20,8 +35,8 @@ const PatientSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-PatientSchema.index({ healthCenterId: 1, mrn: 1 }, { unique: true });
-PatientSchema.index({ healthCenterId: 1, fullName: 1 });
+PatientSchema.index({ healthCenterId: 1, email: 1 }, { unique: true });
+PatientSchema.index({ healthCenterId: 1, lastName: 1, firstName: 1 });
 
 export const Patient = mongoose.model('Patient', PatientSchema);
 

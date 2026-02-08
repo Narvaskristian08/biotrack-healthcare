@@ -3,9 +3,9 @@ import { hashPassword, signHealthCenterToken, verifyPassword } from '../services
 import { writeAuditLog } from '../services/auditService.js';
 
 export async function registerHealthCenter(req, res) {
-  const { email, password, name, address = '', contactNumber = '' } = req.body ?? {};
-  if (!email || !password || !name) {
-    return res.status(400).json({ error: { message: 'email, password, name are required' } });
+  const { email, password, name, holderName, address = '', contactNumber = '' } = req.body ?? {};
+  if (!email || !password || !name || !holderName) {
+    return res.status(400).json({ error: { message: 'email, password, name, and holderName are required' } });
   }
 
   const existing = await HealthCenter.findOne({ email: String(email).toLowerCase().trim() }).lean();
@@ -16,8 +16,10 @@ export async function registerHealthCenter(req, res) {
     email: String(email).toLowerCase().trim(),
     passwordHash,
     name: String(name).trim(),
+    holderName: String(holderName).trim(),
     address: String(address ?? '').trim(),
     contactNumber: String(contactNumber ?? '').trim(),
+    role: 'staff',
   });
 
   const token = signHealthCenterToken({ healthCenterId: hc._id });
@@ -26,11 +28,18 @@ export async function registerHealthCenter(req, res) {
     action: 'HEALTHCENTER.REGISTER',
     entityType: 'HealthCenter',
     entityId: hc._id,
-    after: { email: hc.email, name: hc.name },
+    after: { email: hc.email, name: hc.name, holderName: hc.holderName },
   });
 
   return res.status(201).json({
-    healthCenter: { id: hc._id, email: hc.email, name: hc.name, address: hc.address, contactNumber: hc.contactNumber },
+    healthCenter: {
+      id: hc._id,
+      email: hc.email,
+      name: hc.name,
+      holderName: hc.holderName,
+      address: hc.address,
+      contactNumber: hc.contactNumber
+    },
     accessToken: token,
   });
 }
@@ -65,6 +74,23 @@ export async function loginHealthCenter(req, res) {
     outcome: 'success',
   });
 
-  return res.json({ accessToken: token, healthCenter: { id: hc._id, email: hc.email, name: hc.name } });
+  return res.json({
+    accessToken: token,
+    healthCenter: {
+      id: hc._id,
+      email: hc.email,
+      name: hc.name,
+      holderName: hc.holderName
+    }
+  });
+}
+
+export async function listHealthCentersPublic(req, res) {
+  console.log('listHealthCentersPublic controller executing');
+  const hcs = await HealthCenter.find({ status: 'active' })
+    .select('name address contactNumber')
+    .sort({ name: 1 })
+    .lean();
+  return res.json({ healthCenters: hcs });
 }
 

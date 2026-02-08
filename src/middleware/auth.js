@@ -43,11 +43,25 @@ export function requireAdminAuth(req, res, next) {
   }
 }
 
+
 export async function requireSessionAuth(req, res, next) {
   try {
     const token = getBearerToken(req);
     if (!token) return res.status(401).json({ error: { message: 'Missing Bearer token' } });
     const payload = jwt.verify(token, env.SESSION_JWT_SECRET);
+
+    // Support Patient Login (Stateless for now? Or check if payload has patientId)
+    if (payload.tokenType === 'patient') {
+      req.context = {
+        ...(req.context ?? {}),
+        patientId: payload.patientId,
+        healthCenterId: payload.healthCenterId,
+        role: 'patient',
+        patientAccessToken: token
+      };
+      return next();
+    }
+
     if (payload?.tokenType !== 'session') return res.status(401).json({ error: { message: 'Invalid token type' } });
 
     const session = await Session.findById(payload.sessionId).lean();

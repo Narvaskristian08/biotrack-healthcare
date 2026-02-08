@@ -9,7 +9,17 @@ import { sessionRoutes } from './routes/sessionRoutes.js';
 import { patientRoutes } from './routes/patientRoutes.js';
 import { auditLogRoutes } from './routes/auditLogRoutes.js';
 
+import cors from 'cors';
+
 const app = express();
+
+// Explicitly allow Frontend Origin
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.use(express.json());
 app.use(attachContext);
