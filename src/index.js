@@ -16,7 +16,17 @@ import { aiRoutes } from './routes/aiRoutes.js';
 
 import { activityInsightRoutes } from './routes/activityInsightRoutes.js';
 
+import { fallInsightRoutes } from './routes/fallInsightRoutes.js';
+import { trendInsightRoutes } from './routes/trendInsightRoutes.js';
+
+
 const app = express();
+
+
+app.use('/api/ai', trendInsightRoutes);
+
+app.use('/api/ai', fallInsightRoutes);
+
 
 app.use('/api/ai', activityInsightRoutes);
 
