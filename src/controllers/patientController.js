@@ -1,6 +1,7 @@
 import { Patient } from '../models/Patient.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { hashPassword } from '../services/authService.js';
+import { ensureBlockchainIdentityForDocument } from '../services/blockchain/identity.service.js';
 
 export async function createPatient(req, res) {
   const { healthCenterId, adminId } = req.context;
@@ -14,6 +15,7 @@ export async function createPatient(req, res) {
     nameExtension,
     email,
     password,
+    walletAddress,
     birthDate = null,
     sex = 'unknown',
     address,
@@ -61,6 +63,13 @@ export async function createPatient(req, res) {
     updatedByActorType: actorType,
     updatedByActorId: actorId,
   });
+  const { identity } = await ensureBlockchainIdentityForDocument({
+    doc,
+    subjectType: 'patient',
+    uniqueSeed: doc.email,
+    walletAddress,
+    healthCenterId,
+  });
 
   await writeAuditLog({
     req,
@@ -72,6 +81,7 @@ export async function createPatient(req, res) {
       lastName: doc.lastName,
       firstName: doc.firstName,
       email: doc.email,
+      blockchainIdentityId: identity.identityId,
     },
   });
 

@@ -61,7 +61,7 @@
         "url": { "raw": "{{baseUrl}}/api/admin/healthcenters", "host": ["{{baseUrl}}"], "path": ["api", "admin", "healthcenters"] },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"sanfabiam@gmail.com\",\n  \"password\": \"StrongPassword123!\",\n  \"name\": \"San Fabian Barangay Health Center\",\n  \"address\": \"San Fabian, Pangasinan\",\n  \"contactNumber\": \"09171234567\"\n}\n"
+          "raw": "{\n  \"email\": \"sanfabiam@gmail.com\",\n  \"password\": \"StrongPassword123!\",\n  \"name\": \"San Fabian Barangay Health Center\",\n  \"holderName\": \"Dr. John Doe\",\n  \"address\": \"San Fabian, Pangasinan\",\n  \"contactNumber\": \"09171234567\"\n}\n"
         }
       }
     },
@@ -73,7 +73,7 @@
         "url": { "raw": "{{baseUrl}}/api/healthcenters/register", "host": ["{{baseUrl}}"], "path": ["api", "healthcenters", "register"] },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"sanfabiam@gmail.com\",\n  \"password\": \"StrongPassword123!\",\n  \"name\": \"San Fabian Barangay Health Center\",\n  \"address\": \"San Fabian, Pangasinan\",\n  \"contactNumber\": \"09171234567\"\n}\n"
+          "raw": "{\n  \"email\": \"sanfabiam@gmail.com\",\n  \"password\": \"StrongPassword123!\",\n  \"name\": \"San Fabian Barangay Health Center\",\n  \"holderName\": \"Dr. John Doe\",\n  \"address\": \"San Fabian, Pangasinan\",\n  \"contactNumber\": \"09171234567\"\n}\n"
         }
       },
       "event": [
@@ -150,7 +150,7 @@
         "url": { "raw": "{{baseUrl}}/api/patients", "host": ["{{baseUrl}}"], "path": ["api", "patients"] },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"mrn\": \"SF-0001\",\n  \"fullName\": \"Juan Dela Cruz\",\n  \"birthDate\": \"1992-03-10\",\n  \"sex\": \"male\",\n  \"address\": \"Purok 2, San Fabian\",\n  \"contactNumber\": \"09990001111\"\n}\n"
+          "raw": "{\n  \"mrn\": \"SF-0001\",\n  \"lastName\": \"Dela Cruz\",\n  \"firstName\": \"Juan\",\n  \"middleInitial\": \"D\",\n  \"email\": \"juan.cruz@example.com\",\n  \"password\": \"PatientPassword123!\",\n  \"birthDate\": \"1992-03-10\",\n  \"sex\": \"male\",\n  \"address\": \"Purok 2, San Fabian\",\n  \"contactNumber\": \"09990001111\"\n}\n"
         }
       },
       "event": [
@@ -187,8 +187,28 @@
         "url": { "raw": "{{baseUrl}}/api/patients/{{PATIENT_ID}}/records", "host": ["{{baseUrl}}"], "path": ["api", "patients", "{{PATIENT_ID}}", "records"] },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"type\": \"consultation\",\n  \"data\": {\n    \"complaint\": \"Fever and cough\",\n    \"temperatureC\": 38.2,\n    \"assessment\": \"URI\",\n    \"plan\": \"Paracetamol, fluids, rest\"\n  },\n  \"blockchain\": { \"enabled\": false }\n}\n"
+          "raw": "{\n  \"type\": \"consultation\",\n  \"data\": {\n    \"complaint\": \"Fever and cough\",\n    \"temperatureC\": 38.2,\n    \"assessment\": \"URI\",\n    \"plan\": \"Paracetamol, fluids, rest\"\n  },\n  \"blockchain\": { \"enabled\": true }\n}\n"
         }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json && json.record && json.record._id) { pm.environment.set('RECORD_ID', json.record._id); }",
+              "if (json && json.record && json.record.id) { pm.environment.set('RECORD_ID', json.record.id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PatientRecord - Verify Integrity",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{SESSION_TOKEN}}" }],
+        "url": { "raw": "{{baseUrl}}/api/patients/{{PATIENT_ID}}/records/{{RECORD_ID}}/verify", "host": ["{{baseUrl}}"], "path": ["api", "patients", "{{PATIENT_ID}}", "records", "{{RECORD_ID}}", "verify"] }
       }
     },
     {

@@ -26,6 +26,14 @@ Required:
 - `MONGODB_URI`
 - `HEALTHCENTER_JWT_SECRET`
 - `SESSION_JWT_SECRET`
+- `OPENROUTER_API_KEY`
+
+Optional blockchain (set these when you want on-chain anchoring):
+- `BLOCKCHAIN_ENABLED=true`
+- `BLOCKCHAIN_RPC_URL`
+- `BLOCKCHAIN_PRIVATE_KEY`
+- `BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS`
+- `BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS`
 
 Start server:
 
@@ -410,13 +418,24 @@ Body:
     "assessment": "URI",
     "plan": "Paracetamol, fluids, rest"
   },
-  "blockchain": { "enabled": false }
+  "blockchain": { "enabled": true }
 }
 ```
 
-The response includes `recordHash` (this is what you can anchor on-chain later).
+The response includes `recordHash` plus blockchain proof metadata when anchoring is configured.
 
-### Example 8: View Audit Logs (who did what)
+### Example 8: Verify Patient Record Integrity
+
+**GET** `{{baseUrl}}/api/patients/{{PATIENT_ID}}/records/{{RECORD_ID}}/verify`
+
+Headers:
+- `Authorization: Bearer {{SESSION_TOKEN}}`
+
+This verifies:
+- DB integrity (`storedHash` vs recomputed hash)
+- On-chain proof status (when blockchain is enabled and contracts are configured)
+
+### Example 9: View Audit Logs (who did what)
 
 **GET** `{{baseUrl}}/api/auditlogs`
 
@@ -436,7 +455,8 @@ Optional filters:
 4. **Start Session**
 5. **Create Patient**
 6. **Add Patient Record**
-7. **List Audit Logs**
+7. **Verify Record Integrity**
+8. **List Audit Logs**
 
 ## API endpoints (what each token is for)
 
@@ -472,6 +492,7 @@ Start session body shape:
 - `PATCH /api/patients/:id`
 - `GET /api/patients/:patientId/records`
 - `POST /api/patients/:patientId/records`
+- `GET /api/patients/:patientId/records/:recordId/verify`
 
 Header:
 - `Authorization: Bearer <SESSION_TOKEN>`

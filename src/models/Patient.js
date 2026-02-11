@@ -31,12 +31,46 @@ const PatientSchema = new mongoose.Schema(
     createdByActorId: { type: mongoose.Schema.Types.ObjectId, default: null },
     updatedByActorType: { type: String, enum: ['admin', 'healthcenter', 'unknown'], default: 'unknown', index: true },
     updatedByActorId: { type: mongoose.Schema.Types.ObjectId, default: null },
+
+    blockchainIdentity: {
+      identityId: { type: String, default: '', index: true },
+      identityHash: { type: String, default: '', index: true },
+      identitySalt: { type: String, default: '' },
+      walletAddress: { type: String, default: '', trim: true, lowercase: true, index: true },
+      network: { type: String, default: '' },
+      txId: { type: String, default: '' },
+      blockNumber: { type: Number, default: null },
+      proofId: { type: String, default: '' },
+      anchoredAt: { type: Date, default: null },
+      verificationStatus: {
+        type: String,
+        enum: ['pending', 'anchored', 'local_only', 'failed'],
+        default: 'pending',
+        index: true,
+      },
+      errorMessage: { type: String, default: '' },
+    },
   },
   { timestamps: true }
 );
 
 PatientSchema.index({ healthCenterId: 1, email: 1 }, { unique: true });
 PatientSchema.index({ healthCenterId: 1, lastName: 1, firstName: 1 });
+
+PatientSchema.index(
+  { 'blockchainIdentity.identityId': 1 },
+  { unique: true, partialFilterExpression: { 'blockchainIdentity.identityId': { $type: 'string', $ne: '' } } }
+);
+
+PatientSchema.index(
+  { 'blockchainIdentity.identityHash': 1 },
+  { unique: true, partialFilterExpression: { 'blockchainIdentity.identityHash': { $type: 'string', $ne: '' } } }
+);
+
+PatientSchema.index(
+  { 'blockchainIdentity.walletAddress': 1 },
+  { unique: true, partialFilterExpression: { 'blockchainIdentity.walletAddress': { $type: 'string', $ne: '' } } }
+);
 
 export const Patient = mongoose.model('Patient', PatientSchema);
 

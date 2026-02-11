@@ -2,6 +2,7 @@ import { Admin } from '../models/Admin.js';
 import { HealthCenter } from '../models/HealthCenter.js';
 import { hashPassword, signAdminToken, verifyPassword } from '../services/authService.js';
 import { writeAuditLog } from '../services/auditService.js';
+import { ensureBlockchainIdentityForDocument } from '../services/blockchain/identity.service.js';
 
 export async function registerAdmin(req, res) {
   const { email, password } = req.body ?? {};
@@ -40,9 +41,9 @@ export async function loginAdmin(req, res) {
 }
 
 export async function adminCreateHealthCenter(req, res) {
-  const { email, password, name, address = '', contactNumber = '' } = req.body ?? {};
-  if (!email || !password || !name) {
-    return res.status(400).json({ error: { message: 'email, password, name are required' } });
+  const { email, password, name, holderName, walletAddress = '', address = '', contactNumber = '' } = req.body ?? {};
+  if (!email || !password || !name || !holderName) {
+    return res.status(400).json({ error: { message: 'email, password, name, holderName are required' } });
   }
 
   const existing = await HealthCenter.findOne({ email: String(email).toLowerCase().trim() }).lean();
@@ -52,8 +53,16 @@ export async function adminCreateHealthCenter(req, res) {
     email: String(email).toLowerCase().trim(),
     passwordHash: await hashPassword(String(password)),
     name: String(name).trim(),
+    holderName: String(holderName).trim(),
     address: String(address ?? '').trim(),
     contactNumber: String(contactNumber ?? '').trim(),
+  });
+
+  const { identity } = await ensureBlockchainIdentityForDocument({
+    doc: hc,
+    subjectType: 'healthcenter',
+    uniqueSeed: hc.email,
+    walletAddress,
   });
 
   await writeAuditLog({
@@ -61,9 +70,26 @@ export async function adminCreateHealthCenter(req, res) {
     action: 'HEALTHCENTER.CREATE',
     entityType: 'HealthCenter',
     entityId: hc._id,
-    after: { email: hc.email, name: hc.name },
+    after: {
+      email: hc.email,
+      name: hc.name,
+      holderName: hc.holderName,
+      blockchainIdentityId: identity.identityId,
+    },
   });
 
-  return res.status(201).json({ healthCenter: { id: hc._id, email: hc.email, name: hc.name } });
+  return res.status(201).json({
+    healthCenter: {
+      id: hc._id,
+      email: hc.email,
+      name: hc.name,
+      holderName: hc.holderName,
+      blockchainIdentity: {
+        identityId: identity.identityId,
+        verificationStatus: identity.verificationStatus,
+        txId: identity.txId,
+      },
+    },
+  });
 }
 

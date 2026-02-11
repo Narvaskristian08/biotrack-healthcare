@@ -37,6 +37,22 @@ npm install
 
 ### IMPORTANT: Create .env file
 
+Copy `env.example` to `.env` and set your values:
+
+```bash
+cp env.example .env
+```
+
+For blockchain identity + integrity anchoring, set:
+
+- `BLOCKCHAIN_ENABLED=true`
+- `BLOCKCHAIN_RPC_URL`
+- `BLOCKCHAIN_PRIVATE_KEY`
+- `BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS`
+- `BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS`
+
+Keep `BLOCKCHAIN_ENABLED=false` for local/off-chain mode.
+
 ### Start the server
 
 ```bash
@@ -48,5 +64,14 @@ npm start
 ```bash
 npm run dev
 ```
+
+## Blockchain Features
+
+- Patient and health center registration now creates a blockchain identity reference.
+- Identity metadata is saved in MongoDB and optionally anchored on-chain.
+- Patient record creation computes a deterministic record hash and can anchor proof on-chain.
+- New integrity endpoint:
+  - `GET /api/patients/:patientId/records/:recordId/verify`
+  - Recomputes DB hash, compares stored hash, and verifies on-chain proof when available.
 
 

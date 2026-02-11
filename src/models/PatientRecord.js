@@ -20,8 +20,18 @@ const PatientRecordSchema = new mongoose.Schema(
     blockchain: {
       enabled: { type: Boolean, default: false },
       network: { type: String, default: '' },
+      contractAddress: { type: String, default: '' },
       txId: { type: String, default: '' },
+      blockNumber: { type: Number, default: null },
+      proofId: { type: String, default: '' },
       anchoredAt: { type: Date, default: null },
+      lastVerifiedAt: { type: Date, default: null },
+      verificationStatus: {
+        type: String,
+        enum: ['pending', 'anchored', 'unanchored', 'failed', 'tampered'],
+        default: 'unanchored',
+      },
+      errorMessage: { type: String, default: '' },
     },
 
     createdByActorType: { type: String, enum: ['admin', 'healthcenter', 'unknown'], default: 'unknown', index: true },

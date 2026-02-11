@@ -1,9 +1,10 @@
 import { HealthCenter } from '../models/HealthCenter.js';
 import { hashPassword, signHealthCenterToken, verifyPassword } from '../services/authService.js';
 import { writeAuditLog } from '../services/auditService.js';
+import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
 
 export async function registerHealthCenter(req, res) {
-  const { email, password, name, holderName, address = '', contactNumber = '' } = req.body ?? {};
+  const { email, password, name, holderName, walletAddress = '', address = '', contactNumber = '' } = req.body ?? {};
   if (!email || !password || !name || !holderName) {
     return res.status(400).json({ error: { message: 'email, password, name, and holderName are required' } });
   }
@@ -20,6 +21,12 @@ export async function registerHealthCenter(req, res) {
     address: String(address ?? '').trim(),
     contactNumber: String(contactNumber ?? '').trim(),
     role: 'staff',
+  });
+  const { identity } = await ensureBlockchainIdentityForDocument({
+    doc: hc,
+    subjectType: 'healthcenter',
+    uniqueSeed: hc.email,
+    walletAddress,
   });
 
   const token = signHealthCenterToken({ healthCenterId: hc._id });
@@ -38,7 +45,12 @@ export async function registerHealthCenter(req, res) {
       name: hc.name,
       holderName: hc.holderName,
       address: hc.address,
-      contactNumber: hc.contactNumber
+      contactNumber: hc.contactNumber,
+      blockchainIdentity: {
+        identityId: identity.identityId,
+        verificationStatus: identity.verificationStatus,
+        txId: identity.txId,
+      },
     },
     accessToken: token,
   });
@@ -65,6 +77,16 @@ export async function loginHealthCenter(req, res) {
     return res.status(401).json({ error: { message: 'Invalid credentials' } });
   }
 
+  const { identity } = await ensureBlockchainIdentityForDocument({
+    doc: hc,
+    subjectType: 'healthcenter',
+    uniqueSeed: hc.email,
+  });
+  const identityVerification = await verifyBlockchainIdentity(identity, {
+    subjectType: 'healthcenter',
+    subjectId: hc._id,
+  });
+
   const token = signHealthCenterToken({ healthCenterId: hc._id });
   await writeAuditLog({
     req,
@@ -80,8 +102,14 @@ export async function loginHealthCenter(req, res) {
       id: hc._id,
       email: hc.email,
       name: hc.name,
-      holderName: hc.holderName
-    }
+      holderName: hc.holderName,
+      blockchainIdentity: {
+        identityId: identity.identityId,
+        verificationStatus: identity.verificationStatus,
+        verified: identityVerification.verified,
+        onChain: identityVerification.onChain,
+      },
+    },
   });
 }
 

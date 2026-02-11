@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from '../services/authService.js';
 import { writeAuditLog } from '../services/auditService.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
+import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
 
 export async function registerPatientPublic(req, res) {
     const {
@@ -16,6 +17,7 @@ export async function registerPatientPublic(req, res) {
         middleInitial,
         email,
         password,
+        walletAddress,
         address,
         contactNumber,
         nameExtension
@@ -52,6 +54,13 @@ export async function registerPatientPublic(req, res) {
         role: 'patient',
         createdByActorType: 'unknown', // Self-registered
     });
+    const { identity } = await ensureBlockchainIdentityForDocument({
+        doc: patient,
+        subjectType: 'patient',
+        uniqueSeed: patient.email,
+        walletAddress,
+        healthCenterId: patient.healthCenterId,
+    });
 
     await writeAuditLog({
         req,
@@ -63,7 +72,15 @@ export async function registerPatientPublic(req, res) {
 
     return res.status(201).json({
         message: 'Registration successful',
-        patient: { id: patient._id, email: patient.email }
+        patient: {
+            id: patient._id,
+            email: patient.email,
+            blockchainIdentity: {
+                identityId: identity.identityId,
+                verificationStatus: identity.verificationStatus,
+                txId: identity.txId,
+            },
+        }
     });
 }
 
@@ -96,6 +113,18 @@ export async function loginPatient(req, res) {
     if (!match) {
         return res.status(401).json({ error: { message: 'Invalid credentials' } });
     }
+
+    const { identity } = await ensureBlockchainIdentityForDocument({
+        doc: match,
+        subjectType: 'patient',
+        uniqueSeed: match.email,
+        healthCenterId: match.healthCenterId,
+    });
+    const identityVerification = await verifyBlockchainIdentity(identity, {
+        subjectType: 'patient',
+        subjectId: match._id,
+        healthCenterId: match.healthCenterId,
+    });
 
     // Generate Session Token (Mocking a "Session" for patient login)
     // Our system expects a Session Token for data access. 
@@ -142,7 +171,13 @@ export async function loginPatient(req, res) {
             firstName: match.firstName,
             lastName: match.lastName,
             email: match.email,
-            role: 'patient'
+            role: 'patient',
+            blockchainIdentity: {
+                identityId: identity.identityId,
+                verificationStatus: identity.verificationStatus,
+                verified: identityVerification.verified,
+                onChain: identityVerification.onChain,
+            },
         }
     });
 }
