@@ -2,6 +2,12 @@ import mongoose from 'mongoose';
 
 const HealthRecordSchema = new mongoose.Schema(
   {
+    healthCenterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      index: true,
+    },
+
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
@@ -11,6 +17,7 @@ const HealthRecordSchema = new mongoose.Schema(
     heartRate: Number,
     activityLevel: String, // LOW | MODERATE | HIGH
     riskLevel: String,     // LOW | MODERATE | HIGH | CRITICAL
+    fallDetected: { type: Boolean, default: false },
 
     createdAt: {
       type: Date,
@@ -19,5 +26,7 @@ const HealthRecordSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+HealthRecordSchema.index({ healthCenterId: 1, userId: 1, createdAt: -1 });
 
 export default mongoose.model('HealthRecord', HealthRecordSchema);

@@ -20,6 +20,7 @@ export function requireHealthCenterAuth(req, res, next) {
       ...(req.context ?? {}),
       healthCenterId: payload.healthCenterId,
       healthCenterAccessToken: token,
+      role: 'healthcenter',
     };
     return next();
   } catch (e) {
@@ -36,6 +37,7 @@ export function requireAdminAuth(req, res, next) {
     req.context = {
       ...(req.context ?? {}),
       adminId: payload.adminId,
+      role: 'admin',
     };
     return next();
   } catch (e) {
@@ -77,10 +79,57 @@ export async function requireSessionAuth(req, res, next) {
       sessionId: session._id,
       healthCenterId: session.healthCenterId,
       sessionToken: token,
+      role: 'healthcenter',
     };
     return next();
   } catch (e) {
     return res.status(401).json({ error: { message: 'Invalid or expired token' } });
   }
+}
+
+export function requireRoles(...allowedRoles) {
+  return (req, res, next) => {
+    const role = req.context?.role;
+    if (!role) {
+      return res.status(401).json({ error: { message: 'Unauthorized' } });
+    }
+
+    if (!allowedRoles.includes(role)) {
+      return res.status(403).json({
+        error: {
+          message: `Forbidden for role '${role}'`,
+        },
+      });
+    }
+
+    return next();
+  };
+}
+
+export function requirePatientSelf(paramName = 'id') {
+  return (req, res, next) => {
+    if (req.context?.role !== 'patient') return next();
+
+    const requestedId = String(req.params?.[paramName] ?? '').trim();
+    const patientId = String(req.context?.patientId ?? '').trim();
+
+    if (!requestedId) {
+      return res.status(400).json({
+        error: {
+          message: `${paramName} path parameter is required`,
+        },
+      });
+    }
+
+    if (!patientId || requestedId !== patientId) {
+      return res.status(403).json({
+        error: {
+          message: 'Patients can only access their own resource',
+        },
+      });
+    }
+
+    return next();
+  };
 }
 

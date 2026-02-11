@@ -17,18 +17,14 @@ import { aiRoutes } from './routes/aiRoutes.js';
 import { activityInsightRoutes } from './routes/activityInsightRoutes.js';
 
 import { fallInsightRoutes } from './routes/fallInsightRoutes.js';
+
 import { trendInsightRoutes } from './routes/trendInsightRoutes.js';
 
+import { summaryInsightRoutes } from './routes/summaryInsightRoutes.js';
+
+import { alertRoutes } from './routes/alertRoutes.js';
 
 const app = express();
-
-
-app.use('/api/ai', trendInsightRoutes);
-
-app.use('/api/ai', fallInsightRoutes);
-
-
-app.use('/api/ai', activityInsightRoutes);
 
 app.use(
   cors({
@@ -50,6 +46,11 @@ app.use('/api/sessions', sessionRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/auditlogs', auditLogRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/ai', activityInsightRoutes);
+app.use('/api/ai', fallInsightRoutes);
+app.use('/api/ai', trendInsightRoutes);
+app.use('/api/ai', summaryInsightRoutes);
+app.use('/api/ai', alertRoutes);
 
 app.use(errorHandler);
 

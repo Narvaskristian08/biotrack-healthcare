@@ -61,7 +61,7 @@ Urgency Guidance:
  * Rule-based baseline risk assessment
  * (Hybrid intelligence: rules + AI)
  */
-function computeRiskLevel(vitals) {
+export function computeRiskLevel(vitals) {
   if (!vitals?.heartRate) return 'LOW';
 
   if (vitals.heartRate >= 140) return 'CRITICAL';

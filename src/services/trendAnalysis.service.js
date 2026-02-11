@@ -1,18 +1,18 @@
 import HealthRecord from '../models/HealthRecord.js';
 
-function computeTrend(records) {
-  if (records.length < 3) {
+export function computeTrend(heartRates) {
+  if (heartRates.length < 3) {
     return {
       trend: 'INSUFFICIENT_DATA',
       baseline: null,
     };
   }
 
-  const heartRates = records.map(r => r.heartRate);
+  const midpoint = Math.max(1, Math.floor(heartRates.length / 2));
   const baseline =
-    heartRates.slice(0, Math.floor(heartRates.length / 2))
+    heartRates.slice(0, midpoint)
       .reduce((a, b) => a + b, 0) /
-    Math.floor(heartRates.length / 2);
+    midpoint;
 
   const recentAvg =
     heartRates.slice(-3).reduce((a, b) => a + b, 0) / 3;
@@ -23,16 +23,23 @@ function computeTrend(records) {
   return { trend: 'STABLE', baseline };
 }
 
-export async function analyzeUserTrend(userId) {
-  const records = await HealthRecord.find({ userId })
+export async function analyzeUserTrend(userId, healthCenterId = null) {
+  const query = { userId };
+  if (healthCenterId) query.healthCenterId = healthCenterId;
+
+  const records = await HealthRecord.find(query)
     .sort({ createdAt: 1 })
     .limit(10);
 
-  const { trend, baseline } = computeTrend(records);
+  const heartRates = records
+    .map(r => Number(r.heartRate))
+    .filter(n => Number.isFinite(n));
+
+  const { trend, baseline } = computeTrend(heartRates);
 
   return {
     trend,
     baseline,
-    recentHeartRates: records.map(r => r.heartRate),
+    recentHeartRates: heartRates,
   };
 }
