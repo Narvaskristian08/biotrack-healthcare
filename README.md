@@ -74,4 +74,10 @@ npm run dev
   - `GET /api/patients/:patientId/records/:recordId/verify`
   - Recomputes DB hash, compares stored hash, and verifies on-chain proof when available.
 
+## Testing Guide
+
+For full end-to-end instructions (local-only mode, on-chain mode, tamper test, strict-mode test), read:
+
+- `README-TESTING-BLOCKCHAIN.md`
+
 

@@ -1,5 +1,8 @@
 ## Auth + Sessions (Shared Health Center Account) — Guide
 
+For complete blockchain and integrity testing instructions, see:
+- `README-TESTING-BLOCKCHAIN.md`
+
 This project uses a **shared Health Center account** (one email/password for the clinic) and issues a **shared Session token** for the health center.
 
 In this simplified mode:
