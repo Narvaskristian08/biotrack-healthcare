@@ -24,7 +24,7 @@ class AiInsightsPage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Column(
             children: [
-              // Health insights card 
+              // Health insights card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -46,7 +46,7 @@ class AiInsightsPage extends StatelessWidget {
 
                     const SizedBox(height: 12),
                     SizedBox(
-                      width: double.infinity, 
+                      width: double.infinity,
                       child: Align(
                         alignment: Alignment.centerRight,
                         child: Container(

@@ -111,7 +111,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
-              if (trailing != null) trailing,
+              ?trailing,
             ],
           ),
           const SizedBox(height: 8),

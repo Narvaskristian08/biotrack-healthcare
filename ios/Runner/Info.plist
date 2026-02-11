@@ -22,6 +22,12 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>BioTrack uses camera and flash to estimate heart rate with fingertip PPG.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>BioTrack uses motion sensors to detect movement and potential fall events.</string>
+	<key>NSUserNotificationUsageDescription</key>
+	<string>BioTrack sends health and emergency alerts when unusual events are detected.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

@@ -128,11 +128,16 @@ npm run dev
 
 ## Testing Guide
 
-For full end-to-end instructions (local-only mode, on-chain mode, tamper test, strict-mode test), read:
+For full end-to-end testing instructions, read:
 
-- `README-TESTING-BLOCKCHAIN.md`
+- Blockchain and integrity testing: `README-TESTING-BLOCKCHAIN.md`
+- Flutter mobile testing (auth + live scan + sensors): `README-TESTING-MOBILE.md`
 
+Useful Flutter checks:
 
+```bash
 flutter pub get
 flutter pub outdated
+flutter analyze
+flutter test
 ```

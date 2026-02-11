@@ -1,33 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:biotrack_healthcare/core/theme/app_colors.dart';
+import 'package:biotrack_healthcare/core/services/permission_service.dart';
 
-class HealthPermissionPage extends StatelessWidget {
+class HealthPermissionPage extends StatefulWidget {
   const HealthPermissionPage({super.key});
+
+  @override
+  State<HealthPermissionPage> createState() => _HealthPermissionPageState();
+}
+
+class _HealthPermissionPageState extends State<HealthPermissionPage> {
+  bool _cameraGranted = false;
+  bool _motionGranted = false;
+  bool _notificationGranted = false;
+  bool _busy = false;
 
   // Show confirmation dialog for a permission
   void _confirmPermission(
     BuildContext context, {
     required String title,
-    required String description,
+    required Future<bool> Function() requestPermission,
+    required void Function(bool granted) onResult,
     String? nextRoute,
   }) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: Text(title),
-        content: const Text(
-            'Are you sure you want to allow this permission?'),
+        content: const Text('Allow this permission now?'),
         actions: [
-          TextButton(
-            onPressed: () => context.pop(),
-            child: const Text('No'),
-          ),
+          TextButton(onPressed: () => context.pop(), child: const Text('No')),
           ElevatedButton(
             onPressed: () {
               context.pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('$title enabled')),
+              _requestPermission(
+                title: title,
+                requestPermission: requestPermission,
+                onResult: onResult,
               );
 
               // Navigate to next page if provided
@@ -57,8 +67,10 @@ class HealthPermissionPage extends StatelessWidget {
     required IconData icon,
     required String title,
     required String description,
-    required String buttonText,
-    String? nextRoute, 
+    required Future<bool> Function() requestPermission,
+    required void Function(bool granted) onResult,
+    required bool granted,
+    String? nextRoute,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -91,21 +103,26 @@ class HealthPermissionPage extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: ElevatedButton(
-                    onPressed: () => _confirmPermission(
-                      context,
-                      title: title,
-                      description: description,
-                      nextRoute: nextRoute,
-                    ),
+                    onPressed: _busy
+                        ? null
+                        : () => _confirmPermission(
+                            context,
+                            title: title,
+                            requestPermission: requestPermission,
+                            onResult: onResult,
+                            nextRoute: nextRoute,
+                          ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryBlue,
+                      backgroundColor: granted
+                          ? Colors.green
+                          : AppColors.primaryBlue,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(24),
                       ),
                     ),
                     child: Text(
-                      buttonText,
+                      granted ? 'Granted' : 'Allow',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
@@ -121,11 +138,33 @@ class HealthPermissionPage extends StatelessWidget {
     );
   }
 
+  Future<void> _requestPermission({
+    required String title,
+    required Future<bool> Function() requestPermission,
+    required void Function(bool granted) onResult,
+  }) async {
+    setState(() => _busy = true);
+    final granted = await requestPermission();
+    if (!mounted) {
+      return;
+    }
+
+    onResult(granted);
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          granted ? '$title granted' : '$title denied by the system',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: BackButton(onPressed: () => context.pop()), 
+        leading: BackButton(onPressed: () => context.pop()),
         title: const Text(
           'Enable Health Permission',
           style: TextStyle(fontWeight: FontWeight.w600),
@@ -149,8 +188,9 @@ class HealthPermissionPage extends StatelessWidget {
               title: 'Camera & Flash',
               description:
                   'Used to measure your heart rate by detecting subtle changes in blood flow.',
-              buttonText: 'Allow Camera Access',
-              // nextRoute: '/scan', // navigate to scan page after allowing
+              requestPermission: PermissionService.requestCameraPermission,
+              onResult: (granted) => setState(() => _cameraGranted = granted),
+              granted: _cameraGranted,
             ),
 
             const SizedBox(height: 16),
@@ -161,7 +201,9 @@ class HealthPermissionPage extends StatelessWidget {
               title: 'Motion Sensors',
               description:
                   'Allows BioTrack to detect physical activity, movement patterns, and possible fall events.',
-              buttonText: 'Enable Motion Access',
+              requestPermission: PermissionService.requestMotionPermission,
+              onResult: (granted) => setState(() => _motionGranted = granted),
+              granted: _motionGranted,
             ),
 
             const SizedBox(height: 16),
@@ -172,7 +214,18 @@ class HealthPermissionPage extends StatelessWidget {
               title: 'Notifications',
               description:
                   'Receive alerts when unusual vital signs are detected or when immediate attention is required.',
-              buttonText: 'Allow Notification Access',
+              requestPermission:
+                  PermissionService.requestNotificationPermission,
+              onResult: (granted) =>
+                  setState(() => _notificationGranted = granted),
+              granted: _notificationGranted,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Current status: Camera ${_cameraGranted ? "granted" : "pending"} | '
+              'Motion ${_motionGranted ? "granted" : "pending"} | '
+              'Notifications ${_notificationGranted ? "granted" : "pending"}',
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ],
         ),

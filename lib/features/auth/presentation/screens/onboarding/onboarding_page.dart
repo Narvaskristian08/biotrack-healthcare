@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import 'package:biotrack_healthcare/common/widgets/primary_button.dart';
 import 'package:biotrack_healthcare/core/theme/app_colors.dart';
-import '../../widgets/onboarding_slide.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -12,189 +12,287 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
-  final controller = PageController();
-  int index = 0;
-  void next() {
-    if (index < 3) {
-      controller.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+  final PageController _controller = PageController();
+  int _index = 0;
+
+  void _next() {
+    if (_index < 3) {
+      _controller.nextPage(
+        duration: const Duration(milliseconds: 340),
+        curve: Curves.easeOutCubic,
       );
-    } else {
-      context.go('/auth');
+      return;
     }
+    context.go('/auth');
   }
 
-  Widget logo(double size) =>
-      Image.asset('assets/images/logo.png', height: size);
+  Widget _dot(bool active) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      width: active ? 26 : 9,
+      height: 9,
+      decoration: BoxDecoration(
+        color: active ? AppColors.primaryBlue : const Color(0xFFC9D4C5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: PageView(
-        controller: controller,
-        physics: index == 0
-            ? const PageScrollPhysics()
-            : const NeverScrollableScrollPhysics(),
-        onPageChanged: (i) => setState(() => index = i),
+      body: Stack(
         children: [
-          OnboardingSlide(
-            content: logo(200),
-            bottom: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.swipe, size: 28, color: Colors.grey),
-                SizedBox(height: 8),
-                Text(
-                  'Swipe to continue',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
-                ),
-                SizedBox(height: 24),
-              ],
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFF7FBF4), Color(0xFFE7F2DE)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
             ),
           ),
-
-          OnboardingSlide(
-            content: Column(
+          Positioned(
+            top: -120,
+            right: -70,
+            child: Container(
+              height: 290,
+              width: 290,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.primaryBlue.withValues(alpha: 0.14),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 190,
+            left: -80,
+            child: Container(
+              height: 230,
+              width: 230,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFFCEE6BA),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Column(
               children: [
-                const Spacer(flex: 2),
-                Image.asset('assets/images/logo.png', height: 200),
-                const SizedBox(height: 32),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: const [
-                      Text(
-                        'Welcome to BioTrack',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.darkText,
-                        ),
-                      ),
-                      SizedBox(height: 12),
-                      Text(
-                        'BioTrack brings all your health data, insights, and records '
-                        'together in one secure place.\n\n'
-                        'Get important health alerts, understand your vital data through AI insights, and learn essential health information.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 15,
-                          height: 1.5,
-                          color: AppColors.bodyText,
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => context.go('/auth'),
+                        child: const Text(
+                          'Skip',
+                          style: TextStyle(
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Spacer(flex: 3),
-              ],
-            ),
-            bottom: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-              child: PrimaryButton(text: 'Continue', onTap: next),
-            ),
-          ),
-
-          OnboardingSlide(
-            content: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 120),
-                  Center(
-                    child: Image.asset('assets/images/logo.png', height: 200),
-                  ),
-                  const SizedBox(height: 32),
-                  const Text(
-                    'Your Health data is Private\nand Secure',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.darkText,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'BioTrack encrypts your vital data on your device when locked, ensuring it stays private and protected at all times.\n\n'
-                    'Your health records are never sold or misused. BioTrack uses blockchain verification to ensure data integrity and trust.\n\n'
-                    'You decide when and how your data is shared. With BioTrack, you can manage or disable data sharing anytime.',
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.6,
-                      color: AppColors.bodyText,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Learn more...',
-                    style: TextStyle(
-                      color: AppColors.primaryBlue,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            bottom: PrimaryButton(text: 'Continue', onTap: next),
-          ),
-
-          OnboardingSlide(
-            content: Stack(
-              children: [
-                Center(
-                  child: Image.asset('assets/images/logo.png', height: 2300),
-                ),
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 20),
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(24),
+                Expanded(
+                  child: PageView(
+                    controller: _controller,
+                    onPageChanged: (value) => setState(() => _index = value),
+                    children: const [
+                      _IntroSlide(
+                        title: 'Track Health Vitals Daily',
+                        description:
+                            'Use BioTrack to measure, monitor, and understand your wellbeing from your mobile phone.',
+                        icon: Icons.favorite,
                       ),
+                      _IntroSlide(
+                        title: 'Private and Secure by Default',
+                        description:
+                            'Your records are encrypted, protected, and controlled by you at all times.',
+                        icon: Icons.lock,
+                      ),
+                      _IntroSlide(
+                        title: 'Smart Alerts and Insights',
+                        description:
+                            'Receive timely alerts, movement status, and AI-guided wellness insights.',
+                        icon: Icons.insights,
+                      ),
+                      _IntroSlide(
+                        title: 'Blockchain-Verified Records',
+                        description:
+                            'Important health records can be integrity-verified to build trust and traceability.',
+                        icon: Icons.verified,
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 26),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
+                    border: Border.all(color: const Color(0xFFD9E7D3)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _dot(_index == 0),
+                          const SizedBox(width: 6),
+                          _dot(_index == 1),
+                          const SizedBox(width: 6),
+                          _dot(_index == 2),
+                          const SizedBox(width: 6),
+                          _dot(_index == 3),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      if (_index == 0) ...[
+                        const Icon(Icons.swipe, size: 22, color: Colors.grey),
+                        const SizedBox(height: 6),
                         const Text(
-                          'Stay Healthy with\nBioTrack Notifications',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.darkText,
-                          ),
+                          'Swipe to continue',
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
                         ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Notifications help you stay on top of your vitals, '
-                          'receive important health alerts, and get timely '
-                          'AI-powered insights.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            height: 1.5,
-                            color: AppColors.bodyText,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        PrimaryButton(text: 'Continue', onTap: next),
+                        const SizedBox(height: 14),
                       ],
-                    ),
+                      PrimaryButton(
+                        text: _index == 3 ? 'Get Started' : 'Continue',
+                        onTap: _next,
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            bottom: const SizedBox(),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _IntroSlide extends StatelessWidget {
+  const _IntroSlide({
+    required this.title,
+    required this.description,
+    required this.icon,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxHeight < 430;
+        final heroSize = compact ? 150.0 : 230.0;
+        final logoSize = compact ? 88.0 : 130.0;
+        final titleSize = compact ? 21.0 : 25.0;
+        final cardPadding = compact
+            ? const EdgeInsets.fromLTRB(14, 14, 14, 14)
+            : const EdgeInsets.fromLTRB(18, 20, 18, 18);
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(22, 6, 22, 10),
+          child: SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  const SizedBox(height: 4),
+                  Container(
+                    width: heroSize,
+                    height: heroSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFE0F1D0), Color(0xFFBEDBA4)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.2),
+                          blurRadius: compact ? 24 : 40,
+                          offset: Offset(0, compact ? 12 : 20),
+                        ),
+                      ],
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Image.asset('assets/images/logo.png', height: logoSize),
+                        Positioned(
+                          bottom: compact ? 16 : 28,
+                          right: compact ? 18 : 34,
+                          child: Container(
+                            height: compact ? 34 : 42,
+                            width: compact ? 34 : 42,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryBlue,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              icon,
+                              color: Colors.white,
+                              size: compact ? 18 : 23,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: cardPadding,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: titleSize,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.darkText,
+                          ),
+                        ),
+                        SizedBox(height: compact ? 7 : 10),
+                        Text(
+                          description,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: compact ? 12.6 : 14,
+                            height: 1.45,
+                            color: AppColors.bodyText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

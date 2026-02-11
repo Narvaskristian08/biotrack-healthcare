@@ -98,7 +98,7 @@ class HealthDetailsPage extends StatelessWidget {
               PrimaryButton(
                 text: 'Continue',
                 onTap: () {
-                 // context.go('/main');
+                  context.go('/home');
                 },
               ),
             ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -72,7 +73,7 @@ class HomePage extends StatelessWidget {
                             height: 36,
                             child: ElevatedButton(
                               onPressed: () {
-                                Navigator.pushNamed(context, '/scan');
+                                context.go('/scan');
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF4C9F38),
@@ -155,7 +156,7 @@ class HomePage extends StatelessWidget {
                     alignment: Alignment.centerRight,
                     child: GestureDetector(
                       onTap: () {
-                        Navigator.pushNamed(context, '/ai-insights');
+                        context.go('/ai-insights');
                       },
                       child: const Text(
                         'View full advice >',

@@ -8,4 +8,3 @@ class AppColors {
 
   static Color? get primary => null;
 }
- 
