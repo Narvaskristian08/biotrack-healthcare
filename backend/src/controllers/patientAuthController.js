@@ -5,6 +5,8 @@ import { writeAuditLog } from '../services/auditService.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
+import { PatientLoginHistory } from '../models/PatientLoginHistory.js';
+import { sha256Hex } from '../utils/crypto.js';
 
 export async function registerPatientPublic(req, res) {
     const {
@@ -154,6 +156,28 @@ export async function loginPatient(req, res) {
         env.SESSION_JWT_SECRET,
         { expiresIn: env.SESSION_TOKEN_TTL }
     );
+
+    const ip = String(req?.ip ?? req?.headers?.['x-forwarded-for'] ?? '').trim();
+    const userAgent = String(req?.headers?.['user-agent'] ?? '').trim();
+    let expiresAt = null;
+    try {
+        const decoded = jwt.decode(token);
+        if (decoded?.exp) {
+            expiresAt = new Date(Number(decoded.exp) * 1000);
+        }
+    } catch {
+        expiresAt = null;
+    }
+
+    await PatientLoginHistory.create({
+        healthCenterId: match.healthCenterId,
+        patientId: match._id,
+        tokenHash: sha256Hex(token),
+        ip,
+        userAgent,
+        loginAt: new Date(),
+        expiresAt,
+    });
 
     // Record Audit
     await writeAuditLog({

@@ -21,6 +21,8 @@ import {
   User,
   Shield,
   Building2,
+  Database,
+  Cpu,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -68,8 +70,19 @@ const PROVIDER_NAV: NavItem[] = [
   { label: 'Blockchain', href: '/blockchain', icon: Lock },
 ]
 
+const ADMIN_NAV: NavItem[] = [
+  { label: 'Admin Dashboard', href: '/admin-dashboard', icon: Home },
+  { label: 'User Management', href: '/admin/users', icon: Users },
+  { label: 'System Logs', href: '/admin/logs', icon: Activity },
+  { label: 'RBAC Policies', href: '/admin/ai-configuration', icon: Shield },
+  { label: 'Blockchain Mgmt', href: '/admin/blockchain-management', icon: Lock },
+  { label: 'Backup & Recovery', href: '/admin/backup-recovery', icon: Database },
+  { label: 'System Monitoring', href: '/analytics', icon: Cpu },
+]
+
 function getNavigationItems(role: UserRole): NavItem[] {
   if (role === 'patient') return PATIENT_NAV
+  if (role === 'admin') return ADMIN_NAV
   return PROVIDER_NAV
 }
 

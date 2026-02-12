@@ -1,265 +1,278 @@
-'use client'
+'use client';
 
-import React, { useState } from 'react'
-import { Heart, Activity, Droplets, Thermometer, TrendingUp, Download, Calendar } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
+import React, { useEffect, useMemo, useState } from 'react';
+import { Activity, AlertTriangle, Download, Heart, ShieldCheck, TrendingUp } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from 'recharts'
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import StatsCard from './stats-card';
 import {
-  mockPatientVitals, mockHealthInsights, mockMedicalRecords,
-  mockHeartRateTrend, mockActivityTrend, mockMovementTrend
-} from '@/lib/mock-data'
-import StatsCard from './stats-card'
+  downloadTextFile,
+  fetchMyAlerts,
+  fetchMyHealthSummary,
+  fetchMyPatientRecords,
+  fetchMyTrendInsight,
+  type PatientRecord,
+} from '@/lib/patient-role';
+
+type DashboardState = {
+  loading: boolean;
+  error: string;
+  records: PatientRecord[];
+  trend: number[];
+  trendLabel: string;
+  summaryText: string;
+  fallEvents: number;
+  alerts: { id: string; severity: string; type: string; message: string; createdAt: string }[];
+};
+
+function parseNumeric(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function extractActivityLevel(record: PatientRecord): number | null {
+  const data = record.data ?? {};
+  const direct = parseNumeric((data as Record<string, unknown>).activityLevel);
+  if (direct !== null) return direct;
+  const steps = parseNumeric((data as Record<string, unknown>).steps);
+  if (steps !== null) return Math.min(100, Math.round(steps / 120));
+  return null;
+}
 
 export default function PatientDashboard() {
-  const [timePeriod, setTimePeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly')
-  const currentVital = mockPatientVitals[0]
+  const [state, setState] = useState<DashboardState>({
+    loading: true,
+    error: '',
+    records: [],
+    trend: [],
+    trendLabel: 'INSUFFICIENT_DATA',
+    summaryText: '',
+    fallEvents: 0,
+    alerts: [],
+  });
+
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      const [recordsRes, trendRes, summaryRes, alertsRes] = await Promise.all([
+        fetchMyPatientRecords(),
+        fetchMyTrendInsight(),
+        fetchMyHealthSummary(7),
+        fetchMyAlerts(20),
+      ]);
+
+      if (!active) return;
+
+      const errors = [recordsRes.error, trendRes.error, summaryRes.error, alertsRes.error].filter(Boolean);
+      setState({
+        loading: false,
+        error: errors.length > 0 ? errors[0] ?? 'Failed to load dashboard data' : '',
+        records: recordsRes.records ?? [],
+        trend: trendRes.data?.trendData?.recentHeartRates ?? [],
+        trendLabel: trendRes.data?.trendData?.trend ?? 'INSUFFICIENT_DATA',
+        summaryText: summaryRes.data?.insight ?? '',
+        fallEvents: Number(summaryRes.data?.summaryData?.fallEvents ?? 0),
+        alerts: (alertsRes.alerts ?? []).map((a) => ({
+          id: a._id,
+          severity: a.severity,
+          type: a.type,
+          message: a.message,
+          createdAt: a.createdAt,
+        })),
+      });
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const latestHeartRate = useMemo(() => {
+    if (state.trend.length === 0) return null;
+    return state.trend[state.trend.length - 1];
+  }, [state.trend]);
+
+  const heartRateChartData = useMemo(
+    () =>
+      state.trend.map((value, idx) => ({
+        sample: `#${idx + 1}`,
+        heartRate: value,
+      })),
+    [state.trend]
+  );
+
+  const activityChartData = useMemo(() => {
+    const latest = state.records.slice(0, 10).reverse();
+    return latest.map((record, idx) => ({
+      idx: `${idx + 1}`,
+      activity: extractActivityLevel(record) ?? 0,
+    }));
+  }, [state.records]);
+
+  const verifiedCount = useMemo(
+    () => state.records.filter((record) => String(record.blockchain?.verificationStatus ?? '').toLowerCase() === 'anchored').length,
+    [state.records]
+  );
+
+  const downloadSummary = () => {
+    const lines = [
+      'BioTrack Patient Dashboard Summary',
+      `Generated At: ${new Date().toISOString()}`,
+      `Heart Rate Trend Label: ${state.trendLabel}`,
+      `Latest Heart Rate: ${latestHeartRate ?? 'N/A'}`,
+      `Fall Events (7 days): ${state.fallEvents}`,
+      `Total Records: ${state.records.length}`,
+      `Blockchain Verified Records: ${verifiedCount}`,
+      '',
+      'AI Summary:',
+      state.summaryText || 'No AI summary available.',
+    ];
+    downloadTextFile(`biotrack-dashboard-summary-${new Date().toISOString().slice(0, 10)}.txt`, lines.join('\n'));
+  };
+
+  if (state.loading) {
+    return <div className="text-sm text-muted-foreground">Loading patient dashboard...</div>;
+  }
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">My Health Dashboard</h1>
-            <p className="text-muted-foreground text-lg mt-1">
-              Track your vital signs and health metrics
-            </p>
-          </div>
-          <Button variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            Download Summary
-          </Button>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight text-foreground">My Health Dashboard</h1>
+          <p className="text-muted-foreground text-lg mt-1">Personal health monitoring and record access</p>
         </div>
+        <Button variant="outline" className="gap-2" onClick={downloadSummary}>
+          <Download className="h-4 w-4" />
+          Download Summary
+        </Button>
       </div>
 
-      {/* Current Vitals */}
+      {state.error ? (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="pt-6 text-sm text-destructive">{state.error}</CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
-          title="Heart Rate"
-          value={`${currentVital.heartRate} bpm`}
-          change="Normal"
+          title="Real-Time Heart Rate"
+          value={latestHeartRate !== null ? `${latestHeartRate} bpm` : 'N/A'}
+          change={state.trendLabel}
           icon={<Heart className="h-5 w-5" />}
-          trend="stable"
+          trend={state.trendLabel === 'INCREASING' ? 'up' : state.trendLabel === 'DECREASING' ? 'down' : 'stable'}
         />
         <StatsCard
-          title="Blood Pressure"
-          value={currentVital.bloodPressure}
-          change="Healthy"
-          icon={<Droplets className="h-5 w-5" />}
-          trend="stable"
-        />
-        <StatsCard
-          title="Oxygen Level"
-          value={`${currentVital.oxygenLevel}%`}
-          change="Excellent"
+          title="Activity History"
+          value={`${activityChartData.length} samples`}
+          change="Recent records"
           icon={<Activity className="h-5 w-5" />}
-          trend="up"
+          trend="stable"
         />
         <StatsCard
-          title="Temperature"
-          value={`${currentVital.temperature}°C`}
-          change="Normal"
-          icon={<Thermometer className="h-5 w-5" />}
+          title="Fall Detection Logs"
+          value={String(state.fallEvents)}
+          change="Last 7 days"
+          icon={<AlertTriangle className="h-5 w-5" />}
+          trend={state.fallEvents > 0 ? 'up' : 'stable'}
+        />
+        <StatsCard
+          title="Verified Records"
+          value={String(verifiedCount)}
+          change={`${state.records.length} total records`}
+          icon={<ShieldCheck className="h-5 w-5" />}
           trend="stable"
         />
       </div>
 
-      {/* Main Charts Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Heart Rate Trends */}
-        <Card className="lg:col-span-2 glass glow-green">
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-primary" />
-                  Heart Rate Trends
-                </CardTitle>
-                <CardDescription>Weekly average with min/max range</CardDescription>
-              </div>
-              <Tabs value={timePeriod} onValueChange={(v) => setTimePeriod(v as 'daily' | 'weekly' | 'monthly')}>
-                <TabsList className="h-8">
-                  <TabsTrigger value="daily" className="text-xs">Daily</TabsTrigger>
-                  <TabsTrigger value="weekly" className="text-xs">Weekly</TabsTrigger>
-                  <TabsTrigger value="monthly" className="text-xs">Monthly</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
+            <CardTitle className="flex items-center gap-2">
+              <Heart className="h-5 w-5 text-primary" />
+              Heart Rate Trend
+            </CardTitle>
+            <CardDescription>Derived from recent health analytics</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={mockHeartRateTrend}>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={heartRateChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="day" stroke="var(--muted-foreground)" />
+                <XAxis dataKey="sample" stroke="var(--muted-foreground)" />
                 <YAxis stroke="var(--muted-foreground)" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                  }}
-                />
+                <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="average" stroke="var(--primary)" strokeWidth={2} />
-                <Line type="monotone" dataKey="min" stroke="var(--muted-foreground)" strokeWidth={1} strokeDasharray="5 5" />
-                <Line type="monotone" dataKey="max" stroke="var(--secondary)" strokeWidth={1} strokeDasharray="5 5" />
+                <Line type="monotone" dataKey="heartRate" stroke="var(--primary)" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* AI Health Insights */}
-        <Card className="glass glow-cyan">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-accent" />
-              AI Insights
+              AI Health Insights
             </CardTitle>
-            <CardDescription>Personalized health recommendations</CardDescription>
+            <CardDescription>Advisory summary and alerts</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {mockHealthInsights.map((insight, idx) => (
-              <div
-                key={idx}
-                className={`p-3 rounded-lg border ${
-                  insight.type === 'warning'
-                    ? 'bg-destructive/10 border-destructive/30'
-                    : insight.type === 'success'
-                      ? 'bg-green-500/10 border-green-500/30'
-                      : 'bg-blue-500/10 border-blue-500/30'
-                }`}
-              >
+            <div className="p-3 rounded-lg border bg-muted/40">
+              <p className="text-sm">{state.summaryText || 'No AI advisory summary available yet.'}</p>
+            </div>
+            {state.alerts.slice(0, 3).map((alert) => (
+              <div key={alert.id} className="p-3 rounded-lg border">
                 <div className="flex items-start gap-2">
-                  <Badge
-                    variant={insight.type === 'warning' ? 'destructive' : insight.type === 'success' ? 'default' : 'secondary'}
-                    className="mt-0.5"
-                  >
-                    {insight.type}
+                  <Badge variant={alert.severity === 'CRITICAL' || alert.severity === 'HIGH' ? 'destructive' : 'secondary'}>
+                    {alert.severity}
                   </Badge>
                   <div className="flex-1">
-                    <p className="font-medium text-sm">{insight.title}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{insight.description}</p>
+                    <p className="text-sm font-medium">{alert.type.replaceAll('_', ' ')}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{alert.message || 'No message provided.'}</p>
                   </div>
                 </div>
               </div>
             ))}
+            {state.alerts.length === 0 ? <p className="text-xs text-muted-foreground">No recent alerts.</p> : null}
           </CardContent>
         </Card>
       </div>
 
-      {/* Activity and Movement */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card className="glass glow-green">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5 text-accent" />
-              Activity Summary
-            </CardTitle>
-            <CardDescription>Steps and calories burned</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={mockActivityTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="day" stroke="var(--muted-foreground)" />
-                <YAxis yAxisId="left" stroke="var(--muted-foreground)" />
-                <YAxis yAxisId="right" orientation="right" stroke="var(--muted-foreground)" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                  }}
-                />
-                <Legend />
-                <Bar yAxisId="left" dataKey="steps" fill="var(--chart-1)" radius={[8, 8, 0, 0]} />
-                <Bar yAxisId="right" dataKey="calories" fill="var(--chart-2)" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card className="glass glow-cyan">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-secondary" />
-              Movement Breakdown
-            </CardTitle>
-            <CardDescription>Time spent in different activities</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={mockMovementTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" stroke="var(--muted-foreground)" />
-                <YAxis stroke="var(--muted-foreground)" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                  }}
-                />
-                <Legend />
-                <Area type="monotone" dataKey="walking" stackId="1" fill="var(--chart-3)" />
-                <Area type="monotone" dataKey="running" stackId="1" fill="var(--chart-1)" />
-                <Area type="monotone" dataKey="resting" stackId="1" fill="var(--chart-4)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Medical Records */}
-      <Card className="glass glow-green">
+      <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Medical Records</CardTitle>
-              <CardDescription>Verified blockchain records (read-only)</CardDescription>
-            </div>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Download className="h-4 w-4" />
-              Export PDF
-            </Button>
-          </div>
+          <CardTitle>Activity Trend</CardTitle>
+          <CardDescription>History derived from your recent records</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {mockMedicalRecords.map((record) => (
-              <div
-                key={record.id}
-                className="p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold text-sm">{record.type}</h3>
-                      <Badge variant="outline" className="text-xs gap-1">
-                        ✓ Verified
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-1">{record.notes}</p>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {record.date}
-                      </span>
-                      <span>By: {record.doctor}</span>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="sm">
-                    View
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={activityChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="idx" stroke="var(--muted-foreground)" />
+              <YAxis stroke="var(--muted-foreground)" />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="activity" fill="var(--chart-2)" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

@@ -86,3 +86,13 @@ export function apiPost<T>(endpoint: string, body: unknown) {
         body: JSON.stringify(body),
     });
 }
+
+/**
+ * PATCH request helper
+ */
+export function apiPatch<T>(endpoint: string, body: unknown) {
+    return apiFetch<T>(endpoint, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+    });
+}

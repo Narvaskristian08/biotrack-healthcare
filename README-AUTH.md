@@ -14,6 +14,76 @@ Optional (for readability in audit logs):
 - `X-Barangay` (e.g. `San Fabian`)
 - `X-Actor-Name` (e.g. `Nurse Ana`)
 
+## Web Platform - Role-Based System
+
+The BioTrack Web Platform acts as a centralized monitoring and management system for healthcare stakeholders.
+
+It implements Role-Based Access Control (RBAC) to enforce:
+- security
+- data privacy
+- proper permission management
+- controlled access to sensitive medical records
+
+### Core access model
+
+- Every authenticated user is assigned a role.
+- Permissions are granted to roles, not directly to users.
+- Users can only view or modify records allowed by their assigned role.
+- High-risk actions are logged for accountability and traceability.
+
+### Typical roles and permissions
+
+- `System Admin`
+  - Manages platform configuration, user roles, and policy settings.
+  - Has full administrative access, including audit and compliance views.
+- `Health Center Admin`
+  - Manages users and operations within a single health center.
+  - Can view and manage patients and records for their own organization.
+- `Clinician / Nurse`
+  - Can create and update clinical records relevant to assigned patients.
+  - Cannot change global role or platform configuration settings.
+- `Viewer / Auditor`
+  - Read-only access to approved records and reports.
+  - No create, update, or delete privileges.
+
+### Data protection controls
+
+- Least privilege: default access is restricted until explicitly granted.
+- Organization scoping: access is limited to the correct health center context.
+- Session-based authentication with token validation.
+- Audit logging for record access and modifications.
+
+## PATIENT ROLE
+
+Role: Personal Health Monitoring & Record Access
+
+The Patient role on the web platform is for users who want a larger dashboard view compared to mobile.
+
+### What Patients Can Do
+
+- View Personal Health Dashboard
+  - Real-time heart rate data
+  - Activity history
+  - Fall detection logs
+  - AI-generated health insights
+- View Medical History
+  - Historical vital trends
+  - AI advisory summaries
+  - Downloadable health reports
+- Verify Record Authenticity
+  - Check blockchain verification status
+  - View timestamp and record hash confirmation
+- Manage Profile
+  - Update personal details
+  - Manage emergency contacts
+  - View login history
+
+### Restrictions
+
+- Cannot access other patients' data.
+- Cannot modify blockchain records.
+- Cannot change system configurations.
+
 
 
 

@@ -22,6 +22,10 @@ export default function DashboardPage() {
       router.replace('/login')
       return
     }
+    if (session.role === 'admin') {
+      router.replace('/admin-dashboard')
+      return
+    }
     setChecking(false)
   }, [router])
 
@@ -40,7 +44,7 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       {role === 'patient' && <PatientDashboard />}
-      {(role === 'provider' || role === 'admin') && <ProviderDashboard />}
+      {role === 'provider' && <ProviderDashboard />}
     </DashboardLayout>
   )
 }

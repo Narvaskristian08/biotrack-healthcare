@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { requirePatientSelf, requireRoles, requireSessionAuth } from '../middleware/auth.js';
-import { createPatient, getPatient, listPatients, updatePatient } from '../controllers/patientController.js';
+import { createPatient, getPatient, listPatientLoginHistory, listPatients, updatePatient } from '../controllers/patientController.js';
 import { addPatientRecord, listPatientRecords, verifyPatientRecordIntegrity } from '../controllers/patientRecordController.js';
 import { loginPatient, registerPatientPublic } from '../controllers/patientAuthController.js';
 
@@ -13,7 +13,8 @@ patientRoutes.post('/login', asyncHandler(loginPatient));
 patientRoutes.get('/', requireSessionAuth, requireRoles('healthcenter'), asyncHandler(listPatients));
 patientRoutes.post('/', requireSessionAuth, requireRoles('healthcenter'), asyncHandler(createPatient));
 patientRoutes.get('/:id', requireSessionAuth, requireRoles('healthcenter', 'patient'), requirePatientSelf('id'), asyncHandler(getPatient));
-patientRoutes.patch('/:id', requireSessionAuth, requireRoles('healthcenter'), asyncHandler(updatePatient));
+patientRoutes.patch('/:id', requireSessionAuth, requireRoles('healthcenter', 'patient'), requirePatientSelf('id'), asyncHandler(updatePatient));
+patientRoutes.get('/:id/login-history', requireSessionAuth, requireRoles('healthcenter', 'patient'), requirePatientSelf('id'), asyncHandler(listPatientLoginHistory));
 
 patientRoutes.get('/:patientId/records', requireSessionAuth, requireRoles('healthcenter', 'patient'), requirePatientSelf('patientId'), asyncHandler(listPatientRecords));
 patientRoutes.post('/:patientId/records', requireSessionAuth, requireRoles('healthcenter'), asyncHandler(addPatientRecord));

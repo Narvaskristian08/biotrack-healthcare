@@ -63,6 +63,9 @@ export async function loginHealthCenter(req, res) {
   const hc = await HealthCenter.findOne({ email: String(email).toLowerCase().trim() });
   if (!hc) return res.status(401).json({ error: { message: 'Invalid credentials' } });
   if (hc.status !== 'active') return res.status(403).json({ error: { message: 'Health center disabled' } });
+  if (hc.credentialStatus !== 'approved') {
+    return res.status(403).json({ error: { message: `Health center credentials are '${hc.credentialStatus}'` } });
+  }
 
   const ok = await verifyPassword(String(password), hc.passwordHash);
   if (!ok) {

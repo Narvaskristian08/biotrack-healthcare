@@ -5,7 +5,7 @@ const AuditLogSchema = new mongoose.Schema(
     healthCenterId: { type: mongoose.Schema.Types.ObjectId, ref: 'HealthCenter', index: true },
     barangay: { type: String, default: '', index: true }, // for “no-login” mode: which barangay/clinic performed the action
     actorName: { type: String, default: '', index: true }, // optional free-text (e.g., "Nurse Ana")
-    actorType: { type: String, enum: ['admin', 'healthcenter', 'unknown'], default: 'unknown', index: true },
+    actorType: { type: String, enum: ['admin', 'healthcenter', 'patient', 'unknown'], default: 'unknown', index: true },
     actorId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     actorSessionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', default: null, index: true },
 

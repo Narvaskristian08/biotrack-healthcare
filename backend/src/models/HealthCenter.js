@@ -8,6 +8,12 @@ const HealthCenterSchema = new mongoose.Schema(
     address: { type: String, default: '', trim: true },
     holderName: { type: String, required: true, trim: true }, // "Holder" in diagram
     role: { type: String, default: 'staff' }, // "Role: staff" in diagram
+    credentialStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'approved',
+      index: true,
+    },
     contactNumber: { type: String, default: '', trim: true },
     status: { type: String, enum: ['active', 'disabled'], default: 'active', index: true },
 

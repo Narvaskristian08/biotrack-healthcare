@@ -1,288 +1,261 @@
-'use client'
+'use client';
 
-import React, { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { AlertTriangle, CheckCircle, FileText, Heart, TrendingUp, Users } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import StatsCard from './stats-card';
 import {
-  Users, AlertTriangle, Heart, TrendingDown, Search, Filter,
-  FileText, CheckCircle, AlertCircle, Clock
-} from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
-} from '@/components/ui/table'
-import { mockPatientsList, mockHeartRateTrend } from '@/lib/mock-data'
-import StatsCard from './stats-card'
-import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from 'recharts'
+  extractActivityLevel,
+  extractFallDetected,
+  extractHeartRate,
+  fetchAssignedPatients,
+  fetchPatientAlerts,
+  fetchPatientRecords,
+  fetchPatientSummary,
+  fetchPatientTrend,
+  patientDisplayName,
+  type ProviderPatient,
+  type ProviderPatientRecord,
+} from '@/lib/provider-role';
+
+type PatientView = {
+  patient: ProviderPatient;
+  latestRecord: ProviderPatientRecord | null;
+  heartRate: number | null;
+  activity: number | null;
+  fallDetected: boolean;
+  risk: string;
+  alertCount: number;
+  verifiedRecordCount: number;
+  trendSeries: number[];
+};
+
+function severityRank(risk: string): number {
+  const normalized = risk.toUpperCase();
+  if (normalized === 'CRITICAL') return 4;
+  if (normalized === 'HIGH') return 3;
+  if (normalized === 'MODERATE') return 2;
+  return 1;
+}
 
 export default function ProviderDashboard() {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'alerts' | 'verified'>('all')
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [patientsView, setPatientsView] = useState<PatientView[]>([]);
 
-  const filteredPatients = mockPatientsList.filter((patient) => {
-    const matchesSearch = patient.name.toLowerCase().includes(searchTerm.toLowerCase())
-    if (selectedFilter === 'alerts') return matchesSearch && patient.alerts.length > 0
-    if (selectedFilter === 'verified') return matchesSearch && patient.blockchainVerified
-    return matchesSearch
-  })
+  useEffect(() => {
+    let active = true;
 
-  const alertCount = mockPatientsList.reduce((sum, p) => sum + p.alerts.length, 0)
-  const criticalPatients = mockPatientsList.filter(p => p.alerts.length > 0).length
+    (async () => {
+      const patientsRes = await fetchAssignedPatients();
+      if (!active) return;
+      if (patientsRes.error) {
+        setError(patientsRes.error);
+        setLoading(false);
+        return;
+      }
+
+      const patients = patientsRes.patients ?? [];
+      const rows = await Promise.all(
+        patients.map(async (patient) => {
+          const [recordsRes, alertsRes, summaryRes, trendRes] = await Promise.all([
+            fetchPatientRecords(patient._id),
+            fetchPatientAlerts(patient._id, 10),
+            fetchPatientSummary(patient._id, 7),
+            fetchPatientTrend(patient._id),
+          ]);
+
+          const records = recordsRes.records ?? [];
+          const latestRecord = records[0] ?? null;
+          const verifiedRecordCount = records.filter((record) => String(record.blockchain?.verificationStatus ?? '').toLowerCase() === 'anchored').length;
+
+          return {
+            patient,
+            latestRecord,
+            heartRate: extractHeartRate(latestRecord),
+            activity: extractActivityLevel(latestRecord),
+            fallDetected: extractFallDetected(latestRecord),
+            risk: summaryRes.summaryData?.overallRisk ?? 'LOW',
+            alertCount: (alertsRes.alerts ?? []).length,
+            verifiedRecordCount,
+            trendSeries: trendRes.trendData?.recentHeartRates ?? [],
+          } satisfies PatientView;
+        })
+      );
+
+      if (!active) return;
+      setPatientsView(rows);
+      setLoading(false);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return patientsView;
+    return patientsView.filter((row) => {
+      const name = patientDisplayName(row.patient).toLowerCase();
+      const email = String(row.patient.email ?? '').toLowerCase();
+      const mrn = String(row.patient.mrn ?? '').toLowerCase();
+      return name.includes(q) || email.includes(q) || mrn.includes(q);
+    });
+  }, [patientsView, searchTerm]);
+
+  const totalAlerts = useMemo(() => patientsView.reduce((sum, row) => sum + row.alertCount, 0), [patientsView]);
+  const criticalPatients = useMemo(() => patientsView.filter((row) => severityRank(row.risk) >= 3).length, [patientsView]);
+  const fallIncidents = useMemo(() => patientsView.filter((row) => row.fallDetected).length, [patientsView]);
+  const verifiedRecords = useMemo(() => patientsView.reduce((sum, row) => sum + row.verifiedRecordCount, 0), [patientsView]);
+
+  const trendChartData = useMemo(() => {
+    const maxLength = Math.max(...patientsView.map((row) => row.trendSeries.length), 0);
+    return Array.from({ length: maxLength }).map((_, idx) => {
+      const sampleValues = patientsView
+        .map((row) => row.trendSeries[idx])
+        .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+      const avg = sampleValues.length > 0 ? sampleValues.reduce((a, b) => a + b, 0) / sampleValues.length : null;
+      return {
+        sample: `#${idx + 1}`,
+        average: avg ?? 0,
+      };
+    });
+  }, [patientsView]);
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="space-y-2">
-        <h1 className="text-4xl font-bold tracking-tight text-foreground">Provider Dashboard</h1>
-        <p className="text-muted-foreground text-lg">
-          Monitor and manage authorized patient records with real-time alerts
-        </p>
+        <h1 className="text-4xl font-bold tracking-tight text-foreground">Healthcare Provider Dashboard</h1>
+        <p className="text-muted-foreground text-lg">Patient monitoring, risk flags, clinical oversight, and verified records</p>
       </div>
 
-      {/* Stats Overview */}
+      {error ? (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatsCard
-          title="Total Patients"
-          value={mockPatientsList.length.toString()}
-          change="Active monitoring"
-          icon={<Users className="h-5 w-5" />}
-          trend="up"
-        />
-        <StatsCard
-          title="Active Alerts"
-          value={alertCount.toString()}
-          change={`${criticalPatients} patients`}
-          icon={<AlertTriangle className="h-5 w-5" />}
-          trend="down"
-        />
-        <StatsCard
-          title="Verified Records"
-          value={mockPatientsList.filter(p => p.blockchainVerified).length.toString()}
-          change="100% verified"
-          icon={<CheckCircle className="h-5 w-5" />}
-          trend="stable"
-        />
-        <StatsCard
-          title="Fall Incidents"
-          value="2"
-          change="This week"
-          icon={<TrendingDown className="h-5 w-5" />}
-          trend="down"
-        />
+        <StatsCard title="Assigned Patients" value={String(patientsView.length)} change="Scoped to your health center" icon={<Users className="h-5 w-5" />} trend="stable" />
+        <StatsCard title="Active Alerts" value={String(totalAlerts)} change={`${criticalPatients} high-risk patients`} icon={<AlertTriangle className="h-5 w-5" />} trend="up" />
+        <StatsCard title="Verified Records" value={String(verifiedRecords)} change="Blockchain anchored" icon={<CheckCircle className="h-5 w-5" />} trend="stable" />
+        <StatsCard title="Fall Incidents" value={String(fallIncidents)} change="Latest monitored records" icon={<TrendingUp className="h-5 w-5" />} trend={fallIncidents > 0 ? 'up' : 'stable'} />
       </div>
 
-      {/* Patient Monitoring */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Heart Rate Trends Across Patients */}
-        <Card className="lg:col-span-2 glass glow-green">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Heart className="h-5 w-5 text-primary" />
-              Patient Heart Rate Analytics
+              Real-Time Heart Rate Overview
             </CardTitle>
-            <CardDescription>Average trends across monitored patients</CardDescription>
+            <CardDescription>Average trend from assigned patients</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={mockHeartRateTrend}>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={trendChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="day" stroke="var(--muted-foreground)" />
+                <XAxis dataKey="sample" stroke="var(--muted-foreground)" />
                 <YAxis stroke="var(--muted-foreground)" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                  }}
-                />
-                <Legend />
-                <Line type="monotone" dataKey="average" stroke="var(--primary)" strokeWidth={2} name="Average BPM" />
-                <Line type="monotone" dataKey="min" stroke="var(--muted-foreground)" strokeWidth={1} name="Minimum" />
-                <Line type="monotone" dataKey="max" stroke="var(--secondary)" strokeWidth={1} name="Maximum" />
+                <Tooltip />
+                <Line type="monotone" dataKey="average" stroke="var(--primary)" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Critical Alerts */}
-        <Card className="glass glow-cyan">
+        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-destructive" />
-              Critical Alerts
-            </CardTitle>
-            <CardDescription>Requires immediate attention</CardDescription>
+            <CardTitle>Risk Flag Dashboard</CardTitle>
+            <CardDescription>AI-based risk levels and alert signals</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {mockPatientsList
-              .filter(p => p.alerts.length > 0)
-              .map((patient) => (
-                <div key={patient.id} className="p-3 border border-destructive/30 bg-destructive/5 rounded-lg">
-                  <div className="flex items-start justify-between mb-2">
+            {patientsView
+              .filter((row) => row.alertCount > 0 || severityRank(row.risk) >= 3)
+              .slice(0, 5)
+              .map((row) => (
+                <div key={row.patient._id} className="p-3 rounded-lg border border-border">
+                  <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-semibold text-sm">{patient.name}</p>
-                      <p className="text-xs text-muted-foreground">{patient.condition}</p>
+                      <p className="text-sm font-semibold">{patientDisplayName(row.patient)}</p>
+                      <p className="text-xs text-muted-foreground">{row.patient.email}</p>
                     </div>
-                    <Badge variant="destructive" className="text-xs">{patient.alerts.length}</Badge>
+                    <Badge variant={severityRank(row.risk) >= 3 ? 'destructive' : 'secondary'}>{row.risk}</Badge>
                   </div>
-                  <div className="space-y-1">
-                    {patient.alerts.map((alert, idx) => (
-                      <p key={idx} className="text-xs text-destructive flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3" />
-                        {alert}
-                      </p>
-                    ))}
-                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">Alerts: {row.alertCount}</p>
                 </div>
               ))}
+            {patientsView.length === 0 && !loading ? <p className="text-sm text-muted-foreground">No assigned patients found.</p> : null}
           </CardContent>
         </Card>
       </div>
 
-      {/* Patient Records Table */}
-      <Card className="glass glow-green">
+      <Card>
         <CardHeader>
-          <div className="space-y-4">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" />
-                Patient Monitoring
-              </CardTitle>
-              <CardDescription>Comprehensive patient list with vital status and alerts</CardDescription>
-            </div>
-
-            {/* Search and Filter */}
-            <div className="flex gap-2">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search patient name, ID, or condition..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Button variant="outline" size="icon" className="gap-2">
-                <Filter className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Filter Tabs */}
-            <Tabs value={selectedFilter} onValueChange={(v) => setSelectedFilter(v as 'all' | 'alerts' | 'verified')}>
-              <TabsList>
-                <TabsTrigger value="all">All Patients</TabsTrigger>
-                <TabsTrigger value="alerts" className="flex items-center gap-2">
-                  Alerts <Badge variant="destructive" className="ml-1 text-xs">{alertCount}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="verified">Verified Records</TabsTrigger>
-              </TabsList>
-            </Tabs>
+          <div className="space-y-3">
+            <CardTitle>Assigned Patients</CardTitle>
+            <CardDescription>Monitoring list with risk indicators, alert notifications, and latest vitals</CardDescription>
+            <Input placeholder="Search assigned patients by name, email, or MRN..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
         </CardHeader>
-
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border">
-                  <TableHead>Patient Name</TableHead>
-                  <TableHead>Age</TableHead>
-                  <TableHead>Condition</TableHead>
-                  <TableHead>Heart Rate</TableHead>
-                  <TableHead>Blood Pressure</TableHead>
-                  <TableHead>O₂ Level</TableHead>
-                  <TableHead>Alerts</TableHead>
-                  <TableHead>Blockchain Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPatients.map((patient) => (
-                  <TableRow key={patient.id} className="border-border hover:bg-muted/50">
-                    <TableCell className="font-medium">{patient.name}</TableCell>
-                    <TableCell>{patient.age}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{patient.condition}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className={patient.lastVital.heartRate > 85 ? 'text-destructive font-semibold' : ''}>
-                        {patient.lastVital.heartRate} bpm
-                      </span>
-                    </TableCell>
-                    <TableCell>{patient.lastVital.bloodPressure}</TableCell>
-                    <TableCell>{patient.lastVital.oxygenLevel}%</TableCell>
-                    <TableCell>
-                      {patient.alerts.length > 0 ? (
-                        <Badge variant="destructive" className="gap-1">
-                          <AlertTriangle className="h-3 w-3" />
-                          {patient.alerts.length}
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="gap-1">
-                          <CheckCircle className="h-3 w-3" />
-                          Clear
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {patient.blockchainVerified ? (
-                        <Badge variant="outline" className="gap-1 bg-green-500/10 text-green-700">
-                          <CheckCircle className="h-3 w-3" />
-                          Verified
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="gap-1">
-                          <Clock className="h-3 w-3" />
-                          Pending
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm" className="gap-1">
-                        <FileText className="h-4 w-4" />
-                        View
-                      </Button>
-                    </TableCell>
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading assigned patients...</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Patient</TableHead>
+                    <TableHead>Risk</TableHead>
+                    <TableHead>Heart Rate</TableHead>
+                    <TableHead>Activity</TableHead>
+                    <TableHead>Alerts</TableHead>
+                    <TableHead>Records</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Generate Reports */}
-      <Card className="glass glow-cyan">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-accent" />
-            Generate Reports
-          </CardTitle>
-          <CardDescription>Create evaluation and research reports</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <Button className="justify-start h-auto flex-col items-start p-4 rounded-lg border border-border hover:border-primary">
-            <span className="font-semibold">Weekly Vital Report</span>
-            <span className="text-xs text-muted-foreground mt-1">Summary of all monitored vitals</span>
-          </Button>
-          <Button className="justify-start h-auto flex-col items-start p-4 rounded-lg border border-border hover:border-primary">
-            <span className="font-semibold">Alert Analysis</span>
-            <span className="text-xs text-muted-foreground mt-1">Trends and patterns in patient alerts</span>
-          </Button>
-          <Button className="justify-start h-auto flex-col items-start p-4 rounded-lg border border-border hover:border-primary">
-            <span className="font-semibold">Compliance Report</span>
-            <span className="text-xs text-muted-foreground mt-1">Blockchain verification status</span>
-          </Button>
-          <Button className="justify-start h-auto flex-col items-start p-4 rounded-lg border border-border hover:border-primary">
-            <span className="font-semibold">Patient Population Report</span>
-            <span className="text-xs text-muted-foreground mt-1">Demographics and condition analysis</span>
-          </Button>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((row) => (
+                    <TableRow key={row.patient._id}>
+                      <TableCell>
+                        <div className="font-medium">{patientDisplayName(row.patient)}</div>
+                        <div className="text-xs text-muted-foreground">{row.patient.email}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={severityRank(row.risk) >= 3 ? 'destructive' : 'secondary'}>{row.risk}</Badge>
+                      </TableCell>
+                      <TableCell>{row.heartRate ?? 'N/A'}{row.heartRate !== null ? ' bpm' : ''}</TableCell>
+                      <TableCell>{row.activity ?? 'N/A'}</TableCell>
+                      <TableCell>
+                        <Badge variant={row.alertCount > 0 ? 'destructive' : 'outline'}>{row.alertCount}</Badge>
+                      </TableCell>
+                      <TableCell>{row.verifiedRecordCount}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link href={`/patients/${row.patient._id}`}>
+                            <FileText className="h-4 w-4 mr-1" />
+                            Open
+                          </Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {filtered.length === 0 ? <p className="text-sm text-muted-foreground mt-4">No patients matched your search.</p> : null}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

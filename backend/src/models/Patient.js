@@ -25,6 +25,8 @@ const PatientSchema = new mongoose.Schema(
     contactNumber: { type: String, required: true, default: '', trim: true },
 
     guardianName: { type: String, default: '', trim: true },
+    emergencyContactName: { type: String, default: '', trim: true },
+    emergencyContactPhone: { type: String, default: '', trim: true },
     tags: { type: [String], default: [] },
     status: { type: String, enum: ['active', 'archived'], default: 'active', index: true },
     createdByActorType: { type: String, enum: ['admin', 'healthcenter', 'unknown'], default: 'unknown', index: true },
