@@ -1,48 +1,84 @@
-# Node
+# =========================
+# Dependencies
+# =========================
 node_modules/
+.pnpm-debug.log*
+
+# =========================
+# Environment files
+# =========================
 .env
-postman/
+.env*
 
-# Miscellaneous
-*.class
+# =========================
+# Logs
+# =========================
 *.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
+# =========================
+# Build / Production
+# =========================
+build/
+.next/
+out/
+coverage/
 
-# VS Code
-.vscode/
+# =========================
+# Next.js
+# =========================
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
 
-# Flutter/Dart/Pub related
+# =========================
+# Flutter / Dart
+# =========================
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-build/
-coverage/
 
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android build artifacts
+# =========================
+# Android
+# =========================
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# =========================
+# IDE / Editors
+# =========================
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+.atom/
+
+# =========================
+# System Files
+# =========================
+.DS_Store
+*.swp
+.history
+.svn/
+.swiftpm/
+.build/
+.buildlog/
+migrate_working_dir/
+
+# =========================
+# Misc
+# =========================
+postman/
+*.class
+*.pyc
+app.*.symbols
+app.*.map.json
+.vercel
