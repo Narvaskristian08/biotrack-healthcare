@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, ReactNode, useState, useEffect } from 'react'
-import { getSession, clearSession, type UserSession, type AuthRole } from '@/lib/auth'
+import { getSession, clearSession, type AuthRole } from '@/lib/auth'
 
 export type UserRole = 'patient' | 'provider' | 'admin'
 
@@ -19,6 +19,7 @@ interface DashboardRoleContextType {
   setRole: (role: UserRole) => void
   sessionUser: SessionUser | null
   isAuthenticated: boolean
+  isReady: boolean
   logout: () => void
 }
 
@@ -35,10 +36,11 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
   const [role, setRoleState] = useState<UserRole>('patient')
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
     const session = getSession()
-    if (session) {
+    if (session?.accessToken) {
       const mappedRole = mapAuthRoleToUserRole(session.role)
       setRoleState(mappedRole)
       setSessionUser({
@@ -54,6 +56,7 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
       setIsAuthenticated(false)
       setSessionUser(null)
     }
+    setIsReady(true)
   }, [])
 
   const setRole = (r: UserRole) => {
@@ -74,7 +77,7 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <DashboardRoleContext.Provider value={{ role, setRole, sessionUser, isAuthenticated, logout }}>
+    <DashboardRoleContext.Provider value={{ role, setRole, sessionUser, isAuthenticated, isReady, logout }}>
       {children}
     </DashboardRoleContext.Provider>
   )

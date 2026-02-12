@@ -30,6 +30,7 @@ export const env = {
   BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS: process.env.BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS ?? '',
 
   OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ?? '',
+  CORS_ORIGIN: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
 };
 
 export function assertRequiredEnv() {

@@ -37,8 +37,12 @@ const VITAL_KEYS = {
 
 type VitalTab = keyof typeof VITAL_KEYS
 
-function getStats(dataKey: string) {
-  const values = chartData.map((d) => (d as Record<string, number>)[dataKey]).filter((v) => typeof v === 'number')
+type ChartNumericKey = 'heartRate' | 'oxygenLevel' | 'activityLevel' | 'temperature'
+
+function getStats(dataKey: ChartNumericKey) {
+  const values = chartData
+    .map((d) => d[dataKey])
+    .filter((v): v is number => typeof v === 'number')
   if (values.length === 0) return { current: '—', average: '—', min: '—', max: '—' }
   const current = values[0]
   const sum = values.reduce((a, b) => a + b, 0)

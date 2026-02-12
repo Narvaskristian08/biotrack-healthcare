@@ -58,6 +58,35 @@ export interface UserSession {
     loginTime: string;
 }
 
+async function startHealthCenterSession(
+    healthCenterAccessToken: string
+): Promise<{ sessionToken?: string; error?: string }> {
+    try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000/api';
+        const response = await fetch(`${baseUrl}/sessions/start`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${healthCenterAccessToken}`,
+            },
+            body: JSON.stringify({}),
+        });
+
+        const json = await response.json();
+        if (!response.ok) {
+            return { error: json.error?.message || 'Failed to start health center session' };
+        }
+
+        const token = json.sessionToken as string | undefined;
+        if (!token) {
+            return { error: 'Session token was not returned by the server' };
+        }
+        return { sessionToken: token };
+    } catch (error) {
+        return { error: error instanceof Error ? error.message : 'Network error while starting session' };
+    }
+}
+
 // ============== Session Management ==============
 
 export function saveSession(session: UserSession): void {
@@ -142,12 +171,18 @@ export async function registerHealthCenter(data: HealthCenterRegisterData): Prom
     }
 
     const { accessToken, healthCenter } = result.data!;
+    const sessionStart = await startHealthCenterSession(accessToken);
+    if (sessionStart.error || !sessionStart.sessionToken) {
+        return { success: false, error: sessionStart.error || 'Failed to start role session' };
+    }
+
     const session: UserSession = {
-        accessToken,
+        accessToken: sessionStart.sessionToken,
         role: 'provider',
         email: healthCenter.email,
         name: healthCenter.name,
         id: healthCenter.id,
+        healthCenterId: healthCenter.id,
         loginTime: new Date().toISOString(),
     };
 
@@ -166,12 +201,18 @@ export async function loginHealthCenter(data: LoginData): Promise<{ session?: Us
     }
 
     const { accessToken, healthCenter } = result.data!;
+    const sessionStart = await startHealthCenterSession(accessToken);
+    if (sessionStart.error || !sessionStart.sessionToken) {
+        return { error: sessionStart.error || 'Failed to start role session' };
+    }
+
     const session: UserSession = {
-        accessToken,
+        accessToken: sessionStart.sessionToken,
         role: 'provider',
         email: healthCenter.email,
         name: healthCenter.name,
         id: healthCenter.id,
+        healthCenterId: healthCenter.id,
         loginTime: new Date().toISOString(),
     };
 

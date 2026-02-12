@@ -2,7 +2,7 @@
  * API utilities for making requests to the backend
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000/api';
 
 export interface ApiError {
     message: string;
@@ -23,10 +23,10 @@ export async function apiFetch<T>(
 ): Promise<ApiResponse<T>> {
     const url = `${API_BASE_URL}${endpoint}`;
 
-    const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        ...options.headers,
-    };
+    const headers = new Headers(options.headers);
+    if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+    }
 
     // Add authorization header if token exists
     if (typeof window !== 'undefined') {
@@ -35,7 +35,7 @@ export async function apiFetch<T>(
             try {
                 const parsed = JSON.parse(session);
                 if (parsed.accessToken) {
-                    headers['Authorization'] = `Bearer ${parsed.accessToken}`;
+                    headers.set('Authorization', `Bearer ${parsed.accessToken}`);
                 }
             } catch {
                 // ignore parse errors

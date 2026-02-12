@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Inter, Poppins } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { DashboardRoleProvider } from "@/hooks/use-dashboard-role"
+import RouteGuard from "@/components/route-guard"
 import "./globals.css"
 import PolicyModal from '@/components/policy-modal'
 
@@ -41,7 +42,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.variable} ${poppins.variable} font-sans antialiased`}>
         <DashboardRoleProvider>
-          {children}
+          <RouteGuard>{children}</RouteGuard>
           <PolicyModal />
         </DashboardRoleProvider>
         <Analytics />
