@@ -12,6 +12,7 @@ import '../../features/home/presentation/screens/scan_page.dart';
 import '../../features/home/presentation/screens/scan_vitals_page.dart';
 import '../../features/home/presentation/screens/ai_insights_page.dart';
 import '../../features/home/presentation/screens/records_page.dart';
+import '../../features/home/presentation/screens/record_detail_page.dart';
 import '../../features/home/presentation/screens/profile_page.dart';
 
 class AppRouter {
@@ -77,6 +78,13 @@ class AppRouter {
             path: '/records',
             name: 'records',
             builder: (context, state) => const RecordsPage(),
+          ),
+          GoRoute(
+            path: '/records/:recordId',
+            name: 'recordDetail',
+            builder: (context, state) => RecordDetailPage(
+              recordId: state.pathParameters['recordId'] ?? '',
+            ),
           ),
           GoRoute(
             path: '/profile',

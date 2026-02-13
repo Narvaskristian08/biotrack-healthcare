@@ -9,6 +9,8 @@ import 'package:go_router/go_router.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 import '../../../../core/services/permission_service.dart';
+import '../../data/models/scan_record.dart';
+import '../../data/services/scan_record_store.dart';
 import '../controllers/heart_rate_estimator.dart';
 
 class ScanVitalsPage extends StatefulWidget {
@@ -35,6 +37,7 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
   bool _scanComplete = false;
   bool _fallDetected = false;
   bool _isProcessingFrame = false;
+  bool _showingCompletionDialog = false;
   bool _hasCameraPermission = false;
   bool _hasMotionPermission = false;
   bool _hasNotificationPermission = false;
@@ -86,6 +89,7 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
       _errorMessage = null;
       _noFingerFrameStreak = 0;
       _lowQualityFrameStreak = 0;
+      _showingCompletionDialog = false;
     });
 
     final permissions = await PermissionService.requestCorePermissions();
@@ -395,9 +399,75 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
       // Ignore cleanup failures; user can still review results.
     }
 
+    final successfulScan = _fingerDetected;
+    if (successfulScan) {
+      await ScanRecordStore.add(
+        ScanRecord(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          scannedAt: DateTime.now(),
+          bpm: _estimatedBpm,
+          fallDetected: _fallDetected,
+          signalQuality: _signalQualityScore,
+          fingerDetected: _fingerDetected,
+          fingerConfidence: _fingerConfidence,
+          movementIntensity: _movementIntensity,
+          gyroMagnitude: _gyroMagnitude,
+        ),
+      );
+    }
+
     if (mounted) {
       setState(() {});
+      await _showScanCompletedPopup(successfulScan: successfulScan);
     }
+  }
+
+  Future<void> _showScanCompletedPopup({required bool successfulScan}) async {
+    if (_showingCompletionDialog || !mounted) {
+      return;
+    }
+    _showingCompletionDialog = true;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            successfulScan ? 'Scan Successful' : 'Scanning Unsuccessful',
+          ),
+          content: Text(successfulScan
+              ? (_estimatedBpm == null
+                  ? 'Scan completed and saved to records.'
+                  : 'Scan completed and saved to records.\nHeart rate: $_estimatedBpm bpm')
+              : 'No finger was detected at the end of scanning. Please place your fingertip over the camera and flash, then try again.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+            if (successfulScan)
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  context.go('/records');
+                },
+                child: const Text('View Records'),
+              )
+            else
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(_startScanFlow());
+                },
+                child: const Text('Scan Again'),
+              ),
+          ],
+        );
+      },
+    );
+
+    _showingCompletionDialog = false;
   }
 
   Future<void> _shutdownCamera() async {
@@ -468,13 +538,6 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
 
   Color get _fingerStatusColor {
     return _fingerDetected ? Colors.green : Colors.red;
-  }
-
-  String get _confidenceLabel {
-    if (_hrConfidence <= 0) {
-      return '--';
-    }
-    return '${(_hrConfidence * 100).toStringAsFixed(0)}%';
   }
 
   String get _fingerConfidenceLabel {
@@ -567,13 +630,6 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
                                   value: _estimatedBpm == null
                                       ? '-- bpm'
                                       : '${_estimatedBpm!} bpm',
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _MetricCard(
-                                  title: 'Pulse Confidence',
-                                  value: _confidenceLabel,
                                 ),
                               ),
                             ],

@@ -15,6 +15,14 @@ class AuthTextField extends StatelessWidget {
     this.maxLength,
     this.validator,
     this.inputFormatters,
+    this.readOnly = false,
+    this.onTap,
+    this.textInputAction,
+    this.suffixIcon,
+    this.prefixIcon,
+    this.maxLines = 1,
+    this.enabled = true,
+    this.autofillHints,
   });
 
   final TextEditingController controller;
@@ -26,6 +34,14 @@ class AuthTextField extends StatelessWidget {
   final int? maxLength;
   final String? Function(String?)? validator;
   final List<TextInputFormatter>? inputFormatters;
+  final bool readOnly;
+  final VoidCallback? onTap;
+  final TextInputAction? textInputAction;
+  final Widget? suffixIcon;
+  final Widget? prefixIcon;
+  final int maxLines;
+  final bool enabled;
+  final Iterable<String>? autofillHints;
 
   @override
   Widget build(BuildContext context) {
@@ -46,8 +62,14 @@ class AuthTextField extends StatelessWidget {
           obscureText: obscureText,
           keyboardType: keyboardType,
           textCapitalization: textCapitalization,
+          textInputAction: textInputAction,
           maxLength: maxLength,
+          maxLines: obscureText ? 1 : maxLines,
+          readOnly: readOnly,
+          onTap: onTap,
+          enabled: enabled,
           validator: validator,
+          autofillHints: autofillHints,
           inputFormatters: inputFormatters,
           decoration: InputDecoration(
             hintText: hintText,
@@ -59,6 +81,8 @@ class AuthTextField extends StatelessWidget {
             ),
             filled: true,
             fillColor: Colors.white,
+            prefixIcon: prefixIcon,
+            suffixIcon: suffixIcon,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide.none,

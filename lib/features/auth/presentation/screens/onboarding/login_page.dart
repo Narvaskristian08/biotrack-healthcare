@@ -22,6 +22,7 @@ class _LoginPageState extends State<LoginPage> {
   final _api = AuthApiService();
 
   bool _isLoading = false;
+  bool _showPassword = false;
   String _errorMessage = '';
 
   @override
@@ -50,19 +51,13 @@ class _LoginPageState extends State<LoginPage> {
       );
       await AuthSessionStore.save(login);
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       context.go('/home');
     } on AuthApiException catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() => _errorMessage = error.message);
     } catch (_) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() => _errorMessage = 'Login failed. Please try again.');
     } finally {
       if (mounted) {
@@ -74,12 +69,12 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F7EE),
+      backgroundColor: AppColors.softBackground,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.black),
+          icon: const Icon(Icons.close, color: AppColors.darkText),
           onPressed: () => context.pop(),
         ),
       ),
@@ -93,7 +88,7 @@ class _LoginPageState extends State<LoginPage> {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFFE4F4D8), Color(0xFFCFE8BA)],
+                    colors: [Color(0xFFE6F4D8), Color(0xFFCCE6B4)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -101,7 +96,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 child: Column(
                   children: [
-                    Image.asset('assets/images/logo.png', height: 92),
+                    Image.asset('assets/images/logo.png', height: 84),
                     const SizedBox(height: 14),
                     const Text(
                       'Welcome back',
@@ -113,7 +108,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Use your patient account to continue.',
+                      'Sign in with your patient account to continue to your dashboard.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: AppColors.bodyText, height: 1.4),
                     ),
@@ -126,14 +121,12 @@ class _LoginPageState extends State<LoginPage> {
                 label: 'Email',
                 hintText: 'name@example.com',
                 keyboardType: TextInputType.emailAddress,
+                autofillHints: const [AutofillHints.username, AutofillHints.email],
                 validator: (value) {
-                  final v = (value ?? '').trim();
-                  if (v.isEmpty) {
-                    return 'Email is required';
-                  }
-                  if (!v.contains('@')) {
-                    return 'Enter a valid email';
-                  }
+                  final input = (value ?? '').trim();
+                  if (input.isEmpty) return 'Email is required';
+                  final valid = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(input);
+                  if (!valid) return 'Enter a valid email';
                   return null;
                 },
               ),
@@ -142,7 +135,15 @@ class _LoginPageState extends State<LoginPage> {
                 controller: _passwordController,
                 label: 'Password',
                 hintText: 'Enter your password',
-                obscureText: true,
+                obscureText: !_showPassword,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.password],
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  ),
+                  onPressed: () => setState(() => _showPassword = !_showPassword),
+                ),
                 validator: (value) {
                   if ((value ?? '').isEmpty) {
                     return 'Password is required';
@@ -152,11 +153,18 @@ class _LoginPageState extends State<LoginPage> {
               ),
               if (_errorMessage.isNotEmpty) ...[
                 const SizedBox(height: 10),
-                Text(
-                  _errorMessage,
-                  style: const TextStyle(
-                    color: Colors.redAccent,
-                    fontWeight: FontWeight.w600,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFEAEA),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _errorMessage,
+                    style: const TextStyle(
+                      color: AppColors.danger,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
@@ -178,17 +186,14 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE9EFE3),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   'API: ${AppConfig.apiBaseUrl}',
-                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                  style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
                 ),
               ),
             ],

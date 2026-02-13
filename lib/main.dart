@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'core/routes/app_router.dart';
+import 'core/theme/app_colors.dart';
 
 void main() {
   runApp(const BioTrackApp());
@@ -14,11 +15,22 @@ class BioTrackApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       routerConfig: AppRouter.router,
       theme: ThemeData(
-        scaffoldBackgroundColor: Colors.white,
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColors.primaryGreen,
+          primary: AppColors.primaryGreen,
+          secondary: AppColors.primaryGreenDark,
+        ),
+        scaffoldBackgroundColor: AppColors.softBackground,
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
+          backgroundColor: Colors.transparent,
           elevation: 0,
-          iconTheme: IconThemeData(color: Colors.black),
+          iconTheme: IconThemeData(color: AppColors.darkText),
+          titleTextStyle: TextStyle(
+            color: AppColors.darkText,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
         ),
       ),
     );

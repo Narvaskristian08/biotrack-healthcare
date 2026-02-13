@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -21,11 +22,28 @@ class AuthApiService {
   final http.Client _client;
 
   Uri _buildUri(String path) {
-    return Uri.parse('${AppConfig.apiBaseUrl}$path');
+    final base = AppConfig.apiBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    final normalizedPath = path.startsWith('/') ? path : '/$path';
+
+    // Prevent accidental double "/api" when API_BASE_URL already ends with /api.
+    final hasApiSuffix = base.toLowerCase().endsWith('/api');
+    final resolvedPath = hasApiSuffix &&
+            normalizedPath.toLowerCase().startsWith('/api/')
+        ? normalizedPath.substring(4)
+        : normalizedPath;
+
+    return Uri.parse('$base$resolvedPath');
   }
 
   Future<List<HealthCenterOption>> listHealthCenters() async {
-    final response = await _client.get(_buildUri('/api/healthcenters'));
+    late final http.Response response;
+    try {
+      response = await _client.get(_buildUri('/api/healthcenters'));
+    } on SocketException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    }
     final body = _safeDecodeJson(response.body);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -52,6 +70,11 @@ class AuthApiService {
     required String contactNumber,
     String mrn = '',
     String nameExtension = '',
+    String birthDate = '',
+    String sex = 'unknown',
+    String guardianName = '',
+    String emergencyContactName = '',
+    String emergencyContactPhone = '',
   }) async {
     final payload = <String, dynamic>{
       'healthCenterId': healthCenterId,
@@ -65,13 +88,27 @@ class AuthApiService {
       if (mrn.trim().isNotEmpty) 'mrn': mrn.trim(),
       if (nameExtension.trim().isNotEmpty)
         'nameExtension': nameExtension.trim(),
+      if (birthDate.trim().isNotEmpty) 'birthDate': birthDate.trim(),
+      if (sex.trim().isNotEmpty) 'sex': sex.trim().toLowerCase(),
+      if (guardianName.trim().isNotEmpty) 'guardianName': guardianName.trim(),
+      if (emergencyContactName.trim().isNotEmpty)
+        'emergencyContactName': emergencyContactName.trim(),
+      if (emergencyContactPhone.trim().isNotEmpty)
+        'emergencyContactPhone': emergencyContactPhone.trim(),
     };
 
-    final response = await _client.post(
-      _buildUri('/api/patients/register'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(payload),
-    );
+    late final http.Response response;
+    try {
+      response = await _client.post(
+        _buildUri('/api/patients/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      );
+    } on SocketException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    }
     final body = _safeDecodeJson(response.body);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -83,11 +120,18 @@ class AuthApiService {
     required String email,
     required String password,
   }) async {
-    final response = await _client.post(
-      _buildUri('/api/patients/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email.trim(), 'password': password}),
-    );
+    late final http.Response response;
+    try {
+      response = await _client.post(
+        _buildUri('/api/patients/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email.trim(), 'password': password}),
+      );
+    } on SocketException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    }
 
     final body = _safeDecodeJson(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -140,5 +184,9 @@ class AuthApiService {
     }
 
     return 'Request failed (${response.statusCode})';
+  }
+
+  String _networkErrorMessage() {
+    return 'Cannot reach API at ${AppConfig.apiBaseUrl}. Check backend server and API_BASE_URL.';
   }
 }

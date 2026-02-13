@@ -64,10 +64,28 @@ export async function registerPatientPublic(req, res) {
     address,
     contactNumber,
     nameExtension,
+    birthDate = null,
+    sex = 'unknown',
+    guardianName = '',
+    emergencyContactName = '',
+    emergencyContactPhone = '',
   } = req.body ?? {};
 
   if (!healthCenterId || !email || !password || !lastName || !firstName || !middleInitial || !address || !contactNumber) {
     return res.status(400).json({ error: { message: 'Missing required fields' } });
+  }
+
+  const normalizedSex = String(sex ?? 'unknown').trim().toLowerCase() || 'unknown';
+  if (!['male', 'female', 'other', 'unknown'].includes(normalizedSex)) {
+    return res.status(400).json({ error: { message: "sex must be one of: male, female, other, unknown" } });
+  }
+
+  let normalizedBirthDate = null;
+  if (birthDate) {
+    normalizedBirthDate = new Date(birthDate);
+    if (Number.isNaN(normalizedBirthDate.getTime())) {
+      return res.status(400).json({ error: { message: 'birthDate must be a valid date' } });
+    }
   }
 
   const hc = await HealthCenter.findById(healthCenterId);
@@ -97,8 +115,13 @@ export async function registerPatientPublic(req, res) {
     nameExtension: nameExtension ? String(nameExtension).trim() : '',
     email: normalizedEmail,
     passwordHash,
+    birthDate: normalizedBirthDate,
+    sex: normalizedSex,
     address: String(address ?? '').trim(),
     contactNumber: String(contactNumber ?? '').trim(),
+    guardianName: String(guardianName ?? '').trim(),
+    emergencyContactName: String(emergencyContactName ?? '').trim(),
+    emergencyContactPhone: String(emergencyContactPhone ?? '').trim(),
     role: 'patient',
     accountVerification: {
       status: 'pending',

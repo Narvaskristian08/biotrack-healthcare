@@ -94,6 +94,36 @@ export async function listHealthCentersPublic(req, res) {
     )
     .sort({ name: 1 })
     .lean();
-  return res.json({ healthCenters: hcs });
+
+  const healthCenters = hcs.map((center) => {
+    const barangayName = String(center.barangayName ?? '').trim();
+    const cityMunicipality = String(center.cityMunicipality ?? '').trim();
+    const fallbackLocation = [barangayName, cityMunicipality]
+      .filter(Boolean)
+      .join(', ');
+
+    const normalizedName = String(
+      center.name ||
+        center.healthCenterName ||
+        (fallbackLocation ? `Barangay Unit - ${fallbackLocation}` : '')
+    ).trim();
+
+    const normalizedAddress = String(
+      center.address || center.healthCenterName || fallbackLocation
+    ).trim();
+
+    const normalizedContact = String(
+      center.contactNumber || center.officialContactInfo || ''
+    ).trim();
+
+    return {
+      ...center,
+      name: normalizedName,
+      address: normalizedAddress,
+      contactNumber: normalizedContact,
+    };
+  });
+
+  return res.json({ healthCenters });
 }
 
