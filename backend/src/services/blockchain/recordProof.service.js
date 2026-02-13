@@ -1,8 +1,10 @@
 import { BlockchainProofLog } from '../../models/BlockchainProofLog.js';
 import { sha256Hex } from '../../utils/crypto.js';
 import {
+  assertContractWriteAccess,
   blockchainEnabled,
   blockchainStrictMode,
+  blockchainWriteDisabled,
   getBlockchainNetwork,
   getRecordContractAddress,
   getRecordProofContract,
@@ -56,6 +58,21 @@ export async function anchorRecordProof({
     return base;
   }
 
+  if (blockchainWriteDisabled()) {
+    await writeProofLog({
+      kind: 'record',
+      status: 'skipped',
+      healthCenterId,
+      subjectType: 'patientrecord',
+      subjectId: recordId,
+      recordId,
+      identityId,
+      hash: recordHash,
+      reason: 'BLOCKCHAIN_WRITES_DISABLED',
+    });
+    return base;
+  }
+
   try {
     const contract = await getRecordProofContract();
     if (!contract || typeof contract.anchorRecord !== 'function') {
@@ -72,11 +89,44 @@ export async function anchorRecordProof({
       });
       return base;
     }
+    await assertContractWriteAccess(contract);
+
+    const hash32 = toBytes32Hex(recordHash);
+
+    if (typeof contract.isRecordHashAnchored === 'function') {
+      const duplicate = Boolean(await contract.isRecordHashAnchored(hash32));
+      if (duplicate) {
+        await writeProofLog({
+          kind: 'record',
+          status: 'failed',
+          healthCenterId,
+          subjectType: 'patientrecord',
+          subjectId: recordId,
+          recordId,
+          identityId,
+          hash: recordHash,
+          reason: 'RECORD_HASH_ALREADY_ANCHORED',
+        });
+
+        if (blockchainStrictMode()) {
+          const strictErr = new Error('Blockchain record anchoring failed: RECORD_HASH_ALREADY_ANCHORED');
+          strictErr.statusCode = 409;
+          strictErr.code = 'BLOCKCHAIN_RECORD_DUPLICATE_HASH';
+          throw strictErr;
+        }
+
+        return {
+          ...base,
+          verificationStatus: 'failed',
+          errorMessage: 'RECORD_HASH_ALREADY_ANCHORED',
+        };
+      }
+    }
 
     const tx = await contract.anchorRecord(
       String(recordId),
       String(patientId),
-      toBytes32Hex(recordHash),
+      hash32,
       String(identityId ?? '')
     );
 

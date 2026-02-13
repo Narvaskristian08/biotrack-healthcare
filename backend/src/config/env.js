@@ -20,17 +20,33 @@ export const env = {
 
   ACCESS_TOKEN_TTL: process.env.ACCESS_TOKEN_TTL ?? '12h',
   SESSION_TOKEN_TTL: process.env.SESSION_TOKEN_TTL ?? '12h',
+  OTP_TTL_MINUTES: Number(process.env.OTP_TTL_MINUTES ?? 10),
+  OTP_RESEND_COOLDOWN_SECONDS: Number(process.env.OTP_RESEND_COOLDOWN_SECONDS ?? 30),
 
   BLOCKCHAIN_ENABLED: toBool(process.env.BLOCKCHAIN_ENABLED, false),
   BLOCKCHAIN_STRICT_MODE: toBool(process.env.BLOCKCHAIN_STRICT_MODE, false),
+  BLOCKCHAIN_WRITE_DISABLED: toBool(process.env.BLOCKCHAIN_WRITE_DISABLED, false),
   BLOCKCHAIN_NETWORK: process.env.BLOCKCHAIN_NETWORK ?? '',
   BLOCKCHAIN_RPC_URL: process.env.BLOCKCHAIN_RPC_URL ?? '',
   BLOCKCHAIN_PRIVATE_KEY: process.env.BLOCKCHAIN_PRIVATE_KEY ?? '',
+  BLOCKCHAIN_EXPECTED_SIGNER: process.env.BLOCKCHAIN_EXPECTED_SIGNER ?? '',
   BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS: process.env.BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS ?? '',
   BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS: process.env.BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS ?? '',
 
   OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ?? '',
   CORS_ORIGIN: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
+
+  SMTP_HOST: process.env.SMTP_HOST ?? '',
+  SMTP_PORT: Number(process.env.SMTP_PORT ?? 587),
+  SMTP_SECURE: toBool(process.env.SMTP_SECURE, false),
+  SMTP_USER: process.env.SMTP_USER ?? '',
+  SMTP_PASS: process.env.SMTP_PASS ?? '',
+  SMTP_FROM: process.env.SMTP_FROM ?? '',
+
+  TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID ?? '',
+  TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN ?? '',
+  TWILIO_FROM_NUMBER: process.env.TWILIO_FROM_NUMBER ?? '',
+  SMS_DEFAULT_COUNTRY_CODE: process.env.SMS_DEFAULT_COUNTRY_CODE ?? '+63',
 };
 
 export function assertRequiredEnv() {

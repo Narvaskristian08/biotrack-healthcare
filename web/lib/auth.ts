@@ -7,6 +7,9 @@ import { apiGet, apiPost } from './api';
 // ============== Types ==============
 
 export type AuthRole = 'patient' | 'provider' | 'admin';
+export type VerificationMethod = 'email' | 'sms';
+export const USER_SESSION_STORAGE_KEY = 'userSession';
+export const USER_SESSION_CHANGED_EVENT = 'biotrack:user-session-changed';
 
 export interface HealthCenter {
     _id: string;
@@ -25,6 +28,19 @@ export interface PatientRegisterData {
     password: string;
     address: string;
     contactNumber: string;
+}
+
+export interface PatientVerificationSummary {
+    status: 'pending' | 'verified' | string;
+    emailMasked?: string;
+    contactNumberMasked?: string;
+}
+
+export interface PatientRegistrationPayload {
+    id: string;
+    email: string;
+    contactNumber: string;
+    verification?: PatientVerificationSummary;
 }
 
 export interface HealthCenterRegisterData {
@@ -58,6 +74,15 @@ export interface UserSession {
     loginTime: string;
 }
 
+export interface VerificationCodeSendResult {
+    message?: string;
+    method: VerificationMethod;
+    verificationStatus?: string;
+    recipientMasked?: string;
+    expiresAt?: string;
+    devPreviewCode?: string;
+}
+
 async function startHealthCenterSession(
     healthCenterAccessToken: string
 ): Promise<{ sessionToken?: string; error?: string }> {
@@ -89,16 +114,23 @@ async function startHealthCenterSession(
 
 // ============== Session Management ==============
 
+function notifySessionChanged(): void {
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event(USER_SESSION_CHANGED_EVENT));
+    }
+}
+
 export function saveSession(session: UserSession): void {
     if (typeof window !== 'undefined') {
-        localStorage.setItem('userSession', JSON.stringify(session));
+        localStorage.setItem(USER_SESSION_STORAGE_KEY, JSON.stringify(session));
+        notifySessionChanged();
     }
 }
 
 export function getSession(): UserSession | null {
     if (typeof window === 'undefined') return null;
     try {
-        const raw = localStorage.getItem('userSession');
+        const raw = localStorage.getItem(USER_SESSION_STORAGE_KEY);
         if (!raw) return null;
         return JSON.parse(raw);
     } catch {
@@ -108,7 +140,8 @@ export function getSession(): UserSession | null {
 
 export function clearSession(): void {
     if (typeof window !== 'undefined') {
-        localStorage.removeItem('userSession');
+        localStorage.removeItem(USER_SESSION_STORAGE_KEY);
+        notifySessionChanged();
     }
 }
 
@@ -124,12 +157,43 @@ export async function fetchHealthCenters(): Promise<{ healthCenters: HealthCente
 
 // ============== Patient Auth ==============
 
-export async function registerPatient(data: PatientRegisterData): Promise<{ success: boolean; error?: string }> {
-    const result = await apiPost<{ message: string; patient: { id: string; email: string } }>('/patients/register', data);
+export async function registerPatient(
+    data: PatientRegisterData
+): Promise<{ success: boolean; patient?: PatientRegistrationPayload; error?: string }> {
+    const result = await apiPost<{ message: string; verificationRequired?: boolean; patient: PatientRegistrationPayload }>(
+        '/patients/register',
+        data
+    );
     if (result.error) {
         return { success: false, error: result.error.message };
     }
-    return { success: true };
+    return { success: true, patient: result.data?.patient };
+}
+
+export async function sendPatientVerificationCode(
+    patientId: string,
+    method: VerificationMethod
+): Promise<{ success: boolean; data?: VerificationCodeSendResult; error?: string }> {
+    const result = await apiPost<VerificationCodeSendResult>('/patients/verification/send-code', { patientId, method });
+    if (result.error) {
+        return { success: false, error: result.error.message };
+    }
+    return { success: true, data: result.data };
+}
+
+export async function verifyPatientRegistrationCode(
+    patientId: string,
+    method: VerificationMethod,
+    code: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+    const result = await apiPost<{ message: string; verificationStatus: string; patient: { id: string; email: string } }>(
+        '/patients/verification/verify-code',
+        { patientId, method, code }
+    );
+    if (result.error) {
+        return { success: false, error: result.error.message };
+    }
+    return { success: true, message: result.data?.message };
 }
 
 export async function loginPatient(data: LoginData): Promise<{ session?: UserSession; error?: string }> {

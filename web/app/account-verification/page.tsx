@@ -1,33 +1,94 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Heart, Mail, Shield, CheckCircle, ArrowRight } from 'lucide-react'
+import { ArrowRight, CheckCircle, Heart, Mail, Shield } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  sendPatientVerificationCode,
+  verifyPatientRegistrationCode,
+  type VerificationMethod,
+} from '@/lib/auth'
+
+function maskContactNumber(contactNumber: string) {
+  const digits = String(contactNumber ?? '').replace(/\D/g, '')
+  if (!digits) return ''
+  if (digits.length <= 4) return '*'.repeat(digits.length)
+  return `${'*'.repeat(digits.length - 4)}${digits.slice(-4)}`
+}
+
+const METHOD_LABEL: Record<VerificationMethod, string> = {
+  email: 'email',
+  sms: 'SMS',
+}
 
 export default function AccountVerificationPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [method, setMethod] = useState<'email' | 'otp'>('email')
+
+  const patientId = searchParams.get('patientId') ?? ''
+  const email = searchParams.get('email') ?? ''
+  const contactNumber = searchParams.get('contactNumber') ?? ''
+
+  const [method, setMethod] = useState<VerificationMethod>('email')
   const [step, setStep] = useState<'method' | 'verify' | 'complete'>('method')
   const [isLoading, setIsLoading] = useState(false)
-  const [email, setEmail] = useState(searchParams.get('email') || '')
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [emailRecipient, setEmailRecipient] = useState(email)
+  const [smsRecipient, setSmsRecipient] = useState(maskContactNumber(contactNumber))
 
-  const handleSelectMethod = (selectedMethod: 'email' | 'otp') => {
+  const missingSession = useMemo(() => !patientId, [patientId])
+
+  const requestCode = async (selectedMethod: VerificationMethod, moveToVerifyStep = true) => {
+    if (!patientId) {
+      setError('Missing verification session. Please register again.')
+      return
+    }
+
+    setError('')
+    setSuccess('')
     setMethod(selectedMethod)
-    setStep('verify')
-    setSuccess(`Verification code sent via ${selectedMethod === 'email' ? 'email' : 'SMS'}`)
+    setIsLoading(true)
+
+    const result = await sendPatientVerificationCode(patientId, selectedMethod)
+    setIsLoading(false)
+
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+
+    if (moveToVerifyStep) {
+      setStep('verify')
+    }
+
+    const recipientMasked = result.data?.recipientMasked ?? ''
+    if (selectedMethod === 'email' && recipientMasked) setEmailRecipient(recipientMasked)
+    if (selectedMethod === 'sms' && recipientMasked) setSmsRecipient(recipientMasked)
+
+    const successParts = [
+      result.data?.message ?? `Verification code sent via ${METHOD_LABEL[selectedMethod]}`,
+    ]
+    if (recipientMasked) successParts.push(`Recipient: ${recipientMasked}`)
+    if (result.data?.devPreviewCode) successParts.push(`Dev code: ${result.data.devPreviewCode}`)
+    setSuccess(successParts.join(' | '))
   }
 
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setSuccess('')
+
+    if (missingSession) {
+      setError('Missing verification session. Please register again.')
+      return
+    }
 
     if (!code || code.length !== 6) {
       setError('Please enter a valid 6-digit code')
@@ -35,27 +96,30 @@ export default function AccountVerificationPage() {
     }
 
     setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    const result = await verifyPatientRegistrationCode(patientId, method, code)
     setIsLoading(false)
 
-    // Demo: any 6-digit code works
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+
+    setSuccess(result.message ?? 'Account verified successfully')
     setStep('complete')
   }
 
   const handleContinue = () => {
-    router.push('/')
+    router.push('/login')
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 flex items-center justify-center p-4">
-      {/* Background decoration */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute top-20 right-20 w-72 h-72 bg-primary/20 rounded-full blur-3xl opacity-50" />
         <div className="absolute bottom-40 left-20 w-72 h-72 bg-accent/20 rounded-full blur-3xl opacity-50" />
       </div>
 
       <div className="w-full max-w-md">
-        {/* Logo Section */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center shadow-lg">
@@ -70,15 +134,14 @@ export default function AccountVerificationPage() {
           </div>
         </div>
 
-        {/* Verification Card */}
         <Card className="glass glow-green border-border/50 backdrop-blur-sm">
           <CardHeader className="space-y-2">
             <CardTitle className="text-2xl">Verify Your Account</CardTitle>
             <CardDescription>
               {step === 'method'
-                ? 'Choose how you want to verify your account'
+                ? 'Choose how you want to receive your verification code'
                 : step === 'verify'
-                  ? `Enter the code sent to your ${method}`
+                  ? `Enter the code sent to your ${METHOD_LABEL[method]}`
                   : 'Your account is verified'}
             </CardDescription>
           </CardHeader>
@@ -91,18 +154,28 @@ export default function AccountVerificationPage() {
             )}
 
             {success && (
-              <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-sm text-green-600">
+              <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-sm text-green-700">
                 {success}
               </div>
             )}
 
-            {/* Step 1: Select Verification Method */}
-            {step === 'method' && (
+            {missingSession ? (
               <div className="space-y-3">
-                {/* Email Verification */}
+                <p className="text-sm text-muted-foreground">
+                  Verification session is missing. Please register your patient account again.
+                </p>
+                <Button onClick={() => router.push('/register')} className="w-full">
+                  Go to Register
+                </Button>
+              </div>
+            ) : null}
+
+            {!missingSession && step === 'method' && (
+              <div className="space-y-3">
                 <button
-                  onClick={() => handleSelectMethod('email')}
-                  className="w-full p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors text-left"
+                  onClick={() => requestCode('email')}
+                  disabled={isLoading}
+                  className="w-full p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors text-left disabled:opacity-60"
                 >
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0">
@@ -111,38 +184,37 @@ export default function AccountVerificationPage() {
                     <div className="flex-1">
                       <p className="font-semibold text-sm">Email Verification</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Receive a verification code at {email}
+                        Send code to {emailRecipient || email}
                       </p>
                     </div>
                   </div>
                 </button>
 
-                {/* OTP Verification */}
                 <button
-                  onClick={() => handleSelectMethod('otp')}
-                  className="w-full p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors text-left"
+                  onClick={() => requestCode('sms')}
+                  disabled={isLoading}
+                  className="w-full p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors text-left disabled:opacity-60"
                 >
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0">
                       <Shield className="h-5 w-5 text-accent mt-1" />
                     </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-sm">SMS/OTP Verification</p>
+                      <p className="font-semibold text-sm">SMS Verification</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Receive a one-time password via SMS
+                        Send code to {smsRecipient || maskContactNumber(contactNumber)}
                       </p>
                     </div>
                   </div>
                 </button>
 
                 <p className="text-xs text-muted-foreground text-center mt-4">
-                  We take security seriously. Choose your preferred verification method above.
+                  Use either Email or SMS to verify your patient account.
                 </p>
               </div>
             )}
 
-            {/* Step 2: Enter Verification Code */}
-            {step === 'verify' && (
+            {!missingSession && step === 'verify' && (
               <form onSubmit={handleVerifyCode} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="code">Verification Code</Label>
@@ -158,7 +230,7 @@ export default function AccountVerificationPage() {
                     autoFocus
                   />
                   <p className="text-xs text-muted-foreground text-center">
-                    Enter the 6-digit code sent to your {method}
+                    Enter the 6-digit code sent to your {METHOD_LABEL[method]}
                   </p>
                 </div>
 
@@ -173,17 +245,19 @@ export default function AccountVerificationPage() {
                     variant="outline"
                     onClick={() => setStep('method')}
                     className="w-full"
+                    disabled={isLoading}
                   >
                     Change Method
                   </Button>
                 </div>
 
                 <p className="text-center text-xs text-muted-foreground">
-                  Didn't receive the code?{' '}
+                  Did not receive a code?{' '}
                   <button
                     type="button"
-                    onClick={() => handleSelectMethod(method)}
+                    onClick={() => requestCode(method, false)}
                     className="text-primary hover:underline"
+                    disabled={isLoading}
                   >
                     Resend
                   </button>
@@ -191,8 +265,7 @@ export default function AccountVerificationPage() {
               </form>
             )}
 
-            {/* Step 3: Verification Complete */}
-            {step === 'complete' && (
+            {!missingSession && step === 'complete' && (
               <div className="space-y-4 text-center">
                 <div className="flex justify-center">
                   <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center">
@@ -201,24 +274,14 @@ export default function AccountVerificationPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <p className="font-semibold">Account Verified Successfully!</p>
+                  <p className="font-semibold">Account Verified Successfully</p>
                   <p className="text-sm text-muted-foreground">
-                    Your account is now fully verified and ready to use.
+                    Your patient account is now ready. Continue to login.
                   </p>
                 </div>
 
-                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs text-muted-foreground space-y-2">
-                  <p className="font-semibold">Next Steps:</p>
-                  <ul className="space-y-1 text-left">
-                    <li>✓ Set up your health profile</li>
-                    <li>✓ Connect health devices</li>
-                    <li>✓ Enable notifications</li>
-                    <li>✓ Start tracking your vitals</li>
-                  </ul>
-                </div>
-
                 <Button onClick={handleContinue} className="w-full gap-2">
-                  Go to Dashboard
+                  Go to Login
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -226,14 +289,14 @@ export default function AccountVerificationPage() {
           </CardContent>
         </Card>
 
-        {/* Footer */}
         <div className="mt-6 text-center text-xs text-muted-foreground space-y-2">
           <p>
             <button className="text-primary hover:underline">Security & Privacy</button>
           </p>
-          <p>© 2026 BioTrack. All rights reserved.</p>
+          <p>&copy; 2026 BioTrack. All rights reserved.</p>
         </div>
       </div>
     </div>
   )
 }
+

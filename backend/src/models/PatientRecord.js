@@ -17,6 +17,9 @@ const PatientRecordSchema = new mongoose.Schema(
 
     // Integrity fields
     recordHash: { type: String, required: true, index: true }, // sha256(canonical JSON of data + metadata)
+    hashSchemaVersion: { type: Number, enum: [1, 2], default: 2, index: true },
+    recordNonce: { type: String, default: '', trim: true, index: true },
+    capturedAt: { type: Date, default: null, index: true },
     blockchain: {
       enabled: { type: Boolean, default: false },
       network: { type: String, default: '' },

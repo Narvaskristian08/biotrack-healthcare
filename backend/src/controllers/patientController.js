@@ -63,6 +63,10 @@ export async function createPatient(req, res) {
     contactNumber: String(contactNumber).trim(),
     emergencyContactName: String(emergencyContactName ?? '').trim(),
     emergencyContactPhone: String(emergencyContactPhone ?? '').trim(),
+    accountVerification: {
+      status: 'verified',
+      verifiedAt: new Date(),
+    },
     createdByActorType: actorType,
     createdByActorId: actorId,
     updatedByActorType: actorType,

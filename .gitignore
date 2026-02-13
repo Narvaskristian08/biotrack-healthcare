@@ -82,3 +82,5 @@ postman/
 app.*.symbols
 app.*.map.json
 .vercel
+.codex-run/
+.mongo-data/

@@ -26,9 +26,47 @@ import { alertRoutes } from './routes/alertRoutes.js';
 
 const app = express();
 
+function parseCorsOrigins(value) {
+  if (!value) return [];
+  return String(value)
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function isPrivateDevOrigin(origin) {
+  try {
+    const parsed = new URL(origin);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+
+    const host = parsed.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return true;
+    if (host.startsWith('10.') || host.startsWith('192.168.')) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+const configuredOrigins = parseCorsOrigins(env.CORS_ORIGIN);
+
 app.use(
   cors({
-    origin: env.CORS_ORIGIN,
+    origin(origin, callback) {
+      // Non-browser or same-origin requests may have no origin header.
+      if (!origin) return callback(null, true);
+      if (configuredOrigins.includes('*')) return callback(null, true);
+      if (configuredOrigins.includes(origin)) return callback(null, true);
+
+      // In local development allow localhost/private-network origins to avoid
+      // localhost vs 127.0.0.1 mismatches during manual QA.
+      if (env.NODE_ENV !== 'production' && isPrivateDevOrigin(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
   })
 );

@@ -1,4 +1,4 @@
-import { Contract, JsonRpcProvider, Wallet } from 'ethers';
+import { Contract, JsonRpcProvider, Wallet, getAddress, isAddress } from 'ethers';
 import { env } from '../../config/env.js';
 import { IDENTITY_REGISTRY_ABI, RECORD_PROOF_REGISTRY_ABI } from './abi.js';
 
@@ -17,12 +17,25 @@ function normalizePrivateKey(privateKey) {
   return key.startsWith('0x') ? key : `0x${key}`;
 }
 
+function normalizeAddress(addressValue, fieldName) {
+  const raw = trim(addressValue);
+  if (!raw) return '';
+  if (!isAddress(raw)) {
+    throw new Error(`${fieldName} must be a valid EVM address`);
+  }
+  return getAddress(raw);
+}
+
 export function blockchainEnabled() {
   return Boolean(env.BLOCKCHAIN_ENABLED);
 }
 
 export function blockchainStrictMode() {
   return Boolean(env.BLOCKCHAIN_STRICT_MODE);
+}
+
+export function blockchainWriteDisabled() {
+  return Boolean(env.BLOCKCHAIN_WRITE_DISABLED);
 }
 
 export function toBytes32Hex(hash) {
@@ -56,8 +69,21 @@ async function getSigner() {
   if (!signerCache) {
     const provider = await getProvider();
     signerCache = new Wallet(normalizePrivateKey(env.BLOCKCHAIN_PRIVATE_KEY), provider);
+    const configuredAddress = getAddress(signerCache.address);
+    const expectedAddress = normalizeAddress(env.BLOCKCHAIN_EXPECTED_SIGNER, 'BLOCKCHAIN_EXPECTED_SIGNER');
+    if (expectedAddress && configuredAddress !== expectedAddress) {
+      throw new Error(
+        `BLOCKCHAIN_PRIVATE_KEY address mismatch: expected ${expectedAddress}, got ${configuredAddress}`
+      );
+    }
   }
   return signerCache;
+}
+
+export async function getSignerAddress() {
+  if (!blockchainEnabled()) return '';
+  const signer = await getSigner();
+  return getAddress(signer.address);
 }
 
 export async function getBlockchainNetwork() {
@@ -107,4 +133,29 @@ export function getIdentityContractAddress() {
 
 export function getRecordContractAddress() {
   return trim(env.BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS);
+}
+
+export async function assertContractWriteAccess(contract) {
+  if (!blockchainEnabled() || blockchainWriteDisabled() || !contract) return;
+
+  const signerAddress = String(await getSignerAddress()).toLowerCase();
+
+  if (typeof contract.writesPaused === 'function') {
+    const paused = Boolean(await contract.writesPaused());
+    if (paused) {
+      throw new Error('Contract writes are paused');
+    }
+  }
+
+  if (typeof contract.owner !== 'function' || typeof contract.writers !== 'function') {
+    return;
+  }
+
+  const owner = String(await contract.owner()).trim().toLowerCase();
+  if (owner === signerAddress) return;
+
+  const allowed = Boolean(await contract.writers(signerAddress));
+  if (!allowed) {
+    throw new Error(`Signer ${signerAddress} is not authorized as writer`);
+  }
 }

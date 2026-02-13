@@ -5,8 +5,10 @@ import { HealthCenter } from '../../models/HealthCenter.js';
 import { Patient } from '../../models/Patient.js';
 import { canonicalJsonStringify, sha256Hex } from '../../utils/crypto.js';
 import {
+  assertContractWriteAccess,
   blockchainEnabled,
   blockchainStrictMode,
+  blockchainWriteDisabled,
   getBlockchainNetwork,
   getIdentityContractAddress,
   getIdentityRegistryContract,
@@ -143,6 +145,21 @@ export async function provisionBlockchainIdentity({
     return base;
   }
 
+  if (blockchainWriteDisabled()) {
+    await writeProofLog({
+      kind: 'identity',
+      status: 'skipped',
+      subjectType,
+      subjectId,
+      healthCenterId,
+      identityId,
+      hash: identityHash,
+      reason: 'BLOCKCHAIN_WRITES_DISABLED',
+      details: { verificationStatus: 'local_only' },
+    });
+    return base;
+  }
+
   try {
     const contract = await getIdentityRegistryContract();
     if (!contract || typeof contract.registerIdentity !== 'function') {
@@ -158,6 +175,7 @@ export async function provisionBlockchainIdentity({
       });
       return base;
     }
+    await assertContractWriteAccess(contract);
 
     const tx = await contract.registerIdentity(
       identityId,

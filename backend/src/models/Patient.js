@@ -29,6 +29,22 @@ const PatientSchema = new mongoose.Schema(
     emergencyContactPhone: { type: String, default: '', trim: true },
     tags: { type: [String], default: [] },
     status: { type: String, enum: ['active', 'archived'], default: 'active', index: true },
+    accountVerification: {
+      status: { type: String, enum: ['pending', 'verified'], default: 'pending', index: true },
+      verifiedAt: { type: Date, default: null },
+      email: {
+        codeHash: { type: String, default: '' },
+        codeExpiresAt: { type: Date, default: null },
+        lastSentAt: { type: Date, default: null },
+        verifiedAt: { type: Date, default: null },
+      },
+      sms: {
+        codeHash: { type: String, default: '' },
+        codeExpiresAt: { type: Date, default: null },
+        lastSentAt: { type: Date, default: null },
+        verifiedAt: { type: Date, default: null },
+      },
+    },
     createdByActorType: { type: String, enum: ['admin', 'healthcenter', 'unknown'], default: 'unknown', index: true },
     createdByActorId: { type: mongoose.Schema.Types.ObjectId, default: null },
     updatedByActorType: { type: String, enum: ['admin', 'healthcenter', 'unknown'], default: 'unknown', index: true },

@@ -1,3 +1,5 @@
+import { randomBytes } from 'crypto';
+import mongoose from 'mongoose';
 import { Patient } from '../models/Patient.js';
 import { PatientRecord } from '../models/PatientRecord.js';
 import { canonicalJsonStringify, sha256Hex } from '../utils/crypto.js';
@@ -5,7 +7,10 @@ import { writeAuditLog } from '../services/auditService.js';
 import { anchorRecordProof, verifyRecordProof } from '../services/blockchain/recordProof.service.js';
 import { env } from '../config/env.js';
 
-function buildRecordHash({ healthCenterId, patientId, type, data }) {
+const RECORD_HASH_SCHEMA_VERSION = 2;
+const RECORD_HASH_SCHEMA_NAME = 'biotrack.record.v2';
+
+function buildRecordHashLegacy({ healthCenterId, patientId, type, data }) {
   return sha256Hex(
     canonicalJsonStringify({
       healthCenterId: String(healthCenterId),
@@ -16,27 +21,98 @@ function buildRecordHash({ healthCenterId, patientId, type, data }) {
   );
 }
 
+function buildRecordHashV2({ healthCenterId, patientId, recordId, type, data, capturedAt, recordNonce }) {
+  return sha256Hex(
+    canonicalJsonStringify({
+      schema: RECORD_HASH_SCHEMA_NAME,
+      schemaVersion: RECORD_HASH_SCHEMA_VERSION,
+      healthCenterId: String(healthCenterId),
+      patientId: String(patientId),
+      recordId: String(recordId),
+      type: String(type),
+      capturedAt: new Date(capturedAt).toISOString(),
+      nonce: String(recordNonce),
+      data,
+    })
+  );
+}
+
+function buildRecordHashForRecord(record) {
+  const hasV2Material =
+    Number(record?.hashSchemaVersion) === RECORD_HASH_SCHEMA_VERSION &&
+    String(record?.recordNonce ?? '').trim() &&
+    record?.capturedAt;
+
+  if (hasV2Material) {
+    return buildRecordHashV2({
+      healthCenterId: record.healthCenterId,
+      patientId: record.patientId,
+      recordId: record._id,
+      type: record.type,
+      data: record.data,
+      capturedAt: record.capturedAt,
+      recordNonce: record.recordNonce,
+    });
+  }
+
+  return buildRecordHashLegacy({
+    healthCenterId: record.healthCenterId,
+    patientId: record.patientId,
+    type: record.type,
+    data: record.data,
+  });
+}
+
 export async function addPatientRecord(req, res) {
   const { healthCenterId, adminId, sessionId } = req.context;
   const actorType = adminId ? 'admin' : 'healthcenter';
   const actorId = adminId ?? healthCenterId;
-  const { type = 'note', data, blockchain = { enabled: false } } = req.body ?? {};
+  const { type = 'note', data, blockchain = {}, capturedAt: capturedAtInput } = req.body ?? {};
   const patientId = req.params.patientId;
 
   if (!data) return res.status(400).json({ error: { message: 'data is required' } });
   const patient = await Patient.findOne({ _id: patientId, healthCenterId }).lean();
   if (!patient) return res.status(404).json({ error: { message: 'Patient not found' } });
 
-  const recordHash = buildRecordHash({ healthCenterId, patientId, type, data });
+  const recordId = new mongoose.Types.ObjectId();
+  let capturedAt = new Date();
+  if (capturedAtInput !== undefined && capturedAtInput !== null && String(capturedAtInput).trim() !== '') {
+    const parsed = new Date(capturedAtInput);
+    if (Number.isNaN(parsed.getTime())) {
+      return res.status(400).json({ error: { message: 'capturedAt must be a valid date' } });
+    }
+    capturedAt = parsed;
+  }
+
+  const recordNonce = randomBytes(16).toString('hex');
+  const recordHash = buildRecordHashV2({
+    healthCenterId,
+    patientId,
+    recordId,
+    type,
+    data,
+    capturedAt,
+    recordNonce,
+  });
+  const shouldAnchor = Boolean(blockchain?.enabled ?? env.BLOCKCHAIN_ENABLED);
+
+  const duplicateRecord = await PatientRecord.findOne({ recordHash }).select('_id').lean();
+  if (duplicateRecord) {
+    return res.status(409).json({ error: { message: 'Duplicate record hash rejected' } });
+  }
 
   const rec = await PatientRecord.create({
+    _id: recordId,
     healthCenterId,
     patientId,
     type,
     data,
     recordHash,
+    hashSchemaVersion: RECORD_HASH_SCHEMA_VERSION,
+    recordNonce,
+    capturedAt,
     blockchain: {
-      enabled: Boolean(blockchain?.enabled),
+      enabled: shouldAnchor,
       network: blockchain?.network ?? '',
       contractAddress: blockchain?.contractAddress ?? '',
       txId: blockchain?.txId ?? '',
@@ -44,7 +120,7 @@ export async function addPatientRecord(req, res) {
       proofId: blockchain?.proofId ?? '',
       anchoredAt: blockchain?.anchoredAt ? new Date(blockchain.anchoredAt) : null,
       lastVerifiedAt: null,
-      verificationStatus: blockchain?.verificationStatus ?? 'unanchored',
+      verificationStatus: blockchain?.verificationStatus ?? (shouldAnchor ? 'pending' : 'unanchored'),
       errorMessage: '',
     },
     createdByActorType: actorType,
@@ -52,7 +128,6 @@ export async function addPatientRecord(req, res) {
     sessionId,
   });
 
-  const shouldAnchor = Boolean(blockchain?.enabled ?? env.BLOCKCHAIN_ENABLED);
   if (shouldAnchor) {
     const anchored = await anchorRecordProof({
       healthCenterId,
@@ -124,12 +199,7 @@ export async function verifyPatientRecordIntegrity(req, res) {
   const record = await PatientRecord.findOne({ _id: recordId, patientId, healthCenterId });
   if (!record) return res.status(404).json({ error: { message: 'Record not found' } });
 
-  const recomputedHash = buildRecordHash({
-    healthCenterId: record.healthCenterId,
-    patientId: record.patientId,
-    type: record.type,
-    data: record.data,
-  });
+  const recomputedHash = buildRecordHashForRecord(record);
 
   const dbHashMatch = recomputedHash === record.recordHash;
 
@@ -140,19 +210,32 @@ export async function verifyPatientRecordIntegrity(req, res) {
     identityId: patient?.blockchainIdentity?.identityId ?? '',
     recordHash: record.recordHash,
   });
+  const expectedIdentityId = String(patient?.blockchainIdentity?.identityId ?? '').trim();
+  const chainIdentityId = String(chainVerification?.identityId ?? '').trim();
+  const identityMatch =
+    chainVerification.available && chainVerification.verified === true
+      ? Boolean(chainIdentityId && expectedIdentityId && chainIdentityId === expectedIdentityId)
+      : null;
 
   const status = !dbHashMatch
     ? 'tampered'
-    : chainVerification.available && chainVerification.verified
+    : chainVerification.available && chainVerification.verified && identityMatch === true
       ? 'verified'
-      : chainVerification.available && chainVerification.verified === false
+      : chainVerification.available && (chainVerification.verified === false || identityMatch === false)
         ? 'anchor_mismatch'
         : 'local_hash_only';
 
   record.blockchain = {
     ...record.blockchain,
     lastVerifiedAt: new Date(),
-    verificationStatus: status === 'verified' ? 'anchored' : status === 'tampered' ? 'tampered' : record.blockchain?.verificationStatus ?? 'unanchored',
+    verificationStatus:
+      status === 'verified'
+        ? 'anchored'
+        : status === 'tampered'
+          ? 'tampered'
+          : status === 'anchor_mismatch'
+            ? 'failed'
+            : record.blockchain?.verificationStatus ?? 'unanchored',
   };
   await record.save();
 
@@ -166,6 +249,9 @@ export async function verifyPatientRecordIntegrity(req, res) {
       recomputedHash,
       dbHashMatch,
       onChainVerified: chainVerification.verified,
+      chainIdentityId,
+      expectedIdentityId,
+      identityMatch,
       status,
     },
   });
@@ -179,7 +265,11 @@ export async function verifyPatientRecordIntegrity(req, res) {
       recomputedHash,
       match: dbHashMatch,
     },
-    blockchain: chainVerification,
+    blockchain: {
+      ...chainVerification,
+      expectedIdentityId,
+      identityMatch,
+    },
     verifiedAt: record.blockchain.lastVerifiedAt,
   });
 }

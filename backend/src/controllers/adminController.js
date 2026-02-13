@@ -283,6 +283,10 @@ export async function adminUpsertUser(req, res) {
       address: String(address ?? '').trim(),
       contactNumber: String(contactNumber ?? '').trim(),
       status: status === 'archived' ? 'archived' : 'active',
+      accountVerification: {
+        status: 'verified',
+        verifiedAt: new Date(),
+      },
       createdByActorType: 'admin',
       createdByActorId: actorId,
       updatedByActorType: 'admin',

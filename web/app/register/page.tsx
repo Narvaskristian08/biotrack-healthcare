@@ -209,7 +209,18 @@ export default function RegisterPage() {
       return
     }
 
-    router.push('/account-verification?email=' + encodeURIComponent(patientData.email))
+    const patientId = result.patient?.id
+    if (!patientId) {
+      setError('Registration completed but verification session is missing. Please try again.')
+      return
+    }
+
+    const verificationQuery = new URLSearchParams({
+      patientId,
+      email: result.patient?.email ?? patientData.email,
+      contactNumber: result.patient?.contactNumber ?? patientData.contactNumber,
+    })
+    router.push(`/account-verification?${verificationQuery.toString()}`)
   }
 
   // ============== Health Center Handlers ==============

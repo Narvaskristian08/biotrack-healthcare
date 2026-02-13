@@ -46,6 +46,7 @@ export default function LoginPage() {
     password: '',
   })
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -58,6 +59,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setSuccess('')
 
     if (!formData.email.trim()) {
       setError('Please enter your email address')
@@ -107,8 +109,10 @@ export default function LoginPage() {
       return
     }
 
+    setSuccess('Login successful. Redirecting...')
+
     // Navigate to dashboard on success
-    router.push('/')
+    router.replace('/')
   }
 
   return (
@@ -150,6 +154,11 @@ export default function LoginPage() {
             {error && (
               <div className="p-3.5 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive font-medium">
                 {error}
+              </div>
+            )}
+            {success && (
+              <div className="p-3.5 rounded-lg bg-primary/10 border border-primary/20 text-sm text-primary font-medium">
+                {success}
               </div>
             )}
 

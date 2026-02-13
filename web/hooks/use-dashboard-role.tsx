@@ -1,7 +1,14 @@
 'use client'
 
-import { createContext, useContext, ReactNode, useState, useEffect } from 'react'
-import { getSession, clearSession, type AuthRole } from '@/lib/auth'
+import { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react'
+import {
+  getSession,
+  clearSession,
+  saveSession,
+  USER_SESSION_CHANGED_EVENT,
+  USER_SESSION_STORAGE_KEY,
+  type AuthRole,
+} from '@/lib/auth'
 
 export type UserRole = 'patient' | 'provider' | 'admin'
 
@@ -38,7 +45,7 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isReady, setIsReady] = useState(false)
 
-  useEffect(() => {
+  const syncFromSession = useCallback(() => {
     const session = getSession()
     if (session?.accessToken) {
       const mappedRole = mapAuthRoleToUserRole(session.role)
@@ -55,17 +62,41 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
     } else {
       setIsAuthenticated(false)
       setSessionUser(null)
+      setRoleState('patient')
     }
-    setIsReady(true)
   }, [])
+
+  useEffect(() => {
+    syncFromSession()
+    setIsReady(true)
+    const onSessionChange = () => {
+      syncFromSession()
+    }
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === USER_SESSION_STORAGE_KEY) {
+        syncFromSession()
+      }
+    }
+
+    window.addEventListener(USER_SESSION_CHANGED_EVENT, onSessionChange)
+    window.addEventListener('storage', onStorage)
+
+    return () => {
+      window.removeEventListener(USER_SESSION_CHANGED_EVENT, onSessionChange)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [syncFromSession])
 
   const setRole = (r: UserRole) => {
     setRoleState(r)
-    // Update localStorage if needed
+    setSessionUser((prev) => (prev ? { ...prev, role: r } : prev))
     const session = getSession()
     if (session) {
-      session.role = r as AuthRole
-      localStorage.setItem('userSession', JSON.stringify(session))
+      saveSession({
+        ...session,
+        role: r as AuthRole,
+      })
     }
   }
 
