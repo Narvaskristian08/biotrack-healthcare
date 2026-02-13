@@ -225,33 +225,11 @@ export async function loginPatient(data: LoginData): Promise<{ session?: UserSes
 // ============== Health Center Auth ==============
 
 export async function registerHealthCenter(data: HealthCenterRegisterData): Promise<{ success: boolean; session?: UserSession; error?: string }> {
-    const result = await apiPost<{
-        accessToken: string;
-        healthCenter: { id: string; email: string; name: string; holderName: string };
-    }>('/healthcenters/register', data);
-
-    if (result.error) {
-        return { success: false, error: result.error.message };
-    }
-
-    const { accessToken, healthCenter } = result.data!;
-    const sessionStart = await startHealthCenterSession(accessToken);
-    if (sessionStart.error || !sessionStart.sessionToken) {
-        return { success: false, error: sessionStart.error || 'Failed to start role session' };
-    }
-
-    const session: UserSession = {
-        accessToken: sessionStart.sessionToken,
-        role: 'provider',
-        email: healthCenter.email,
-        name: healthCenter.name,
-        id: healthCenter.id,
-        healthCenterId: healthCenter.id,
-        loginTime: new Date().toISOString(),
+    void data;
+    return {
+        success: false,
+        error: 'Official barangay onboarding is admin-managed. Contact your system administrator.',
     };
-
-    saveSession(session);
-    return { success: true, session };
 }
 
 export async function loginHealthCenter(data: LoginData): Promise<{ session?: UserSession; error?: string }> {

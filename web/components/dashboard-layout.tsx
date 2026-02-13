@@ -125,6 +125,11 @@ function getRoleBadgeColor(role: UserRole): string {
   }
 }
 
+function getProfileHref(role: UserRole): string {
+  if (role === 'patient') return '/profile-settings'
+  return '/settings'
+}
+
 function getInitialsFromName(name?: string, firstName?: string, lastName?: string): string {
   // Try to get initials from firstName + lastName first
   if (firstName && lastName) {
@@ -168,6 +173,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { role, sessionUser, logout } = useDashboardRole()
   const navigationItems = getNavigationItems(role)
   const roleLabel = getRoleLabel(role)
+  const profileHref = getProfileHref(role)
   const displayName = getDisplayName(sessionUser, role)
   const displayInitials = getInitialsFromName(sessionUser?.name, sessionUser?.firstName, sessionUser?.lastName) || role[0].toUpperCase()
 
@@ -304,7 +310,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
-                      <Link href="/profile-settings">Profile</Link>
+                      <Link href={profileHref}>Profile</Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/settings">Settings</Link>

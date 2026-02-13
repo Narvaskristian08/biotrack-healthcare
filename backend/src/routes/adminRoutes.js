@@ -29,11 +29,13 @@ adminRoutes.post('/login', asyncHandler(loginAdmin));
 
 // Admin management
 adminRoutes.post('/healthcenters', requireAdminAuth, asyncHandler(adminCreateHealthCenter));
+adminRoutes.post('/barangays', requireAdminAuth, asyncHandler(adminCreateHealthCenter));
 adminRoutes.get('/overview', requireAdminAuth, asyncHandler(getAdminOverview));
 adminRoutes.get('/users', requireAdminAuth, asyncHandler(listAdminUsers));
 adminRoutes.post('/users', requireAdminAuth, asyncHandler(adminUpsertUser));
 adminRoutes.patch('/users/:userRole/:userId', requireAdminAuth, asyncHandler(adminUpdateUser));
 adminRoutes.post('/providers/:providerId/credential-status', requireAdminAuth, asyncHandler(approveProviderCredentials));
+adminRoutes.post('/barangays/:providerId/status', requireAdminAuth, asyncHandler(approveProviderCredentials));
 
 adminRoutes.get('/rbac', requireAdminAuth, asyncHandler(getRbacSettings));
 adminRoutes.patch('/rbac', requireAdminAuth, asyncHandler(updateRbacSettings));

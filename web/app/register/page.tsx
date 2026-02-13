@@ -52,7 +52,6 @@ type SignUpRole = 'patient' | 'provider' | 'admin'
 
 const ROLES: { value: SignUpRole; label: string; icon: React.ReactNode; description: string }[] = [
   { value: 'patient', label: 'Patient', icon: <User className="h-5 w-5" />, description: 'Access your health records' },
-  { value: 'provider', label: 'Healthcare Provider', icon: <Building2 className="h-5 w-5" />, description: 'Manage your health center' },
   { value: 'admin', label: 'Admin', icon: <Shield className="h-5 w-5" />, description: 'System administration' },
 ]
 
@@ -480,6 +479,9 @@ export default function RegisterPage() {
                     </button>
                   ))}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Barangay/healthcare-provider onboarding is admin-managed and cannot be self-registered.
+                </p>
 
                 <Button onClick={handleStep1} className="w-full h-11 gap-2 rounded-lg font-medium shadow-sm">
                   Continue

@@ -1,161 +1,147 @@
-# BioTrack Web Testing Guide
+# BioTrack Web Testing Guide (Fixed Port: 127.0.0.1:3001)
 
-This guide provides a full manual QA flow for the BioTrack Web Platform.
+This guide is for running and testing the full web authentication and role flows against the local backend.
 
-It covers:
-- environment setup
-- role-based testing (Patient, Healthcare Provider, Admin)
-- RBAC negative tests (access restrictions)
-- blockchain verification checks
-- data governance and system monitoring checks
-- test sign-off checklist
+## 1. Target Local URLs
 
-## 1. Scope
+- Web: `http://127.0.0.1:3001`
+- Backend API: `http://127.0.0.1:3000/api`
 
-This web testing guide validates:
-- authentication and role-based routing
-- patient monitoring and records workflows
-- blockchain integrity visibility and verification endpoints
-- admin governance capabilities
-- restrictions around immutable blockchain/medical records
+Use `127.0.0.1` consistently to avoid localhost/host mismatch issues.
 
 ## 2. Prerequisites
 
-- Node.js 18+ (Node 20+ recommended)
-- MongoDB running (local or remote)
-- Dependencies installed at repo root:
+- Node.js 18+ (Node.js 20 recommended)
+- MongoDB running
+- Repo dependencies installed from root:
 
 ```bash
 npm install
 ```
 
-- Backend `.env` configured (minimum):
-  - `MONGODB_URI`
-  - `ADMIN_JWT_SECRET`
-  - `HEALTHCENTER_JWT_SECRET`
-  - `SESSION_JWT_SECRET`
-  - `OPENROUTER_API_KEY`
+## 3. Environment Configuration
 
-Optional blockchain verification mode:
-- `BLOCKCHAIN_ENABLED=true`
-- `BLOCKCHAIN_RPC_URL`
-- `BLOCKCHAIN_PRIVATE_KEY`
-- `BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS`
-- `BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS`
+### 3.1 Backend (`backend/.env`)
 
-## 3. Start Services
+Minimum required:
 
-From repo root, run in separate terminals:
+```env
+PORT=3000
+NODE_ENV=development
+CORS_ORIGIN=http://127.0.0.1:3001,http://localhost:3001
+MONGODB_URI=mongodb://127.0.0.1:27017/biotrack
+ADMIN_JWT_SECRET=change_me_admin_secret
+HEALTHCENTER_JWT_SECRET=change_me_healthcenter_secret
+SESSION_JWT_SECRET=change_me_session_secret
+OPENROUTER_API_KEY=dev-placeholder
+```
+
+Optional for real emails:
+
+```env
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=
+```
+
+### 3.2 Web (`web/.env.local`)
+
+```env
+NEXT_PUBLIC_API_URL=http://127.0.0.1:3000/api
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_key_optional
+```
+
+`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is optional and only used by the Admin Google Maps picker on `/admin/users`.
+
+## 4. Start Services
+
+Run in two terminals from repo root.
+
+Terminal 1 (backend):
 
 ```bash
 npm run dev:backend
 ```
 
+Terminal 2 (web fixed to `127.0.0.1:3001`):
+
 ```bash
-npm run dev:web
+npm --workspace web run dev -- --hostname 127.0.0.1 --port 3001
 ```
 
-Default URLs:
-- Backend: `http://localhost:3000`
-- Web: `http://localhost:3001` (or next available port shown by Next.js)
+## 5. Quick Smoke Test
 
-## 4. Test Accounts and Bootstrapping
-
-Use Web Register/Login pages:
-- `/register`
-- `/login`
-
-Recommended test accounts:
-- Patient account
-- Provider account (health center)
-- Admin account
-
-Important provider credential behavior:
-- Providers created by Admin can be marked `pending`, `approved`, or `rejected`
-- Provider login should be blocked unless credential status is `approved`
-
-## 5. Smoke Test Matrix
-
-Run this first before deep testing.
-
-1. Login as Patient.
-2. Confirm patient routes load and non-patient routes are blocked.
-3. Login as Provider.
-4. Confirm provider routes load and patient-only routes are blocked.
-5. Login as Admin.
-6. Confirm admin routes load and provider/patient management views are role-appropriate.
+Open:
+- `http://127.0.0.1:3001/login`
+- `http://127.0.0.1:3001/register`
 
 Expected:
-- no blank pages
-- no redirect loops
-- unauthorized routes redirect safely
+- pages load without infinite spinner
+- no CORS/network errors in browser console
 
-## 6. Patient Role Test Cases
+## 6. Onboarding Rules to Validate
 
-Role intent: personal monitoring and own-record access.
+- Provider (barangay/clinic) self-registration is blocked.
+- Admin creates provider from `/admin/users`.
+- Provider lifecycle statuses: `pending`, `verified`, `active`.
+- Only `active` providers:
+  - can log in
+  - appear in patient Health Center dropdown
+  - can access provider services
+- Admin provider creation returns notification status and attempts onboarding email delivery.
 
-### 6.1 Dashboard and Monitoring
+## 7. Role-Based Test Flows
 
-Routes:
-- `/`
-- `/health-monitoring`
-- `/vitals-history`
-- `/ai-health-advisory`
+### 7.1 Admin Role Testing
 
-Checks:
-- patient sees own trend/summary/alerts only
-- charts render without runtime errors
-- empty state appears if no data exists
+1. Register/login admin:
+- Open `http://127.0.0.1:3001/register` and select `Admin`, or use `/login` for existing admin.
 
-### 6.2 Medical History and Records
+2. Open `http://127.0.0.1:3001/admin/users`.
 
-Routes:
-- `/medical-records`
-- `/blockchain`
-- `/blockchain-verification`
+3. Create provider (Barangay Unit):
+- Fill required fields:
+  - email
+  - password
+  - barangay name
+  - city/municipality
+  - health center name
+  - official contact info
+  - latitude/longitude
+- Set initial status (`pending`, `verified`, or `active`).
 
-Checks:
-- records list loads
-- verify actions call integrity endpoint successfully
-- hash, tx id, block number, timestamp fields render when present
-- record export/download actions work
+4. Validate provider email notification:
+- After create, UI should show either:
+  - onboarding email sent, or
+  - account created but email notification not delivered (with reason)
 
-### 6.3 Profile Management
+5. Status transition checks:
+- Set provider to `pending`, try provider login, expect blocked.
+- Set provider to `verified`, try provider login, expect blocked.
+- Set provider to `active`, provider login should succeed.
 
-Route:
-- `/profile-settings`
-
-Checks:
-- patient profile loads
-- allowed fields update successfully
-- login history list loads
-
-### 6.4 Patient Reports
-
-Route:
-- `/reports-downloads`
-
-Checks:
-- CSV/JSON/TXT exports download
-- generated file contains only patient-scoped data
-
-### 6.5 Patient Restrictions (Negative Tests)
-
-Attempt:
-- access `/patients`, `/users`, `/admin-dashboard`, `/admin/users`
-- manually call another patient id endpoint (if testing API via Postman/curl)
+6. Validate admin pages:
+- `/admin-dashboard`
+- `/admin/users`
+- `/admin/logs`
+- `/admin/ai-configuration`
+- `/admin/blockchain-management`
+- `/admin/backup-recovery`
 
 Expected:
-- UI redirect or access denied
-- backend returns `403` for cross-patient resource access
+- all admin pages load
+- user management and status updates work
 
-## 7. Healthcare Provider Role Test Cases
+### 7.2 Provider Role Testing
 
-Role intent: assigned patient monitoring and clinical oversight.
+Use provider account created by admin.
 
-### 7.1 Provider Core Views
+1. Login at `http://127.0.0.1:3001/login` with role `Provider`.
 
-Routes:
+2. Validate allowed routes:
 - `/`
 - `/provider-dashboard`
 - `/patients`
@@ -166,240 +152,90 @@ Routes:
 - `/analytics`
 - `/provider-reports`
 
-Checks:
-- assigned patients list renders
-- risk indicators and alert counts render
-- latest vitals summary renders
-- patient detail shows trend, AI summary, alert list, record verification controls
+3. Validate restrictions:
+- Attempt `/admin/users` and `/admin/logs`.
+- Expected: redirected/blocked by route guard.
 
-### 7.2 Real-Time Monitoring and Risk Flags
+4. Validate session behavior:
+- Provider login should fail when provider status is not `active`.
+- Provider login should succeed when status is `active`.
 
-Checks:
-- heart-rate trend chart loads
-- risk-level badges load from AI summary response
-- fall-related flags/alerts appear when data exists
+### 7.3 Patient Role Testing
 
-### 7.3 Verified Records Access
+1. Open `http://127.0.0.1:3001/register` and choose `Patient`.
 
-Checks:
-- provider can open records for assigned patients
-- provider can run verify action on records
-- tamper/anchor mismatch statuses are visible if returned
+2. Validate Health Center dropdown behavior:
+- If no provider is `active`, dropdown should be empty.
+- After admin activates a provider, dropdown should list it.
 
-### 7.4 Report Generation
+3. Complete patient registration:
+- required fields include health center, names, email, password, address, contact number
 
-Checks:
-- single-patient summary export works
-- batch CSV export works
-- export data columns are complete and readable
+4. Account verification flow:
+- Send code via email or SMS
+- verify code
+- then login
 
-### 7.5 Provider Restrictions (Negative Tests)
+5. Validate allowed routes:
+- `/`
+- `/health-monitoring`
+- `/medical-records`
+- `/vitals-history`
+- `/ai-health-advisory`
+- `/reports-downloads`
+- `/profile-settings`
+- `/blockchain`
+- `/blockchain-verification`
 
-Attempt:
-- access admin routes: `/admin-dashboard`, `/admin/users`, `/admin/logs`
-- attempt modifying blockchain hash fields (no UI operation should exist)
-- attempt editing AI output directly (no UI operation should exist)
+6. Validate restrictions:
+- Attempt `/patients`, `/users`, `/admin-dashboard`, `/admin/users`
+- Expected: redirected/blocked
 
-Expected:
-- route guard blocks admin routes
-- no mutation controls for immutable blockchain data
-- AI outputs remain read-only
+## 8. API Spot Checks (Optional)
 
-## 8. Admin Role Test Cases
-
-Role intent: system governance and access control.
-
-### 8.1 Admin Dashboard
-
-Route:
-- `/admin-dashboard`
-
-Checks:
-- overview cards load:
-  - user counts
-  - active sessions
-  - failed events
-  - blockchain proof counts
-- snapshot export works
-
-### 8.2 User Management
-
-Route:
-- `/admin/users`
-
-Checks:
-- list users (patient/provider/admin)
-- create user by role:
-  - provider
-  - patient
-  - admin
-- activate/deactivate users
-- approve/reject provider credentials
-
-Credential approval validation:
-1. Set provider credential to `rejected` or `pending`
-2. attempt provider login
-3. expect login blocked
-4. set credential back to `approved`
-5. login should succeed
-
-### 8.3 RBAC Policies
-
-Route:
-- `/admin/ai-configuration` (RBAC policy editor)
-
-Checks:
-- policy toggles load from backend
-- saving policy changes succeeds
-- refresh preserves updated values
-
-### 8.4 System Logs and Monitoring
-
-Route:
-- `/admin/logs`
-
-Checks:
-- log stream loads
-- search and outcome filters work
-- suspicious count updates
-- export works
-
-### 8.5 Blockchain Supervision
-
-Route:
-- `/admin/blockchain-management`
-
-Checks:
-- proof/failed counters load
-- recent blockchain proof logs render
-- export audit works
-
-### 8.6 Data Governance and Backup
-
-Route:
-- `/admin/backup-recovery`
-
-Checks:
-- encryption/privacy settings load
-- performance thresholds editable/savable
-- backup marker action updates timestamp
-- restore marker action updates timestamp
-
-### 8.7 Admin Restrictions (Negative Tests)
-
-Verify there is no operation that:
-- changes historical blockchain hashes
-- rewrites immutable medical records
-
-Expected:
-- admin can supervise/audit but cannot mutate immutable chain history or immutable medical entries
-
-## 9. RBAC Route Guard Validation
-
-Validate route access by role:
-
-- Patient allowed:
-  - `/`
-  - `/health-monitoring`
-  - `/medical-records`
-  - `/vitals-history`
-  - `/ai-health-advisory`
-  - `/reports-downloads`
-  - `/profile-settings`
-  - `/blockchain`
-  - `/blockchain-verification`
-
-- Provider allowed:
-  - `/`
-  - `/provider-dashboard`
-  - `/patients`, `/patients/[id]`
-  - `/users`, `/users/[id]`
-  - `/records`
-  - `/analytics`
-  - `/provider-reports`
-  - `/blockchain`
-
-- Admin allowed:
-  - `/admin-dashboard`
-  - `/admin/users`
-  - `/admin/logs`
-  - `/admin/ai-configuration`
-  - `/admin/blockchain-management`
-  - `/admin/backup-recovery`
-
-Negative route tests:
-- each role attempts one route from another role’s protected set
-- expect redirect or blocked access
-
-## 10. API-Level Spot Checks (Optional but Recommended)
-
-Use Postman/curl with role token in `Authorization: Bearer <token>`.
+Use tokens from login.
 
 Admin:
 - `GET /api/admin/overview`
 - `GET /api/admin/users`
-- `PATCH /api/admin/rbac`
-- `GET /api/admin/logs`
-- `GET /api/admin/blockchain/overview`
 
 Provider:
 - `GET /api/patients`
-- `GET /api/patients/:id`
-- `GET /api/patients/:id/records`
-- `GET /api/ai/summary?patientId=:id`
-- `GET /api/ai/trend-insight?patientId=:id`
 
 Patient:
 - `GET /api/patients/:id` (self only)
-- `PATCH /api/patients/:id` (self only)
-- `GET /api/patients/:id/login-history` (self only)
-- `GET /api/patients/:id/records`
-- `GET /api/patients/:id/records/:recordId/verify`
+- `GET /api/patients/:id/records` (self only)
 
 Expected:
-- role-appropriate endpoints return `200`
-- disallowed calls return `403`
+- allowed endpoints return `200`
+- disallowed role access returns `403`
 
-## 11. Build and Static Validation
+## 9. Build Validation
 
-Run before QA sign-off:
-
-```bash
-npm --workspace web exec tsc -- --noEmit
-```
+From repo root:
 
 ```bash
 npm --workspace web run build
 ```
 
 Expected:
-- no TypeScript errors
-- successful Next.js production build
+- build succeeds
 
-## 12. Final QA Sign-Off Checklist
+## 10. Troubleshooting
 
-Mark all as pass/fail:
+- `/register` or `/login` keeps loading:
+  - confirm backend is running on `127.0.0.1:3000`
+  - confirm `NEXT_PUBLIC_API_URL=http://127.0.0.1:3000/api`
+  - restart web dev server after env change
 
-- Auth works for Patient, Provider, Admin
-- Role-based route guarding works
-- Patient pages function and enforce self-only data access
-- Provider pages function and enforce assigned-patient scope
-- Admin pages function for governance, logs, RBAC, and supervision
-- Provider credential approval flow works end-to-end
-- Blockchain verification views load and verify actions run
-- Report exports work for patient/provider/admin contexts
-- No route exposes unauthorized data
-- No UI/API flow can modify immutable blockchain hashes or immutable medical records
+- Patient Health Center dropdown empty:
+  - at least one provider must exist with status `active`
+  - confirm backend `GET /api/healthcenters` returns data
 
-## 13. Troubleshooting
+- Provider login blocked:
+  - provider is not `active` yet
 
-- `401 Unauthorized`
-  - session expired or invalid token; login again
-- `403 Forbidden`
-  - RBAC restriction is expected for wrong-role endpoint
-- empty charts/lists
-  - no source data exists yet; seed test records first
-- provider login blocked
-  - provider credential status may be `pending` or `rejected`
-- web build warning about lockfiles
-  - informational; can be cleaned by standardizing lockfile strategy
+- Google Maps picker shows "Oops! Something went wrong":
+  - verify valid Maps JavaScript API key
+  - enable Maps JavaScript API and Places API
+  - configure HTTP referrers for `127.0.0.1:3001`

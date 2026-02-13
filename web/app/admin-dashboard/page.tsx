@@ -104,7 +104,7 @@ export default function AdminDashboardPage() {
                     Patients | Providers: {overview?.users?.providers ?? 0} | Admins: {overview?.users?.admins ?? 0}
                   </div>
                   <div className="text-xs text-muted-foreground mt-2">
-                    Pending provider credentials: {overview?.providers?.pendingApproval ?? 0}
+                    Barangays pending activation (pending/verified): {overview?.providers?.pendingApproval ?? 0}
                   </div>
                 </>
               )}

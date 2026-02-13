@@ -8,6 +8,68 @@ import { AdminConfig } from '../models/AdminConfig.js';
 import { hashPassword, signAdminToken, verifyPassword } from '../services/authService.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { ensureBlockchainIdentityForDocument } from '../services/blockchain/identity.service.js';
+import { deliverProviderOnboardingNotification } from '../services/verificationDelivery.service.js';
+
+const BARANGAY_STATUSES = ['pending', 'verified', 'active'];
+
+function normalizeBarangayStatus(value, fallback = 'pending') {
+  const normalized = String(value ?? fallback).trim().toLowerCase();
+  return BARANGAY_STATUSES.includes(normalized) ? normalized : '';
+}
+
+function parseCoordinate(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
+}
+
+function sanitizeAssignedProviders(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (entry && typeof entry === 'object') {
+        return {
+          name: String(entry.name ?? '').trim(),
+          email: String(entry.email ?? '').trim().toLowerCase(),
+          contactNumber: String(entry.contactNumber ?? '').trim(),
+        };
+      }
+      const name = String(entry ?? '').trim();
+      return { name, email: '', contactNumber: '' };
+    })
+    .filter((entry) => entry.name || entry.email || entry.contactNumber);
+}
+
+async function notifyProviderOnboarding({ req, provider, temporaryPassword = '' }) {
+  const notification = await deliverProviderOnboardingNotification({
+    email: provider.email,
+    barangayName: provider.barangayName,
+    cityMunicipality: provider.cityMunicipality,
+    healthCenterName: provider.healthCenterName,
+    status: provider.status,
+    loginEmail: provider.email,
+    temporaryPassword,
+  });
+
+  await writeAuditLog({
+    req,
+    action: 'ADMIN.PROVIDER.NOTIFY',
+    entityType: 'HealthCenter',
+    entityId: provider._id,
+    outcome: notification.delivered ? 'success' : 'failure',
+    reason: notification.message || '',
+    after: {
+      channel: notification.channel,
+      delivered: notification.delivered,
+      recipientMasked: notification.recipientMasked,
+      status: provider.status,
+      credentialsIncluded: Boolean(temporaryPassword),
+    },
+  });
+
+  return notification;
+}
 
 export async function registerAdmin(req, res) {
   const { email, password } = req.body ?? {};
@@ -46,21 +108,73 @@ export async function loginAdmin(req, res) {
 }
 
 export async function adminCreateHealthCenter(req, res) {
-  const { email, password, name, holderName, walletAddress = '', address = '', contactNumber = '' } = req.body ?? {};
-  if (!email || !password || !name || !holderName) {
-    return res.status(400).json({ error: { message: 'email, password, name, holderName are required' } });
+  const {
+    email,
+    password,
+    walletAddress = '',
+    contactNumber = '',
+    // Barangay onboarding fields
+    barangayName = '',
+    cityMunicipality = '',
+    healthCenterName = '',
+    officialContactInfo = '',
+    latitude = null,
+    longitude = null,
+    assignedHealthcareProviders = [],
+    status = 'pending',
+    // Backward-compatible fields
+    name = '',
+    holderName = '',
+    address = '',
+  } = req.body ?? {};
+
+  const onboardingStatus = normalizeBarangayStatus(status, 'pending');
+  if (!email || !password || !barangayName || !cityMunicipality || !healthCenterName || !officialContactInfo) {
+    return res.status(400).json({
+      error: {
+        message:
+          'email, password, barangayName, cityMunicipality, healthCenterName, and officialContactInfo are required',
+      },
+    });
+  }
+  if (!onboardingStatus) {
+    return res.status(400).json({ error: { message: "status must be one of: pending, verified, active" } });
+  }
+
+  const lat = parseCoordinate(latitude);
+  const lng = parseCoordinate(longitude);
+  if (lat === null || lng === null) {
+    return res.status(400).json({ error: { message: 'latitude and longitude are required numeric coordinates' } });
+  }
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return res.status(400).json({ error: { message: 'latitude/longitude are out of valid range' } });
   }
 
   const existing = await HealthCenter.findOne({ email: String(email).toLowerCase().trim() }).lean();
   if (existing) return res.status(409).json({ error: { message: 'Health center email already exists' } });
 
+  const assignedProviders = sanitizeAssignedProviders(assignedHealthcareProviders);
+  const normalizedBarangayName = String(barangayName).trim();
+  const normalizedHealthCenterName = String(healthCenterName).trim();
+  const displayName = String(name || `${normalizedBarangayName} - ${normalizedHealthCenterName}`).trim();
+
   const hc = await HealthCenter.create({
     email: String(email).toLowerCase().trim(),
     passwordHash: await hashPassword(String(password)),
-    name: String(name).trim(),
-    holderName: String(holderName).trim(),
-    address: String(address ?? '').trim(),
+    name: displayName,
+    barangayName: normalizedBarangayName,
+    cityMunicipality: String(cityMunicipality).trim(),
+    healthCenterName: normalizedHealthCenterName,
+    officialContactInfo: String(officialContactInfo).trim(),
+    geoLocation: {
+      latitude: lat,
+      longitude: lng,
+    },
+    assignedHealthcareProviders: assignedProviders,
+    holderName: String(holderName || normalizedBarangayName).trim(),
+    address: String(address || cityMunicipality).trim(),
     contactNumber: String(contactNumber ?? '').trim(),
+    status: onboardingStatus,
   });
 
   const { identity } = await ensureBlockchainIdentityForDocument({
@@ -78,16 +192,29 @@ export async function adminCreateHealthCenter(req, res) {
     after: {
       email: hc.email,
       name: hc.name,
-      holderName: hc.holderName,
+      barangayName: hc.barangayName,
+      cityMunicipality: hc.cityMunicipality,
+      healthCenterName: hc.healthCenterName,
+      status: hc.status,
+      assignedHealthcareProvidersCount: hc.assignedHealthcareProviders?.length ?? 0,
       blockchainIdentityId: identity.identityId,
     },
   });
+
+  const notification = await notifyProviderOnboarding({ req, provider: hc, temporaryPassword: String(password) });
 
   return res.status(201).json({
     healthCenter: {
       id: hc._id,
       email: hc.email,
       name: hc.name,
+      barangayName: hc.barangayName,
+      cityMunicipality: hc.cityMunicipality,
+      healthCenterName: hc.healthCenterName,
+      officialContactInfo: hc.officialContactInfo,
+      geoLocation: hc.geoLocation,
+      assignedHealthcareProviders: hc.assignedHealthcareProviders,
+      status: hc.status,
       holderName: hc.holderName,
       blockchainIdentity: {
         identityId: identity.identityId,
@@ -95,6 +222,7 @@ export async function adminCreateHealthCenter(req, res) {
         txId: identity.txId,
       },
     },
+    notification,
   });
 }
 
@@ -111,7 +239,7 @@ export async function getAdminOverview(req, res) {
     Patient.countDocuments({}),
     HealthCenter.countDocuments({}),
     HealthCenter.countDocuments({ status: 'active' }),
-    HealthCenter.countDocuments({ credentialStatus: 'pending' }),
+    HealthCenter.countDocuments({ status: { $in: ['pending', 'verified'] } }),
     Admin.countDocuments({ status: 'active' }),
     Session.countDocuments({ revokedAt: null, expiresAt: { $gt: new Date() } }),
     AuditLog.countDocuments({
@@ -152,7 +280,7 @@ export async function listAdminUsers(req, res) {
   }
 
   if (status) {
-    if (status === 'active' || status === 'disabled') providerFilter.status = status;
+    if (['pending', 'verified', 'active', 'disabled'].includes(status)) providerFilter.status = status;
     if (status === 'active' || status === 'archived') patientFilter.status = status;
   }
 
@@ -162,7 +290,13 @@ export async function listAdminUsers(req, res) {
       : Patient.find(patientFilter).select('firstName lastName email mrn status healthCenterId role createdAt updatedAt').sort({ updatedAt: -1 }).limit(limit).lean(),
     role && role !== 'provider'
       ? []
-      : HealthCenter.find(providerFilter).select('name holderName email role status credentialStatus createdAt updatedAt').sort({ updatedAt: -1 }).limit(limit).lean(),
+      : HealthCenter.find(providerFilter)
+          .select(
+            'name holderName email role status barangayName cityMunicipality healthCenterName officialContactInfo geoLocation assignedHealthcareProviders createdAt updatedAt'
+          )
+          .sort({ updatedAt: -1 })
+          .limit(limit)
+          .lean(),
     role && role !== 'admin'
       ? []
       : Admin.find(adminFilter).select('email role status createdAt updatedAt').sort({ updatedAt: -1 }).limit(limit).lean(),
@@ -183,11 +317,21 @@ export async function listAdminUsers(req, res) {
     ...providers.map((p) => ({
       id: p._id,
       role: 'provider',
-      displayName: p.name,
+      displayName: p.barangayName || p.name,
       email: p.email,
       status: p.status,
-      credentialStatus: p.credentialStatus ?? 'approved',
-      meta: { holderName: p.holderName, providerRole: p.role },
+      // Kept for UI compatibility; values now mirror barangay onboarding status.
+      credentialStatus: p.status,
+      meta: {
+        holderName: p.holderName,
+        providerRole: p.role,
+        barangayName: p.barangayName ?? '',
+        cityMunicipality: p.cityMunicipality ?? '',
+        healthCenterName: p.healthCenterName ?? '',
+        officialContactInfo: p.officialContactInfo ?? '',
+        geoLocation: p.geoLocation ?? null,
+        assignedHealthcareProviders: p.assignedHealthcareProviders ?? [],
+      },
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
     })),
@@ -213,13 +357,19 @@ export async function adminUpsertUser(req, res) {
     role,
     email,
     password,
-    status = 'active',
-    credentialStatus = 'approved',
+    status = 'pending',
     // provider fields
     name = '',
     holderName = '',
     address = '',
     contactNumber = '',
+    barangayName = '',
+    cityMunicipality = '',
+    healthCenterName = '',
+    officialContactInfo = '',
+    latitude = null,
+    longitude = null,
+    assignedHealthcareProviders = [],
     // patient fields
     healthCenterId = '',
     firstName = '',
@@ -235,21 +385,50 @@ export async function adminUpsertUser(req, res) {
   if (!email || !password) return res.status(400).json({ error: { message: 'email and password are required' } });
 
   if (normalizedRole === 'provider') {
-    if (!name || !holderName) {
-      return res.status(400).json({ error: { message: 'name and holderName are required for provider' } });
+    if (!barangayName || !cityMunicipality || !healthCenterName || !officialContactInfo) {
+      return res.status(400).json({
+        error: {
+          message:
+            'barangayName, cityMunicipality, healthCenterName, and officialContactInfo are required for provider',
+        },
+      });
     }
     const existing = await HealthCenter.findOne({ email: String(email).toLowerCase().trim() }).lean();
     if (existing) return res.status(409).json({ error: { message: 'Provider email already exists' } });
 
+    const onboardingStatus = normalizeBarangayStatus(status, 'pending');
+    if (!onboardingStatus) {
+      return res.status(400).json({ error: { message: "status must be one of: pending, verified, active" } });
+    }
+
+    const lat = parseCoordinate(latitude);
+    const lng = parseCoordinate(longitude);
+    if (lat === null || lng === null) {
+      return res.status(400).json({ error: { message: 'latitude and longitude are required numeric coordinates' } });
+    }
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ error: { message: 'latitude/longitude are out of valid range' } });
+    }
+
+    const assignedProviders = sanitizeAssignedProviders(assignedHealthcareProviders);
+    const normalizedBarangayName = String(barangayName).trim();
+    const normalizedHealthCenterName = String(healthCenterName).trim();
+    const displayName = String(name || `${normalizedBarangayName} - ${normalizedHealthCenterName}`).trim();
+
     const provider = await HealthCenter.create({
       email: String(email).toLowerCase().trim(),
       passwordHash: await hashPassword(String(password)),
-      name: String(name).trim(),
-      holderName: String(holderName).trim(),
-      address: String(address ?? '').trim(),
+      name: displayName,
+      holderName: String(holderName || normalizedBarangayName).trim(),
+      barangayName: normalizedBarangayName,
+      cityMunicipality: String(cityMunicipality).trim(),
+      healthCenterName: normalizedHealthCenterName,
+      officialContactInfo: String(officialContactInfo).trim(),
+      geoLocation: { latitude: lat, longitude: lng },
+      assignedHealthcareProviders: assignedProviders,
+      address: String(address || cityMunicipality).trim(),
       contactNumber: String(contactNumber ?? '').trim(),
-      status: status === 'disabled' ? 'disabled' : 'active',
-      credentialStatus: ['pending', 'approved', 'rejected'].includes(String(credentialStatus)) ? credentialStatus : 'approved',
+      status: onboardingStatus,
       role: 'staff',
     });
     await writeAuditLog({
@@ -257,9 +436,10 @@ export async function adminUpsertUser(req, res) {
       action: 'ADMIN.USER.CREATE',
       entityType: 'HealthCenter',
       entityId: provider._id,
-      after: { email: provider.email, status: provider.status, credentialStatus: provider.credentialStatus },
+      after: { email: provider.email, status: provider.status, barangayName: provider.barangayName },
     });
-    return res.status(201).json({ user: { id: provider._id, role: 'provider', email: provider.email } });
+    const notification = await notifyProviderOnboarding({ req, provider, temporaryPassword: String(password) });
+    return res.status(201).json({ user: { id: provider._id, role: 'provider', email: provider.email }, notification });
   }
 
   if (normalizedRole === 'patient') {
@@ -330,14 +510,52 @@ export async function adminUpdateUser(req, res) {
   }
 
   if (role === 'provider') {
-    const allowed = ['name', 'holderName', 'address', 'contactNumber', 'status', 'credentialStatus', 'role', 'email'];
+    const allowed = [
+      'name',
+      'holderName',
+      'address',
+      'contactNumber',
+      'status',
+      'role',
+      'email',
+      'barangayName',
+      'cityMunicipality',
+      'healthCenterName',
+      'officialContactInfo',
+      'latitude',
+      'longitude',
+      'assignedHealthcareProviders',
+    ];
     const update = {};
     for (const k of allowed) if (k in patch) update[k] = patch[k];
     if ('email' in update) update.email = String(update.email).toLowerCase().trim();
+    if ('status' in update) {
+      const normalizedStatus = normalizeBarangayStatus(update.status);
+      if (!normalizedStatus) {
+        return res.status(400).json({ error: { message: "status must be one of: pending, verified, active" } });
+      }
+      update.status = normalizedStatus;
+    }
+    if ('latitude' in update || 'longitude' in update) {
+      const lat = parseCoordinate(update.latitude);
+      const lng = parseCoordinate(update.longitude);
+      if (lat === null || lng === null) {
+        return res.status(400).json({ error: { message: 'latitude and longitude are required numeric coordinates' } });
+      }
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return res.status(400).json({ error: { message: 'latitude/longitude are out of valid range' } });
+      }
+      update.geoLocation = { latitude: lat, longitude: lng };
+      delete update.latitude;
+      delete update.longitude;
+    }
+    if ('assignedHealthcareProviders' in update) {
+      update.assignedHealthcareProviders = sanitizeAssignedProviders(update.assignedHealthcareProviders);
+    }
     const doc = await HealthCenter.findByIdAndUpdate(userId, { $set: update }, { new: true, runValidators: true }).lean();
     if (!doc) return res.status(404).json({ error: { message: 'Provider not found' } });
     await writeAuditLog({ req, action: 'ADMIN.USER.UPDATE', entityType: 'HealthCenter', entityId: doc._id, after: update });
-    return res.json({ user: { id: doc._id, role: 'provider', email: doc.email, status: doc.status, credentialStatus: doc.credentialStatus } });
+    return res.json({ user: { id: doc._id, role: 'provider', email: doc.email, status: doc.status, credentialStatus: doc.status } });
   }
 
   if (role === 'patient') {
@@ -381,30 +599,41 @@ export async function adminUpdateUser(req, res) {
 
 export async function approveProviderCredentials(req, res) {
   const { providerId } = req.params;
-  const status = String(req.body?.credentialStatus ?? 'approved').toLowerCase();
-  if (!['approved', 'rejected', 'pending'].includes(status)) {
-    return res.status(400).json({ error: { message: 'credentialStatus must be approved, rejected, or pending' } });
+  const requested =
+    req.body?.status ??
+    req.body?.onboardingStatus ??
+    (() => {
+      const legacy = String(req.body?.credentialStatus ?? '').toLowerCase();
+      if (legacy === 'approved') return 'active';
+      if (legacy === 'rejected') return 'verified';
+      if (legacy === 'pending') return 'pending';
+      return '';
+    })();
+  const status = normalizeBarangayStatus(requested);
+  if (!status) {
+    return res.status(400).json({ error: { message: 'status must be pending, verified, or active' } });
   }
   const provider = await HealthCenter.findByIdAndUpdate(
     providerId,
-    { $set: { credentialStatus: status } },
+    { $set: { status } },
     { new: true, runValidators: true }
   ).lean();
   if (!provider) return res.status(404).json({ error: { message: 'Provider not found' } });
 
   await writeAuditLog({
     req,
-    action: 'ADMIN.PROVIDER.CREDENTIALS',
+    action: 'ADMIN.BARANGAY.STATUS.UPDATE',
     entityType: 'HealthCenter',
     entityId: provider._id,
-    after: { credentialStatus: provider.credentialStatus },
+    after: { status: provider.status },
   });
 
   return res.json({
     provider: {
       id: provider._id,
       email: provider.email,
-      credentialStatus: provider.credentialStatus,
+      onboardingStatus: provider.status,
+      credentialStatus: provider.status,
       status: provider.status,
     },
   });

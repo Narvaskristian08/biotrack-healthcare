@@ -1,58 +1,22 @@
 import { HealthCenter } from '../models/HealthCenter.js';
-import { hashPassword, signHealthCenterToken, verifyPassword } from '../services/authService.js';
+import { signHealthCenterToken, verifyPassword } from '../services/authService.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
 
 export async function registerHealthCenter(req, res) {
-  const { email, password, name, holderName, walletAddress = '', address = '', contactNumber = '' } = req.body ?? {};
-  if (!email || !password || !name || !holderName) {
-    return res.status(400).json({ error: { message: 'email, password, name, and holderName are required' } });
-  }
-
-  const existing = await HealthCenter.findOne({ email: String(email).toLowerCase().trim() }).lean();
-  if (existing) return res.status(409).json({ error: { message: 'Health center email already exists' } });
-
-  const passwordHash = await hashPassword(String(password));
-  const hc = await HealthCenter.create({
-    email: String(email).toLowerCase().trim(),
-    passwordHash,
-    name: String(name).trim(),
-    holderName: String(holderName).trim(),
-    address: String(address ?? '').trim(),
-    contactNumber: String(contactNumber ?? '').trim(),
-    role: 'staff',
-  });
-  const { identity } = await ensureBlockchainIdentityForDocument({
-    doc: hc,
-    subjectType: 'healthcenter',
-    uniqueSeed: hc.email,
-    walletAddress,
-  });
-
-  const token = signHealthCenterToken({ healthCenterId: hc._id });
   await writeAuditLog({
     req,
-    action: 'HEALTHCENTER.REGISTER',
+    action: 'HEALTHCENTER.SELF_REGISTER.BLOCKED',
     entityType: 'HealthCenter',
-    entityId: hc._id,
-    after: { email: hc.email, name: hc.name, holderName: hc.holderName },
+    outcome: 'failure',
+    reason: 'Self registration is disabled; admin onboarding is required.',
   });
-
-  return res.status(201).json({
-    healthCenter: {
-      id: hc._id,
-      email: hc.email,
-      name: hc.name,
-      holderName: hc.holderName,
-      address: hc.address,
-      contactNumber: hc.contactNumber,
-      blockchainIdentity: {
-        identityId: identity.identityId,
-        verificationStatus: identity.verificationStatus,
-        txId: identity.txId,
-      },
+  return res.status(403).json({
+    error: {
+      message:
+        'Official barangay onboarding is admin-managed. Please contact your system administrator.',
+      code: 'BARANGAY_SELF_REGISTRATION_DISABLED',
     },
-    accessToken: token,
   });
 }
 
@@ -62,9 +26,10 @@ export async function loginHealthCenter(req, res) {
 
   const hc = await HealthCenter.findOne({ email: String(email).toLowerCase().trim() });
   if (!hc) return res.status(401).json({ error: { message: 'Invalid credentials' } });
-  if (hc.status !== 'active') return res.status(403).json({ error: { message: 'Health center disabled' } });
-  if (hc.credentialStatus !== 'approved') {
-    return res.status(403).json({ error: { message: `Health center credentials are '${hc.credentialStatus}'` } });
+  if (hc.status !== 'active') {
+    return res.status(403).json({
+      error: { message: `Barangay unit status is '${hc.status}'. Only 'active' barangays can access BioTrack services.` },
+    });
   }
 
   const ok = await verifyPassword(String(password), hc.passwordHash);
@@ -105,6 +70,11 @@ export async function loginHealthCenter(req, res) {
       id: hc._id,
       email: hc.email,
       name: hc.name,
+      barangayName: hc.barangayName,
+      cityMunicipality: hc.cityMunicipality,
+      healthCenterName: hc.healthCenterName,
+      officialContactInfo: hc.officialContactInfo,
+      status: hc.status,
       holderName: hc.holderName,
       blockchainIdentity: {
         identityId: identity.identityId,
@@ -119,7 +89,9 @@ export async function loginHealthCenter(req, res) {
 export async function listHealthCentersPublic(req, res) {
   console.log('listHealthCentersPublic controller executing');
   const hcs = await HealthCenter.find({ status: 'active' })
-    .select('name address contactNumber')
+    .select(
+      'name barangayName cityMunicipality healthCenterName officialContactInfo geoLocation address contactNumber assignedHealthcareProviders'
+    )
     .sort({ name: 1 })
     .lean();
   return res.json({ healthCenters: hcs });

@@ -1,143 +1,91 @@
-## Getting Started
+# BioTrack Healthcare Monorepo
 
-### src/
-- **config/**: Configuration files including database, blockchain, and environment-specific settings.  
-- **controllers/**: Handles incoming HTTP requests and sends responses. Keep controllers thin, delegate logic to services.
-- **middleware/**: Reusable middleware functions for authentication, logging, validation, or error handling.
-- **models/**: Database or blockchain schema definitions.  
-- **routes/**: Define API endpoints and link them to controllers. Organize routes by feature.  
-- **services/**: Business logic including AI, blockchain integration, and analytics.  
-- **utils/**: Generic helper functions used across the project.  
-- **index.js**: Main entry point that initializes the server and connects middleware and routes.
+This repository contains:
+- `backend/`: Express + MongoDB API
+- `web/`: Next.js web app
 
-### root
-- **.env**: Stores environment variables (API keys, secrets).
-- **.gitignore**: Specifies files and folders Git should ignore.
-### android/
-- Native Android project for platform-specific integrations.
+## Local Requirements
 
-### assets/
-- **images/**: Image assets.
-- **icons/**: Icon assets.
-- **fonts/**: Custom font files.
+- Node.js 18+ (Node.js 20 recommended)
+- npm 9+
+- MongoDB running locally or remotely
 
-### integration_test/
-- End-to-end tests that run on real devices or emulators.
-- Simulates full user flows across multiple screens (login, scan, results, etc.).
-- Example: `app_test.dart` for testing navigation and interactions.
+## Install Dependencies
 
-### ios/
-- Native iOS project for platform-specific integrations.
-
-### lib/
-- **core/**: App-wide infrastructure, configuration, services, and routing.
-- **common/**: Shared widgets, models, and extensions reused across features.
-- **features/**: Feature-based modules following clean architecture.
-- **main.dart**: Main entry point that initializes the app, routing, themes, and providers.
-
-### lib/common/
-- **widgets/**: Shared UI components such as buttons, loaders, and dialogs.
-- **models/**: Shared data models used across features.
-- **extensions/**: Dart extensions for common utilities.
-
-### lib/core/
-- **config/**: Environment configuration, API base URLs, and app-level settings.
-- **constants/**: Centralized constants such as colors, strings, and dimensions.
-- **utils/**: Generic helper functions used across the project.
-- **theme/**: Light and dark theme configurations.
-- **services/**: Reusable low-level services including API clients, secure storage, notifications, sensors, and platform channels.
-- **routes/**: Application routing using GoRouter.
-
-### lib/features/
-- **data/**: Repositories, data sources, and data models.
-- **domain/**: Business logic and use cases.
-- **presentation/**: UI layer containing screens, widgets, and controllers.
-- **providers/**: State management providers (Riverpod / Bloc).
-
-### test/
-- Unit, widget, and integration tests. Structure mirrors the `lib/` directory.
-
-### root
-- **.gitignore**: Specifies files and folders Git should ignore.
-- **pubspec.yaml**: Defines Flutter dependencies, assets, and project configuration.
-- **README.md**: Project documentation.
-
-## Quick Setup 
-
-### Clone the repository
-
-```bash
-git clone https://github.com/dev-jsc0f1eld/biotrack-healthcare.git
-cd biotrack-healthcare
-```
-
-### Checkout backend branch
-
-```bash
-git checkout backend
-### Checkout mobile branch
-
-```bash
-git checkout mobile
-```
-
-### Install dependencies
+From repo root:
 
 ```bash
 npm install
 ```
 
-### IMPORTANT: Create .env file
+## Environment Setup
 
-Copy `env.example` to `.env` and set your values:
+### 1) Backend env
 
-```bash
-cp env.example .env
+Create `backend/.env` (copy from `backend/env.example`) and set at least:
+
+```env
+PORT=3000
+NODE_ENV=development
+CORS_ORIGIN=http://127.0.0.1:3001,http://localhost:3001
+MONGODB_URI=mongodb://127.0.0.1:27017/biotrack
+ADMIN_JWT_SECRET=change_me_admin_secret
+HEALTHCENTER_JWT_SECRET=change_me_healthcenter_secret
+SESSION_JWT_SECRET=change_me_session_secret
+OPENROUTER_API_KEY=dev-placeholder
 ```
 
-For blockchain identity + integrity anchoring, set:
+Notes:
+- `OPENROUTER_API_KEY` is required by backend startup validation. Use a placeholder for local auth/routing tests if AI calls are not part of your run.
+- SMTP is optional for startup, but required if you want real provider/patient email delivery.
 
-- `BLOCKCHAIN_ENABLED=true`
-- `BLOCKCHAIN_RPC_URL`
-- `BLOCKCHAIN_PRIVATE_KEY`
-- `BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS`
-- `BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS`
+### 2) Web env
 
-Keep `BLOCKCHAIN_ENABLED=false` for local/off-chain mode.
+Create `web/.env.local`:
 
-### Start the server
-
-```bash
-npm start
+```env
+NEXT_PUBLIC_API_URL=http://127.0.0.1:3000/api
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_key_optional
 ```
 
-### Run in development mode (auto-reload)
+`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is optional. It is only needed for the Admin Google Maps location picker on `/admin/users`.
+
+## Run Locally (Fixed Web Port)
+
+Run in two terminals from repo root:
+
+Terminal 1 (backend):
 
 ```bash
-npm run dev
+npm run dev:backend
 ```
 
-## Blockchain Features
-
-- Patient and health center registration now creates a blockchain identity reference.
-- Identity metadata is saved in MongoDB and optionally anchored on-chain.
-- Patient record creation computes a deterministic record hash and can anchor proof on-chain.
-- New integrity endpoint:
-  - `GET /api/patients/:patientId/records/:recordId/verify`
-  - Recomputes DB hash, compares stored hash, and verifies on-chain proof when available.
-
-## Testing Guide
-
-For full end-to-end testing instructions, read:
-
-- Blockchain and integrity testing: `README-TESTING-BLOCKCHAIN.md`
-- Flutter mobile testing (auth + live scan + sensors): `README-TESTING-MOBILE.md`
-
-Useful Flutter checks:
+Terminal 2 (web, fixed to `127.0.0.1:3001`):
 
 ```bash
-flutter pub get
-flutter pub outdated
-flutter analyze
-flutter test
+npm --workspace web run dev -- --hostname 127.0.0.1 --port 3001
 ```
+
+URLs:
+- Backend API: `http://127.0.0.1:3000/api`
+- Web app: `http://127.0.0.1:3001`
+
+## Core Auth and Onboarding Rules
+
+- Patient can self-register from `/register`.
+- Provider (barangay/clinic) cannot self-register.
+- Admin must create provider accounts from `/admin/users`.
+- Provider lifecycle status is `pending`, `verified`, or `active`.
+- Only `active` providers can:
+  - log in as provider
+  - appear in patient health center dropdown
+  - use BioTrack provider services
+- Admin provider creation triggers provider onboarding email notification when SMTP is configured.
+
+## Testing Guides
+
+- Web run + role QA: `README-TESTING-WEB.md`
+- Backend auth/session/API checks: `README-AUTH.md`
+- Blockchain/integrity checks: `README-TESTING-BLOCKCHAIN.md`
+- Mobile testing: `README-TESTING-MOBILE.md`
+

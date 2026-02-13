@@ -15,10 +15,19 @@ export interface AdminUser {
   displayName: string;
   email: string;
   status: string;
+  onboardingStatus?: string;
   credentialStatus: string;
   meta: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface AdminUserNotification {
+  attempted: boolean;
+  delivered: boolean;
+  channel: string;
+  recipientMasked?: string;
+  message?: string;
 }
 
 export interface AdminOverview {
@@ -109,10 +118,14 @@ export async function fetchAdminUsers(params?: {
   return { users: result.data?.users ?? [] };
 }
 
-export async function createAdminUser(payload: Record<string, unknown>): Promise<{ user?: AdminUser; error?: string }> {
-  const result = await apiPost<{ user: AdminUser }>('/admin/users', payload);
+export async function createAdminUser(payload: Record<string, unknown>): Promise<{
+  user?: AdminUser;
+  notification?: AdminUserNotification;
+  error?: string;
+}> {
+  const result = await apiPost<{ user: AdminUser; notification?: AdminUserNotification }>('/admin/users', payload);
   if (result.error) return { error: result.error.message };
-  return { user: result.data?.user };
+  return { user: result.data?.user, notification: result.data?.notification };
 }
 
 export async function updateAdminUser(
@@ -127,11 +140,11 @@ export async function updateAdminUser(
 
 export async function updateProviderCredentialStatus(
   providerId: string,
-  credentialStatus: 'approved' | 'pending' | 'rejected'
-): Promise<{ provider?: { id: string; email: string; credentialStatus: string; status: string }; error?: string }> {
-  const result = await apiPost<{ provider: { id: string; email: string; credentialStatus: string; status: string } }>(
+  onboardingStatus: 'pending' | 'verified' | 'active'
+): Promise<{ provider?: { id: string; email: string; onboardingStatus?: string; credentialStatus: string; status: string }; error?: string }> {
+  const result = await apiPost<{ provider: { id: string; email: string; onboardingStatus?: string; credentialStatus: string; status: string } }>(
     `/admin/providers/${providerId}/credential-status`,
-    { credentialStatus }
+    { status: onboardingStatus }
   );
   if (result.error) return { error: result.error.message };
   return { provider: result.data?.provider };

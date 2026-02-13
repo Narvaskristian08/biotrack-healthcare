@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { Session } from '../models/Session.js';
+import { HealthCenter } from '../models/HealthCenter.js';
 import { sha256Hex } from '../utils/crypto.js';
 
 function getBearerToken(req) {
@@ -54,6 +55,18 @@ export async function requireSessionAuth(req, res, next) {
 
     // Support Patient Login (Stateless for now? Or check if payload has patientId)
     if (payload.tokenType === 'patient') {
+      const healthCenter = await HealthCenter.findById(payload.healthCenterId).select('status').lean();
+      if (!healthCenter) {
+        return res.status(401).json({ error: { message: 'Health center account not found' } });
+      }
+      if (healthCenter.status !== 'active') {
+        return res.status(403).json({
+          error: {
+            message: `Barangay unit status is '${healthCenter.status}'. Only 'active' barangays can use BioTrack services.`,
+          },
+        });
+      }
+
       req.context = {
         ...(req.context ?? {}),
         patientId: payload.patientId,
@@ -72,6 +85,18 @@ export async function requireSessionAuth(req, res, next) {
     if (new Date(session.expiresAt).getTime() < Date.now()) return res.status(401).json({ error: { message: 'Session expired' } });
     if (session.sessionTokenHash && session.sessionTokenHash !== sha256Hex(token)) {
       return res.status(401).json({ error: { message: 'Session token mismatch' } });
+    }
+
+    const healthCenter = await HealthCenter.findById(session.healthCenterId).select('status').lean();
+    if (!healthCenter) {
+      return res.status(401).json({ error: { message: 'Health center account not found' } });
+    }
+    if (healthCenter.status !== 'active') {
+      return res.status(403).json({
+        error: {
+          message: `Barangay unit status is '${healthCenter.status}'. Only 'active' barangays can use BioTrack services.`,
+        },
+      });
     }
 
     req.context = {

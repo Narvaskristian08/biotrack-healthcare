@@ -72,6 +72,14 @@ export async function registerPatientPublic(req, res) {
 
   const hc = await HealthCenter.findById(healthCenterId);
   if (!hc) return res.status(404).json({ error: { message: 'Health Center not found' } });
+  if (String(hc.status) !== 'active') {
+    return res.status(403).json({
+      error: {
+        message: `Selected barangay unit is '${hc.status}'. Only active barangays can onboard patients.`,
+        code: 'BARANGAY_NOT_ACTIVE',
+      },
+    });
+  }
 
   const normalizedEmail = String(email).toLowerCase().trim();
   const existingEmail = await Patient.findOne({ healthCenterId, email: normalizedEmail });
@@ -329,6 +337,16 @@ export async function loginPatient(req, res) {
     return res.status(403).json({ error: { message: 'Patient account is not active' } });
   }
 
+  const owningHealthCenter = await HealthCenter.findById(match.healthCenterId).select('status').lean();
+  if (!owningHealthCenter || String(owningHealthCenter.status) !== 'active') {
+    return res.status(403).json({
+      error: {
+        message: 'Your barangay unit is not active yet. Please contact your health center administrator.',
+        code: 'BARANGAY_NOT_ACTIVE',
+      },
+    });
+  }
+
   if (getVerificationStatus(match) !== 'verified') {
     return res.status(403).json({
       error: {
@@ -411,4 +429,3 @@ export async function loginPatient(req, res) {
     },
   });
 }
-

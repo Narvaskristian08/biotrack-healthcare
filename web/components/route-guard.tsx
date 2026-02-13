@@ -21,7 +21,6 @@ const COMMON_PROTECTED_PATHS = new Set([
   '/blockchain',
   '/blockchain-verification',
   '/help-support',
-  '/profile-settings',
   '/settings',
 ])
 
@@ -30,6 +29,7 @@ const PATIENT_PATHS = new Set([
   '/evaluation-feedback',
   '/health-monitoring',
   '/medical-records',
+  '/profile-settings',
   '/reports-downloads',
   '/vitals-history',
 ])
@@ -114,4 +114,3 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
 
   return <>{children}</>
 }
-
