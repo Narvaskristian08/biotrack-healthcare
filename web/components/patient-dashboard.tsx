@@ -5,6 +5,7 @@ import { Activity, AlertTriangle, Download, Heart, ShieldCheck, TrendingUp } fro
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Bar,
   BarChart,
@@ -54,6 +55,71 @@ function extractActivityLevel(record: PatientRecord): number | null {
   const steps = parseNumeric((data as Record<string, unknown>).steps);
   if (steps !== null) return Math.min(100, Math.round(steps / 120));
   return null;
+}
+
+function PatientDashboardSkeleton() {
+  return (
+    <div className="space-y-8" aria-busy="true" aria-live="polite">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-72 max-w-full" />
+          <Skeleton className="h-5 w-80 max-w-full" />
+        </div>
+        <Skeleton className="h-10 w-44 rounded-md" />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Card key={`stats-skeleton-${index}`} className="glass glow-green">
+            <CardContent className="pt-6">
+              <div className="flex items-start justify-between">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-8 w-24" />
+                </div>
+                <Skeleton className="h-10 w-10 rounded-lg" />
+              </div>
+              <Skeleton className="mt-4 h-4 w-36" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="space-y-3">
+            <Skeleton className="h-6 w-56" />
+            <Skeleton className="h-4 w-48" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-[280px] w-full rounded-lg" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="space-y-3">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-44" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="space-y-3">
+          <Skeleton className="h-6 w-36" />
+          <Skeleton className="h-4 w-64" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[260px] w-full rounded-lg" />
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 export default function PatientDashboard() {
@@ -149,7 +215,7 @@ export default function PatientDashboard() {
   };
 
   if (state.loading) {
-    return <div className="text-sm text-muted-foreground">Loading patient dashboard...</div>;
+    return <PatientDashboardSkeleton />;
   }
 
   return (

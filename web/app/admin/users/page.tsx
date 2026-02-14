@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardLayout from '@/components/dashboard-layout';
 import {
   createAdminUser,
@@ -52,6 +53,13 @@ const emptyForm: NewUserForm = {
   firstName: '',
   lastName: '',
   middleInitial: '',
+};
+
+type StatusChangeConfirmation = {
+  userDisplayName: string;
+  role: AdminUser['role'];
+  previousStatus: string;
+  nextStatus: string;
 };
 
 function parseAssignedProvidersCsv(value: string): Array<{ name: string }> {
@@ -113,6 +121,9 @@ export default function AdminUsersPage() {
   const [mapError, setMapError] = useState('');
   const [mapReady, setMapReady] = useState(false);
   const [mapsUrlInput, setMapsUrlInput] = useState('');
+  const [updatingUserKey, setUpdatingUserKey] = useState<string | null>(null);
+  const [statusChangeConfirmation, setStatusChangeConfirmation] = useState<StatusChangeConfirmation | null>(null);
+  const [statusChangeDialogOpen, setStatusChangeDialogOpen] = useState(false);
 
   const mapCanvasRef = useRef<HTMLDivElement | null>(null);
   const mapSearchRef = useRef<HTMLInputElement | null>(null);
@@ -331,22 +342,48 @@ export default function AdminUsersPage() {
   };
 
   const toggleStatus = async (user: AdminUser) => {
+    setError('');
+    setMessage('');
     const nextStatus = user.status === 'active' ? 'disabled' : 'active';
+    const userKey = `${user.role}-${user.id}`;
+    setUpdatingUserKey(userKey);
     const res = await updateAdminUser(user.role, user.id, { status: nextStatus });
     if (res.error) {
       setError(res.error);
+      setUpdatingUserKey(null);
       return;
     }
     await loadUsers();
+    setStatusChangeConfirmation({
+      userDisplayName: user.displayName,
+      role: user.role,
+      previousStatus: user.status,
+      nextStatus,
+    });
+    setStatusChangeDialogOpen(true);
+    setUpdatingUserKey(null);
   };
 
   const setBarangayStatus = async (provider: AdminUser, status: 'pending' | 'verified' | 'active') => {
+    setError('');
+    setMessage('');
+    const userKey = `${provider.role}-${provider.id}`;
+    setUpdatingUserKey(userKey);
     const res = await updateProviderCredentialStatus(provider.id, status);
     if (res.error) {
       setError(res.error);
+      setUpdatingUserKey(null);
       return;
     }
     await loadUsers();
+    setStatusChangeConfirmation({
+      userDisplayName: provider.displayName,
+      role: provider.role,
+      previousStatus: provider.status,
+      nextStatus: status,
+    });
+    setStatusChangeDialogOpen(true);
+    setUpdatingUserKey(null);
   };
 
   const extractCoordinatesFromMapsUrl = () => {
@@ -379,6 +416,24 @@ export default function AdminUsersPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <Dialog open={statusChangeDialogOpen} onOpenChange={setStatusChangeDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Status changed</DialogTitle>
+              <DialogDescription>
+                {statusChangeConfirmation
+                  ? `${statusChangeConfirmation.userDisplayName} (${statusChangeConfirmation.role}) was updated from ${statusChangeConfirmation.previousStatus} to ${statusChangeConfirmation.nextStatus}.`
+                  : 'The account status was updated successfully.'}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button type="button" onClick={() => setStatusChangeDialogOpen(false)}>
+                OK
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <div>
           <h1 className="text-3xl font-bold">User Management</h1>
           <p className="text-muted-foreground mt-1">Admin-controlled onboarding for users and barangay units</p>
@@ -603,9 +658,11 @@ export default function AdminUsersPage() {
                   const barangayName = String(meta.barangayName ?? '');
                   const cityMunicipality = String(meta.cityMunicipality ?? '');
                   const healthCenterName = String(meta.healthCenterName ?? '');
+                  const userKey = `${user.role}-${user.id}`;
+                  const isUpdating = updatingUserKey === userKey;
 
                   return (
-                    <Card key={`${user.role}-${user.id}`}>
+                    <Card key={userKey}>
                       <CardContent className="pt-4">
                         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                           <div>
@@ -627,19 +684,34 @@ export default function AdminUsersPage() {
                           <div className="flex flex-wrap gap-2">
                             {user.role === 'provider' ? (
                               <>
-                                <Button size="sm" variant="outline" onClick={() => setBarangayStatus(user, 'pending')}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isUpdating || user.status === 'pending'}
+                                  onClick={() => setBarangayStatus(user, 'pending')}
+                                >
                                   Set Pending
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={() => setBarangayStatus(user, 'verified')}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isUpdating || user.status === 'verified'}
+                                  onClick={() => setBarangayStatus(user, 'verified')}
+                                >
                                   Set Verified
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={() => setBarangayStatus(user, 'active')}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isUpdating || user.status === 'active'}
+                                  onClick={() => setBarangayStatus(user, 'active')}
+                                >
                                   Set Active
                                 </Button>
                               </>
                             ) : (
-                              <Button size="sm" variant="outline" onClick={() => toggleStatus(user)}>
-                                {user.status === 'active' ? 'Deactivate' : 'Activate'}
+                              <Button size="sm" variant="outline" disabled={isUpdating} onClick={() => toggleStatus(user)}>
+                                {isUpdating ? 'Updating...' : user.status === 'active' ? 'Deactivate' : 'Activate'}
                               </Button>
                             )}
                           </div>

@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/sidebar'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,7 +49,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useDashboardRole, type UserRole } from '@/hooks/use-dashboard-role'
-import { Badge } from '@/components/ui/badge'
 
 type NavItem = { label: string; href: string; icon: React.ComponentType<{ className?: string }> }
 
@@ -163,6 +163,15 @@ function getDisplayName(sessionUser: { name?: string; firstName?: string; lastNa
   return getRoleLabel(role)
 }
 
+function toTitleCaseFromPath(pathname: string): string {
+  const segment = pathname.split('/').filter(Boolean).pop() ?? ''
+  if (!segment) return 'Dashboard'
+  return segment
+    .split('-')
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
+    .join(' ')
+}
+
 interface DashboardLayoutProps {
   children: React.ReactNode
 }
@@ -176,6 +185,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const profileHref = getProfileHref(role)
   const displayName = getDisplayName(sessionUser, role)
   const displayInitials = getInitialsFromName(sessionUser?.name, sessionUser?.firstName, sessionUser?.lastName) || role[0].toUpperCase()
+  const activeNavItem =
+    navigationItems.find((item) => pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`))) ?? null
+  const pageTitle = activeNavItem?.label ?? toTitleCaseFromPath(pathname)
 
   const handleLogout = () => {
     logout()
@@ -186,10 +198,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     <SidebarProvider>
       <div className="flex h-screen w-full">
         {/* Sidebar */}
-        <Sidebar className="border-r border-border">
-          <SidebarHeader className="border-b border-border h-16 flex flex-col justify-center px-4 shrink-0">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center shadow-md">
+        <Sidebar className="border-r border-sidebar-border/80 bg-sidebar/95 backdrop-blur-sm">
+          <SidebarHeader className="shrink-0 border-b border-sidebar-border/80 px-4 py-4">
+            <Link
+              href="/"
+              className="flex items-center gap-3 rounded-xl border border-sidebar-border/70 bg-background/70 px-3 py-3 shadow-sm transition-colors hover:bg-background"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-sm">
                 <Heart className="h-6 w-6 text-white" />
               </div>
               <div className="flex flex-col">
@@ -201,8 +216,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </Link>
           </SidebarHeader>
 
-          <SidebarContent>
-            <SidebarMenu>
+          <SidebarContent className="px-3 py-4">
+            <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">Navigation</p>
+            <SidebarMenu className="gap-1.5">
               {navigationItems.map((item) => {
                 const Icon = item.icon
                 const isActive = pathname === item.href
@@ -211,11 +227,25 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     <SidebarMenuButton
                       asChild
                       isActive={isActive}
-                      className={isActive ? 'bg-primary/10 text-primary' : ''}
+                      className={cn(
+                        'group h-11 rounded-xl px-3.5',
+                        isActive
+                          ? 'bg-primary/12 text-primary shadow-sm ring-1 ring-primary/20'
+                          : 'text-sidebar-foreground/85 hover:bg-sidebar-accent/10 hover:text-sidebar-foreground'
+                      )}
                     >
                       <Link href={item.href} className="flex items-center gap-3">
-                        <Icon className="h-5 w-5" />
-                        <span>{item.label}</span>
+                        <span
+                          className={cn(
+                            'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
+                            isActive
+                              ? 'bg-primary/15 text-primary'
+                              : 'text-sidebar-foreground/70 group-hover:bg-sidebar-accent/15 group-hover:text-sidebar-foreground'
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <span className="font-medium tracking-tight">{item.label}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -224,80 +254,104 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="border-t border-border p-4 space-y-4">
-            <SidebarMenu>
+          <SidebarFooter className="border-t border-sidebar-border/80 px-3 py-4">
+            <div className="rounded-xl border border-sidebar-border/70 bg-background/60 px-3 py-3">
+              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-sidebar-foreground/55">Signed in as</p>
+              <p className="mt-1 truncate text-sm font-semibold">{displayName}</p>
+              <p className="truncate text-xs text-sidebar-foreground/65">{sessionUser?.email || roleLabel}</p>
+            </div>
+            <SidebarMenu className="mt-2 gap-1.5">
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton asChild className="h-10 rounded-lg px-3">
                   <Link href="/settings" className="flex items-center gap-3">
-                    <Settings className="h-5 w-5" />
+                    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-sidebar-accent/10 text-sidebar-foreground/80">
+                      <Settings className="h-4 w-4" />
+                    </span>
                     <span>Settings</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  className="h-10 rounded-lg px-3 text-red-600 hover:bg-red-500/10 hover:text-red-600 data-[active=true]:bg-red-500/10 data-[active=true]:text-red-600"
+                  onClick={handleLogout}
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500/10 text-red-600">
+                    <LogOut className="h-4 w-4" />
+                  </span>
+                  <span>Logout</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
-            <Button
-              variant="outline"
-              className="w-full justify-start bg-transparent h-10"
-              onClick={handleLogout}
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
           </SidebarFooter>
         </Sidebar>
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header */}
-          <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-40">
-            <div className="flex items-center justify-between px-6 py-4 h-16">
+          <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-md">
+            <div className="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
               {/* Left Section */}
-              <div className="flex items-center gap-4">
-                <SidebarTrigger className="-ml-1" />
-                <div className="h-6 w-px bg-border hidden sm:block" />
-                {/* RBAC Badge */}
-                <div className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(role)}`}>
-                  {getRoleIcon(role)}
-                  <span>{roleLabel}</span>
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <SidebarTrigger className="h-9 w-9 rounded-lg border border-border/70 bg-background hover:bg-muted/70" />
+                <div className="hidden h-6 w-px bg-border/70 sm:block" />
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    {roleLabel}
+                  </p>
+                  <p className="truncate text-sm font-semibold text-foreground">{pageTitle}</p>
                 </div>
               </div>
 
               {/* Center Section - Search */}
-              <div className="hidden md:flex flex-1 max-w-md">
+              <div className="hidden lg:flex w-full max-w-md">
                 <div className="relative w-full">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder={role === 'patient' ? 'Search my records...' : 'Search patients, records...'}
-                    className="pl-10 bg-muted border-0 focus-visible:ring-1"
+                    className="h-10 rounded-xl border-border/70 bg-muted/35 pl-10 shadow-sm focus-visible:ring-2 focus-visible:ring-primary/30"
                   />
                 </div>
               </div>
 
               {/* Right Section */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className={`hidden md:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${getRoleBadgeColor(role)}`}>
+                  {getRoleIcon(role)}
+                  <span>{roleLabel}</span>
+                </div>
+
                 {/* Notifications */}
-                <Button variant="ghost" size="icon" className="relative">
-                  <Bell className="h-5 w-5" />
-                  <span className="absolute top-1 right-1 h-2 w-2 bg-accent rounded-full" />
+                <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg border border-transparent hover:border-border hover:bg-muted/70">
+                  <Bell className="h-4 w-4" />
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />
                 </Button>
 
                 {/* Help */}
-                <Button variant="ghost" size="icon" className="hidden sm:flex" asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden h-9 w-9 rounded-lg border border-transparent hover:border-border hover:bg-muted/70 sm:flex"
+                  asChild
+                >
                   <Link href="/help-support">
-                    <HelpCircle className="h-5 w-5" />
+                    <HelpCircle className="h-4 w-4" />
                   </Link>
                 </Button>
 
                 {/* User Profile Dropdown - shows user name and role */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="flex items-center gap-3 pl-2 pr-3">
-                      <div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center">
+                    <Button
+                      variant="ghost"
+                      className="h-10 rounded-xl border border-border/70 bg-background px-2 pr-3 shadow-sm hover:bg-muted/40"
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-accent/20">
                         <span className="text-xs font-semibold text-primary">{displayInitials}</span>
                       </div>
-                      <div className="hidden sm:flex flex-col items-start text-left">
-                        <span className="text-sm font-medium">{displayName}</span>
-                        <span className="text-xs text-muted-foreground">{roleLabel}</span>
+                      <div className="hidden sm:flex min-w-0 flex-col items-start text-left">
+                        <span className="max-w-[10rem] truncate text-sm font-medium">{displayName}</span>
+                        <span className="text-xs text-muted-foreground">{pageTitle}</span>
                       </div>
                     </Button>
                   </DropdownMenuTrigger>
