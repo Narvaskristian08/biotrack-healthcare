@@ -26,36 +26,46 @@ class HeartRateEstimator {
     this.windowMs = 20000,
     this.minBpm = 42,
     this.maxBpm = 190,
-    this.reliabilityThreshold = 0.34,
-    this.minimumAcceptConfidence = 0.18,
+    this.minSamplesForEstimate = 28,
+    this.reliabilityThreshold = 0.30,
+    this.minimumAcceptConfidence = 0.14,
   });
 
   final int windowMs;
   final int minBpm;
   final int maxBpm;
+  final int minSamplesForEstimate;
   final double reliabilityThreshold;
   final double minimumAcceptConfidence;
+  static const double _minSignalStdDev = 0.0018;
+  static const double _maxSignalStdDev = 0.018;
+  static const int _maxStepPerUpdate = 7;
+  static const int _consensusToleranceBpm = 8;
+  static const int _hardDisagreementBpm = 24;
 
   final List<_SignalSample> _samples = <_SignalSample>[];
   int _lastPeakMs = -1;
   int _lastBpm = 0;
+  int _lastCandidateBpm = 0;
   double _lastConfidence = 0;
   double _lastRegularity = 0;
   double _lastSnr = 0;
   double _lastSignalStrength = 0;
 
   int get latestBpm => _lastBpm;
+  int get latestCandidateBpm => _lastCandidateBpm;
   double get confidence => _lastConfidence;
   double get regularity => _lastRegularity;
   double get snr => _lastSnr;
   bool get hasReliableSignal => _lastConfidence >= reliabilityThreshold;
-  bool get hasEnoughData => _samples.length >= 45;
+  bool get hasEnoughData => _samples.length >= minSamplesForEstimate;
   double get signalStrength => _lastSignalStrength;
 
   void reset() {
     _samples.clear();
     _lastPeakMs = -1;
     _lastBpm = 0;
+    _lastCandidateBpm = 0;
     _lastConfidence = 0;
     _lastRegularity = 0;
     _lastSnr = 0;
@@ -85,7 +95,7 @@ class HeartRateEstimator {
     final stdDev = math.sqrt(variance);
     _lastSignalStrength = stdDev;
 
-    if (stdDev < 0.0025) {
+    if (stdDev < _minSignalStdDev) {
       _lastConfidence = 0;
       return null;
     }
@@ -110,6 +120,7 @@ class HeartRateEstimator {
     _lastConfidence = selected.confidence;
     _lastRegularity = selected.regularity;
     _lastSnr = selected.snr;
+    _lastCandidateBpm = selected.bpm;
 
     if (selected.confidence < minimumAcceptConfidence) {
       return null;
@@ -124,15 +135,15 @@ class HeartRateEstimator {
     }
 
     _lastPeakMs = _samples.last.timestampMs;
-    _lastBpm = selected.bpm;
-    return selected.bpm;
+    _lastBpm = _stabilizeBpm(selected.bpm);
+    return _lastBpm;
   }
 
   _BpmCandidate? _estimateFromPeaks({
     required List<double> centered,
     required double stdDev,
   }) {
-    final threshold = math.max(stdDev * 0.6, 0.0038).toDouble();
+    final threshold = math.max(stdDev * 0.54, 0.0030).toDouble();
     final peaks = <int>[];
     final peakValues = <double>[];
 
@@ -146,7 +157,7 @@ class HeartRateEstimator {
       }
 
       final peakTimeMs = _samples[i].timestampMs;
-      if (peaks.isNotEmpty && peakTimeMs - peaks.last < 320) {
+      if (peaks.isNotEmpty && peakTimeMs - peaks.last < 300) {
         continue;
       }
       peaks.add(peakTimeMs);
@@ -188,8 +199,8 @@ class HeartRateEstimator {
     final noiseFloor =
         centered.map((v) => v.abs()).reduce((a, b) => a + b) / centered.length;
     final snr = avgPeakAmplitude / (noiseFloor + 1e-9);
-    final snrScore = ((snr - 1.02) / 1.6).clamp(0.0, 1.0).toDouble();
-    final signalScore = ((stdDev - 0.0025) / 0.02).clamp(0.0, 1.0).toDouble();
+    final snrScore = ((snr - 0.95) / 1.5).clamp(0.0, 1.0).toDouble();
+    final signalScore = _signalScoreFromStdDev(stdDev);
 
     final confidence =
         (0.35 * signalScore + 0.35 * regularity + 0.30 * snrScore).toDouble();
@@ -207,7 +218,7 @@ class HeartRateEstimator {
     required double stdDev,
     required double sampleIntervalMs,
   }) {
-    if (sampleIntervalMs <= 0 || centered.length < 55) {
+    if (sampleIntervalMs <= 0 || centered.length < 35) {
       return null;
     }
 
@@ -262,8 +273,8 @@ class HeartRateEstimator {
 
     final periodicity = bestCorr.clamp(0.0, 1.0).toDouble();
     final separation = (bestCorr - math.max(0, secondCorr)).clamp(0.0, 1.0);
-    final separationScore = (separation / 0.18).clamp(0.0, 1.0).toDouble();
-    final signalScore = ((stdDev - 0.0025) / 0.02).clamp(0.0, 1.0).toDouble();
+    final separationScore = (separation / 0.16).clamp(0.0, 1.0).toDouble();
+    final signalScore = _signalScoreFromStdDev(stdDev);
 
     final confidence =
         (0.45 * periodicity + 0.35 * separationScore + 0.20 * signalScore)
@@ -287,10 +298,69 @@ class HeartRateEstimator {
     if (second == null) {
       return first;
     }
-    if (first.confidence >= second.confidence) {
-      return first;
+
+    final gap = (first.bpm - second.bpm).abs();
+    if (gap <= _consensusToleranceBpm) {
+      final totalConfidence = first.confidence + second.confidence + 1e-9;
+      final blendedBpm =
+          ((first.bpm * first.confidence + second.bpm * second.confidence) /
+                  totalConfidence)
+              .round();
+      final blendedConfidence =
+          ((first.confidence + second.confidence) / 2 + 0.07)
+              .clamp(0.0, 1.0)
+              .toDouble();
+      final blendedRegularity = ((first.regularity + second.regularity) / 2)
+          .clamp(0.0, 1.0)
+          .toDouble();
+      final blendedSnr = (first.snr + second.snr) / 2;
+
+      return _BpmCandidate(
+        bpm: blendedBpm,
+        confidence: blendedConfidence,
+        regularity: blendedRegularity,
+        snr: blendedSnr,
+      );
     }
-    return second;
+
+    final stronger = first.confidence >= second.confidence ? first : second;
+    if (gap >= _hardDisagreementBpm &&
+        stronger.confidence < minimumAcceptConfidence + 0.06) {
+      return null;
+    }
+
+    final downgradedConfidence = gap >= _hardDisagreementBpm
+        ? (stronger.confidence * 0.82).clamp(0.0, 1.0).toDouble()
+        : (stronger.confidence * 0.92).clamp(0.0, 1.0).toDouble();
+
+    return _BpmCandidate(
+      bpm: stronger.bpm,
+      confidence: downgradedConfidence,
+      regularity: stronger.regularity,
+      snr: stronger.snr,
+    );
+  }
+
+  int _stabilizeBpm(int incomingBpm) {
+    final incoming = incomingBpm.clamp(minBpm, maxBpm).toInt();
+    if (_lastBpm <= 0) {
+      return incoming;
+    }
+
+    final delta = (incoming - _lastBpm).clamp(
+      -_maxStepPerUpdate,
+      _maxStepPerUpdate,
+    );
+    final limited = (_lastBpm + delta).clamp(minBpm, maxBpm).toInt();
+    final blended = ((_lastBpm * 0.72) + (limited * 0.28)).round();
+    return blended.clamp(minBpm, maxBpm).toInt();
+  }
+
+  double _signalScoreFromStdDev(double stdDev) {
+    return ((stdDev - _minSignalStdDev) /
+            (_maxSignalStdDev - _minSignalStdDev))
+        .clamp(0.0, 1.0)
+        .toDouble();
   }
 
   double _estimatedSampleIntervalMs() {

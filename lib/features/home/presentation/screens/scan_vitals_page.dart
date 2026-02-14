@@ -22,11 +22,18 @@ class ScanVitalsPage extends StatefulWidget {
 
 class _ScanVitalsPageState extends State<ScanVitalsPage> {
   static const Duration _scanDuration = Duration(seconds: 25);
-  static const double _fingerConfidenceThreshold = 0.56;
-  static const int _clearBpmAfterNoFingerFrames = 8;
-  static const int _clearBpmAfterLowQualityFrames = 18;
+  static const double _fingerConfidenceThreshold = 0.52;
+  static const int _clearBpmAfterNoFingerFrames = 14;
+  static const int _clearBpmAfterLowQualityFrames = 42;
+  static const int _minFrameIntervalMs = 80;
+  static const int _maxLiveBpmSamples = 7;
 
-  final HeartRateEstimator _heartRateEstimator = HeartRateEstimator();
+  final HeartRateEstimator _heartRateEstimator = HeartRateEstimator(
+    minSamplesForEstimate: 28,
+    reliabilityThreshold: 0.28,
+    minimumAcceptConfidence: 0.12,
+  );
+  final List<int> _liveBpmSamples = <int>[];
 
   CameraController? _cameraController;
   StreamSubscription<AccelerometerEvent>? _accelerometerSub;
@@ -90,6 +97,7 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
       _noFingerFrameStreak = 0;
       _lowQualityFrameStreak = 0;
       _showingCompletionDialog = false;
+      _liveBpmSamples.clear();
     });
 
     final permissions = await PermissionService.requestCorePermissions();
@@ -185,7 +193,8 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
     }
 
     final now = DateTime.now();
-    if (now.difference(_lastProcessedFrameAt).inMilliseconds < 90) {
+    if (now.difference(_lastProcessedFrameAt).inMilliseconds <
+        _minFrameIntervalMs) {
       return;
     }
 
@@ -205,6 +214,7 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
         if (_noFingerFrameStreak >= _clearBpmAfterNoFingerFrames) {
           _estimatedBpm = null;
           _heartRateEstimator.reset();
+          _liveBpmSamples.clear();
         }
 
         if (mounted) {
@@ -221,14 +231,23 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
       );
       _signalStrength = _heartRateEstimator.signalStrength;
       _hrConfidence = _heartRateEstimator.confidence;
+      final liveCandidate = bpm ?? _heartRateEstimator.latestCandidateBpm;
+      final canUseLiveCandidate = _fingerDetected &&
+          _fingerConfidence >= 0.66 &&
+          _hrConfidence >= 0.08 &&
+          _movementIntensity < 2.6 &&
+          liveCandidate > 0;
 
-      if (bpm != null && _hrConfidence >= 0.12) {
-        _estimatedBpm = bpm;
+      if (canUseLiveCandidate) {
+        _pushLiveBpmSample(liveCandidate);
+        final medianBpm = _medianLiveBpm() ?? liveCandidate;
+        _estimatedBpm = _blendLiveBpm(_estimatedBpm, medianBpm);
         _lowQualityFrameStreak = 0;
       } else {
         _lowQualityFrameStreak++;
         if (_lowQualityFrameStreak >= _clearBpmAfterLowQualityFrames) {
           _estimatedBpm = null;
+          _liveBpmSamples.clear();
         }
       }
 
@@ -400,12 +419,28 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
     }
 
     final successfulScan = _fingerDetected;
+    var resolvedBpm = _estimatedBpm;
+    if (successfulScan &&
+        resolvedBpm == null &&
+        _fingerConfidence >= 0.66 &&
+        (_medianLiveBpm() ?? 0) > 0) {
+      resolvedBpm = _medianLiveBpm();
+      _estimatedBpm = resolvedBpm;
+    }
+    if (successfulScan &&
+        resolvedBpm == null &&
+        _fingerConfidence >= 0.66 &&
+        _heartRateEstimator.latestCandidateBpm > 0) {
+      resolvedBpm = _heartRateEstimator.latestCandidateBpm;
+      _estimatedBpm = resolvedBpm;
+    }
+
     if (successfulScan) {
       await ScanRecordStore.add(
         ScanRecord(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
           scannedAt: DateTime.now(),
-          bpm: _estimatedBpm,
+          bpm: resolvedBpm,
           fallDetected: _fallDetected,
           signalQuality: _signalQualityScore,
           fingerDetected: _fingerDetected,
@@ -523,13 +558,40 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
     if (!_fingerDetected) {
       return 'No finger detected';
     }
+    if (_movementIntensity >= 2.6) {
+      return 'Hold still for better accuracy';
+    }
     if (_estimatedBpm == null) {
       return 'Collecting stable pulse';
     }
-    if (_hrConfidence < 0.45) {
-      return 'Low confidence pulse';
+    if (_hrConfidence < 0.38) {
+      return 'Live estimate';
     }
     return 'Reliable pulse';
+  }
+
+  void _pushLiveBpmSample(int bpm) {
+    _liveBpmSamples.add(bpm.clamp(42, 190).toInt());
+    if (_liveBpmSamples.length > _maxLiveBpmSamples) {
+      _liveBpmSamples.removeAt(0);
+    }
+  }
+
+  int? _medianLiveBpm() {
+    if (_liveBpmSamples.isEmpty) {
+      return null;
+    }
+    final sorted = List<int>.from(_liveBpmSamples)..sort();
+    return sorted[sorted.length ~/ 2];
+  }
+
+  int _blendLiveBpm(int? currentBpm, int incomingBpm) {
+    final clampedIncoming = incomingBpm.clamp(42, 190).toInt();
+    if (currentBpm == null || currentBpm <= 0) {
+      return clampedIncoming;
+    }
+    final blended = ((currentBpm * 0.78) + (clampedIncoming * 0.22)).round();
+    return blended.clamp(42, 190).toInt();
   }
 
   String get _fingerStatusLabel {

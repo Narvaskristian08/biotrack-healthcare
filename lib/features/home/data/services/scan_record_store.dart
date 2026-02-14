@@ -48,6 +48,17 @@ class ScanRecordStore {
     await prefs.setString(_recordsKey, encoded);
   }
 
+  static Future<void> deleteById(String recordId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final records = await list();
+    final updated = records
+        .where((record) => record.id != recordId)
+        .toList(growable: false);
+
+    final encoded = jsonEncode(updated.map((item) => item.toJson()).toList());
+    await prefs.setString(_recordsKey, encoded);
+  }
+
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_recordsKey);

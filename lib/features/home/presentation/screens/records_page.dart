@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../data/models/scan_record.dart';
@@ -14,17 +18,100 @@ class RecordsPage extends StatefulWidget {
 
 class _RecordsPageState extends State<RecordsPage> {
   late Future<List<ScanRecord>> _recordsFuture;
+  StreamSubscription<GyroscopeEvent>? _gyroscopeSub;
+  double _liveGyroMagnitude = 0;
+  bool _gyroStreamError = false;
+  final Set<String> _deletingRecordIds = <String>{};
 
   @override
   void initState() {
     super.initState();
     _recordsFuture = ScanRecordStore.list();
+    _startGyroscopeTracking();
+  }
+
+  @override
+  void dispose() {
+    _gyroscopeSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _reload() async {
     setState(() {
       _recordsFuture = ScanRecordStore.list();
     });
+  }
+
+  Future<void> _deleteRecord(ScanRecord record) async {
+    if (_deletingRecordIds.contains(record.id)) {
+      return;
+    }
+
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete record?'),
+          content: const Text(
+            'This scan record will be removed from your recent records list.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _deletingRecordIds.add(record.id);
+    });
+
+    await ScanRecordStore.deleteById(record.id);
+    await _reload();
+
+    if (!mounted) return;
+    setState(() {
+      _deletingRecordIds.remove(record.id);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Record deleted')),
+    );
+  }
+
+  void _startGyroscopeTracking() {
+    _gyroscopeSub?.cancel();
+    _gyroscopeSub = gyroscopeEventStream().listen(
+      (event) {
+        final magnitude = math.sqrt(
+          event.x * event.x + event.y * event.y + event.z * event.z,
+        );
+        if (!mounted) return;
+        setState(() {
+          _gyroStreamError = false;
+          _liveGyroMagnitude = magnitude;
+        });
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() {
+          _gyroStreamError = true;
+          _liveGyroMagnitude = 0;
+        });
+      },
+    );
   }
 
   @override
@@ -96,24 +183,36 @@ class _RecordsPageState extends State<RecordsPage> {
                   children: [
                     const Icon(Icons.favorite, color: Colors.green, size: 59),
                     const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Fall Detection',
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Fall Detection',
+                            style: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 4),
-                        Text('Monitoring', style: TextStyle(color: Colors.grey)),
-                        SizedBox(height: 4),
-                        Text(
-                          'No falls detected\nMonthly summary',
-                          style: TextStyle(fontSize: 13),
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(
+                            _gyroStreamError
+                                ? 'Gyroscope unavailable'
+                                : 'Monitoring',
+                            style: TextStyle(
+                              color:
+                                  _gyroStreamError ? Colors.red : Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _gyroStreamError
+                                ? 'Unable to read gyroscope sensor right now.'
+                                : 'Gyroscope (real-time): ${_liveGyroMagnitude.toStringAsFixed(2)} rad/s',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -167,8 +266,10 @@ class _RecordsPageState extends State<RecordsPage> {
   }
 
   Widget _recordItem({required ScanRecord record}) {
+    final isDeleting = _deletingRecordIds.contains(record.id);
+
     return InkWell(
-      onTap: () => context.push('/records/${record.id}'),
+      onTap: isDeleting ? null : () => context.push('/records/${record.id}'),
       borderRadius: BorderRadius.circular(14),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
@@ -233,6 +334,22 @@ class _RecordsPageState extends State<RecordsPage> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(width: 6),
+            IconButton(
+              onPressed: isDeleting ? null : () => _deleteRecord(record),
+              tooltip: 'Delete record',
+              icon: isDeleting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(
+                      Icons.delete_outline,
+                      size: 20,
+                      color: Colors.red,
+                    ),
             ),
           ],
         ),
