@@ -83,6 +83,17 @@ export interface VerificationCodeSendResult {
     devPreviewCode?: string;
 }
 
+const CREDENTIAL_ERROR_MESSAGES = new Set([
+    'Invalid credentials',
+    'email and password are required',
+    'Email and password required',
+]);
+
+function isCredentialError(message?: string): boolean {
+    if (!message) return true;
+    return CREDENTIAL_ERROR_MESSAGES.has(String(message).trim());
+}
+
 async function startHealthCenterSession(
     healthCenterAccessToken: string
 ): Promise<{ sessionToken?: string; error?: string }> {
@@ -220,6 +231,26 @@ export async function loginPatient(data: LoginData): Promise<{ session?: UserSes
 
     saveSession(session);
     return { session };
+}
+
+export async function loginWithDetectedRole(data: LoginData): Promise<{ session?: UserSession; error?: string }> {
+    const attempts = [loginPatient, loginHealthCenter, loginAdmin];
+    const nonCredentialErrors: string[] = [];
+
+    for (const loginAttempt of attempts) {
+        const result = await loginAttempt(data);
+        if (result.session) {
+            return { session: result.session };
+        }
+        if (result.error && !isCredentialError(result.error)) {
+            nonCredentialErrors.push(result.error);
+        }
+    }
+
+    if (nonCredentialErrors.length > 0) {
+        return { error: nonCredentialErrors[0] };
+    }
+    return { error: 'Invalid credentials' };
 }
 
 // ============== Health Center Auth ==============

@@ -195,4 +195,104 @@
   .gradient-green {
     background: linear-gradient(135deg, rgba(39, 174, 96, 0.1), rgba(39, 174, 96, 0.05));
   }
+
+  @keyframes auth-enter-left {
+    0% {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes auth-enter-right {
+    0% {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes auth-float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+
+  @keyframes auth-wheel-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes auth-soft-glow {
+    0%,
+    100% {
+      box-shadow: 0 0 0 rgba(15, 143, 96, 0);
+    }
+    50% {
+      box-shadow: 0 0 40px rgba(15, 143, 96, 0.2);
+    }
+  }
+
+  .auth-enter-left {
+    animation: auth-enter-left 0.55s ease-out both;
+  }
+
+  .auth-enter-right {
+    animation: auth-enter-right 0.7s ease-out both;
+  }
+
+  .auth-float {
+    animation: auth-float 7s ease-in-out infinite;
+  }
+
+  .auth-wheel-spin {
+    animation: auth-wheel-spin 45s linear infinite;
+  }
+
+  .auth-soft-glow {
+    animation: auth-soft-glow 5s ease-in-out infinite;
+  }
+
+  .auth-panel {
+    border: 1px solid rgba(15, 143, 96, 0.16);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.9));
+    box-shadow:
+      0 24px 56px rgba(8, 35, 25, 0.1),
+      0 1px 0 rgba(255, 255, 255, 0.65) inset;
+    backdrop-filter: blur(6px);
+  }
+
+  .auth-input-shell {
+    border: 2px solid rgba(84, 153, 123, 0.45);
+    background: #ffffff;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 2px 6px rgba(8, 35, 25, 0.05);
+    transition:
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease;
+  }
+
+  .auth-input-shell:focus-within {
+    border-color: rgba(15, 143, 96, 0.85);
+    box-shadow:
+      0 0 0 4px rgba(18, 183, 106, 0.16),
+      0 10px 24px rgba(15, 143, 96, 0.1);
+    transform: translateY(-1px);
+  }
 }

@@ -1,28 +1,28 @@
-'use client'
+﻿'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  Heart,
-  Mail,
-  Lock,
-  User,
-  ArrowRight,
+  Activity,
   ArrowLeft,
-  CheckCircle,
-  Eye,
-  EyeOff,
+  ArrowRight,
   Building2,
+  Heart,
+  Lock,
+  Mail,
   MapPin,
   Phone,
-  Shield,
+  ShieldCheck,
+  User,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -33,46 +33,77 @@ import {
 import {
   fetchHealthCenters,
   registerPatient,
-  registerHealthCenter,
-  registerAdmin,
   type HealthCenter,
   type PatientRegisterData,
-  type HealthCenterRegisterData,
-  type AdminRegisterData,
 } from '@/lib/auth'
 
-// Email: only @gmail.com or @yahoo.com
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@(gmail|yahoo)\.com$/
-// Password: min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()\-_=+[\]{}|;:,.<>])[A-Za-z\d@$!%*?&#^()\-_=+[\]{}|;:,.<>]{8,}$/
-// Name regex: letters, spaces, hyphens, apostrophes only
 const NAME_REGEX = /^[a-zA-Z\s\-']+$/
+const STEP_LABELS = ['Identity', 'Contact', 'Security'] as const
 
-type SignUpRole = 'patient' | 'provider' | 'admin'
+function RegisterHeroPanel() {
+  return (
+    <aside className="relative hidden overflow-hidden bg-gradient-to-br from-[#33c481] via-[#1fae6e] to-[#0f7a4e] lg:flex lg:items-center lg:justify-center lg:p-12">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_12%,rgba(255,255,255,0.26),transparent_36%),radial-gradient(circle_at_86%_86%,rgba(255,255,255,0.14),transparent_46%)]" />
+      <img
+        src="/assets/sdg/sdg-wheel-official.svg"
+        alt="Official UN SDG wheel"
+        className="pointer-events-none absolute -right-24 top-8 h-[24rem] w-[24rem] opacity-20 auth-wheel-spin"
+      />
 
-const ROLES: { value: SignUpRole; label: string; icon: React.ReactNode; description: string }[] = [
-  { value: 'patient', label: 'Patient', icon: <User className="h-5 w-5" />, description: 'Access your health records' },
-  { value: 'admin', label: 'Admin', icon: <Shield className="h-5 w-5" />, description: 'System administration' },
-]
+      <div className="relative z-10 w-full max-w-[560px] auth-enter-right">
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-white/90 backdrop-blur-sm">
+          <ShieldCheck className="h-3.5 w-3.5" />
+          Official Health Goal Artwork
+        </div>
 
-const STEP_TITLES = {
-  patient: ['Select Role', 'Personal Information', 'Account Security'],
-  provider: ['Select Role', 'Center Information', 'Account Security'],
-  admin: ['Select Role', 'Account Information', 'Confirmation'],
+        <div className="rounded-3xl border border-white/35 bg-[#0b3a2a]/80 p-6 shadow-[0_24px_54px_rgba(8,35,25,0.45)] backdrop-blur-md auth-soft-glow">
+          <div className="grid grid-cols-[auto_1fr] gap-6">
+            <div className="flex flex-col items-center gap-4">
+              <img
+                src="/assets/sdg/sdg3-official.svg"
+                alt="Official UN Sustainable Development Goal 3 icon"
+                className="h-24 w-24 rounded-2xl bg-white p-2 shadow-lg auth-float"
+              />
+              <img
+                src="/assets/sdg/sdg3-official.png"
+                alt="UN Good Health and Well-being goal"
+                className="h-28 w-28 rounded-xl border border-white/35 object-cover"
+              />
+            </div>
+
+            <div className="text-white">
+              <p className="text-xs uppercase tracking-[0.18em] text-white/75">Goal 3</p>
+              <h2 className="mt-2 text-3xl font-semibold leading-tight text-white">Good Health and Well-Being</h2>
+              <p className="mt-3 text-sm text-white/85">
+                Registering with BioTrack helps connect patients with verified care pathways and safer health journeys.
+              </p>
+              <div className="mt-5 grid grid-cols-2 gap-3 text-xs text-white/85">
+                <div className="rounded-xl border border-white/30 bg-white/10 px-3 py-2">Verified Enrollment</div>
+                <div className="rounded-xl border border-white/30 bg-white/10 px-3 py-2">Patient Safety</div>
+                <div className="rounded-xl border border-white/30 bg-white/10 px-3 py-2">Secure Records</div>
+                <div className="rounded-xl border border-white/30 bg-white/10 px-3 py-2">Health Equity</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  )
 }
 
 export default function RegisterPage() {
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
+
   const [step, setStep] = useState(1)
+  const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [selectedRole, setSelectedRole] = useState<SignUpRole>('patient')
   const [error, setError] = useState('')
   const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([])
   const [loadingHealthCenters, setLoadingHealthCenters] = useState(false)
 
-  // Patient form data
   const [patientData, setPatientData] = useState({
     healthCenterId: '',
     lastName: '',
@@ -87,54 +118,33 @@ export default function RegisterPage() {
     termsAccepted: false,
   })
 
-  // Health Center form data
-  const [healthCenterData, setHealthCenterData] = useState({
-    name: '',
-    holderName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    address: '',
-    contactNumber: '',
-    termsAccepted: false,
-  })
-
-  // Admin form data
-  const [adminData, setAdminData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
-    termsAccepted: false,
-  })
-
-  // Fetch health centers when patient role is selected at step 2
   useEffect(() => {
-    if (selectedRole === 'patient' && step === 2 && healthCenters.length === 0) {
-      setLoadingHealthCenters(true)
-      fetchHealthCenters().then((result) => {
+    let mounted = true
+    setLoadingHealthCenters(true)
+
+    fetchHealthCenters()
+      .then((result) => {
+        if (!mounted) return
         if ('healthCenters' in result) {
           setHealthCenters(result.healthCenters)
         }
-        setLoadingHealthCenters(false)
       })
+      .finally(() => {
+        if (mounted) {
+          setLoadingHealthCenters(false)
+        }
+      })
+
+    return () => {
+      mounted = false
     }
-  }, [selectedRole, step, healthCenters.length])
+  }, [])
 
-  const handleRoleSelect = (role: SignUpRole) => {
-    setSelectedRole(role)
-    setError('')
-  }
+  const progressWidth = useMemo(() => `${(step / STEP_LABELS.length) * 100}%`, [step])
 
-  const handleStep1 = () => {
-    setStep(2)
-    setError('')
-  }
-
-  // ============== Patient Handlers ==============
-  const handlePatientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
 
-    // Validate name fields
     if (['lastName', 'firstName'].includes(name) && value !== '' && !NAME_REGEX.test(value)) return
     if (name === 'middleInitial' && value.length > 1) return
 
@@ -144,11 +154,15 @@ export default function RegisterPage() {
     }))
   }
 
-  const validatePatientStep2 = (): string | null => {
+  const validateStep1 = (): string | null => {
     if (!patientData.healthCenterId) return 'Please select a health center'
     if (!patientData.lastName.trim()) return 'Please enter your last name'
     if (!patientData.firstName.trim()) return 'Please enter your first name'
     if (!patientData.middleInitial.trim()) return 'Please enter your middle initial'
+    return null
+  }
+
+  const validateStep2 = (): string | null => {
     if (!patientData.email.trim()) return 'Please enter your email address'
     if (!EMAIL_REGEX.test(patientData.email.trim())) return 'Please use a valid @gmail.com or @yahoo.com email'
     if (!patientData.address.trim()) return 'Please enter your address'
@@ -156,7 +170,7 @@ export default function RegisterPage() {
     return null
   }
 
-  const validatePatientStep3 = (): string | null => {
+  const validateStep3 = (): string | null => {
     if (!patientData.password) return 'Please enter a password'
     if (!PASSWORD_REGEX.test(patientData.password)) {
       return 'Password must be at least 8 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special character'
@@ -166,21 +180,32 @@ export default function RegisterPage() {
     return null
   }
 
-  const handlePatientStep2 = () => {
-    const validationError = validatePatientStep2()
+  const validateCurrentStep = (): string | null => {
+    if (step === 1) return validateStep1()
+    if (step === 2) return validateStep2()
+    return validateStep3()
+  }
+
+  const handleNext = () => {
+    setError('')
+    const validationError = validateCurrentStep()
     if (validationError) {
       setError(validationError)
       return
     }
-    setStep(3)
-    setError('')
+    setStep((prev) => Math.min(prev + 1, STEP_LABELS.length))
   }
 
-  const handlePatientSubmit = async (e: React.FormEvent) => {
+  const handleBack = () => {
+    setError('')
+    setStep((prev) => Math.max(prev - 1, 1))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
-    const validationError = validatePatientStep3()
+    const validationError = validateStep3()
     if (validationError) {
       setError(validationError)
       return
@@ -219,817 +244,367 @@ export default function RegisterPage() {
       email: result.patient?.email ?? patientData.email,
       contactNumber: result.patient?.contactNumber ?? patientData.contactNumber,
     })
+
     router.push(`/account-verification?${verificationQuery.toString()}`)
   }
 
-  // ============== Health Center Handlers ==============
-  const handleHealthCenterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target
-    setHealthCenterData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }))
-  }
-
-  const validateHealthCenterStep2 = (): string | null => {
-    if (!healthCenterData.name.trim()) return 'Please enter the health center name'
-    if (!healthCenterData.holderName.trim()) return 'Please enter the holder name'
-    if (!healthCenterData.email.trim()) return 'Please enter an email address'
-    if (!EMAIL_REGEX.test(healthCenterData.email.trim())) return 'Please use a valid @gmail.com or @yahoo.com email'
-    return null
-  }
-
-  const validateHealthCenterStep3 = (): string | null => {
-    if (!healthCenterData.password) return 'Please enter a password'
-    if (!PASSWORD_REGEX.test(healthCenterData.password)) {
-      return 'Password must be at least 8 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special character'
-    }
-    if (healthCenterData.password !== healthCenterData.confirmPassword) return 'Passwords do not match'
-    if (!healthCenterData.termsAccepted) return 'You must accept the terms and conditions'
-    return null
-  }
-
-  const handleHealthCenterStep2 = () => {
-    const validationError = validateHealthCenterStep2()
-    if (validationError) {
-      setError(validationError)
-      return
-    }
-    setStep(3)
-    setError('')
-  }
-
-  const handleHealthCenterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-
-    const validationError = validateHealthCenterStep3()
-    if (validationError) {
-      setError(validationError)
-      return
-    }
-
-    setIsLoading(true)
-
-    const data: HealthCenterRegisterData = {
-      name: healthCenterData.name.trim(),
-      holderName: healthCenterData.holderName.trim(),
-      email: healthCenterData.email.trim(),
-      password: healthCenterData.password,
-      address: healthCenterData.address.trim() || undefined,
-      contactNumber: healthCenterData.contactNumber.trim() || undefined,
-    }
-
-    const result = await registerHealthCenter(data)
-    setIsLoading(false)
-
-    if (result.error) {
-      setError(result.error)
-      return
-    }
-
-    router.push('/')
-  }
-
-  // ============== Admin Handlers ==============
-  const handleAdminChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target
-    setAdminData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }))
-  }
-
-  const validateAdminStep2 = (): string | null => {
-    if (!adminData.email.trim()) return 'Please enter an email address'
-    if (!EMAIL_REGEX.test(adminData.email.trim())) return 'Please use a valid @gmail.com or @yahoo.com email'
-    if (!adminData.password) return 'Please enter a password'
-    if (!PASSWORD_REGEX.test(adminData.password)) {
-      return 'Password must be at least 8 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special character'
-    }
-    if (adminData.password !== adminData.confirmPassword) return 'Passwords do not match'
-    return null
-  }
-
-  const handleAdminStep2 = () => {
-    const validationError = validateAdminStep2()
-    if (validationError) {
-      setError(validationError)
-      return
-    }
-    setStep(3)
-    setError('')
-  }
-
-  const handleAdminSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-
-    if (!adminData.termsAccepted) {
-      setError('You must accept the terms and conditions')
-      return
-    }
-
-    setIsLoading(true)
-
-    const data: AdminRegisterData = {
-      email: adminData.email.trim(),
-      password: adminData.password,
-    }
-
-    const result = await registerAdmin(data)
-    setIsLoading(false)
-
-    if (result.error) {
-      setError(result.error)
-      return
-    }
-
-    router.push('/')
-  }
-
-  // ============== Render Helpers ==============
-  const renderTermsSection = (
-    checked: boolean,
-    onChange: (checked: boolean) => void,
-    id: string
-  ) => (
-    <div className="space-y-3 p-4 rounded-lg bg-muted/50 border border-border">
-      <p className="text-sm font-semibold">Terms & Conditions</p>
-      <div className="text-xs text-muted-foreground space-y-2 max-h-28 overflow-y-auto">
-        <p>
-          By creating an account, you agree to BioTrack&apos;s Terms of Service and Privacy Policy. You consent to the collection and processing of your health data for monitoring, insights, and care.
-        </p>
-      </div>
-      <div className="flex items-start gap-3">
-        <Checkbox
-          id={id}
-          checked={checked}
-          onCheckedChange={(c: boolean | 'indeterminate') => onChange(c === true)}
-          className="mt-0.5"
-        />
-        <div className="flex-1 min-w-0">
-          <Label htmlFor={id} className="text-sm cursor-pointer font-medium">
-            I accept the terms and conditions
-          </Label>
-          <p className="mt-1 flex flex-wrap gap-x-2 gap-y-0 text-xs text-muted-foreground">
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('openPolicy', { detail: { mode: 'terms' } }))}
-              className="underline hover:text-foreground"
-            >
-              Terms
-            </button>
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('openPolicy', { detail: { mode: 'privacy' } }))}
-              className="underline hover:text-foreground"
-            >
-              Privacy
-            </button>
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-
-  const stepTitles = STEP_TITLES[selectedRole]
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-4 sm:p-6">
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute top-20 right-20 w-80 h-80 bg-primary/15 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-40 left-20 w-80 h-80 bg-secondary/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-accent/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="w-full max-w-[520px] animate-in fade-in slide-in-from-bottom-4 duration-500">
-        {/* Logo */}
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center shadow-lg shadow-primary/25 ring-2 ring-primary/20">
-              <Heart className="h-7 w-7 text-white" />
-            </div>
-            <div className="text-left">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent tracking-tight">
-                BioTrack
-              </h1>
-              <p className="text-xs text-muted-foreground font-medium">Healthcare Platform</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Progress - 3 steps */}
-        <div className="flex gap-2 mb-6">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex-1 flex flex-col gap-1.5">
-              <div
-                className={`h-1.5 rounded-full transition-colors ${s <= step ? 'bg-primary' : 'bg-muted'
-                  }`}
-              />
-              <span className={`text-xs text-center ${s <= step ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
-                {stepTitles[s - 1]}
+    <div className="h-screen overflow-hidden bg-[#eef8f2]">
+      <div className="grid h-full lg:grid-cols-2">
+        <section className="flex h-full items-center justify-center px-6 py-6 sm:px-10 lg:px-16 xl:px-20">
+          <div className="flex h-full w-full max-w-[560px] flex-col auth-enter-left">
+            <Link href="/" className="mb-6 inline-flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#12935f] to-[#33c481] text-white shadow-lg shadow-[#12935f]/30">
+                <Heart className="h-6 w-6" />
               </span>
-            </div>
-          ))}
-        </div>
+              <span className="text-[1.95rem] font-semibold tracking-tight text-[#111f1a]">BioTrack</span>
+            </Link>
 
-        <Card className="border-border/60 shadow-xl shadow-black/5 dark:shadow-none bg-card/95 backdrop-blur-sm overflow-hidden">
-          <div className="h-1 w-full bg-gradient-to-r from-primary via-secondary to-primary" />
-          <CardHeader className="space-y-1.5 pb-4">
-            <CardTitle className="text-2xl font-semibold tracking-tight">Create Account</CardTitle>
-            <CardDescription>
-              Step {step} of 3: {stepTitles[step - 1]}
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-5">
-            {error && (
-              <div className="p-3.5 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive font-medium">
-                {error}
+            <div className="auth-panel rounded-3xl p-6">
+              <div className="inline-flex items-center gap-2 rounded-full bg-[#e9f8f0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#0f7a4e]">
+                <Activity className="h-3.5 w-3.5" />
+                Patient Registration
               </div>
-            )}
 
-            {/* Step 1: Role Selection */}
-            {step === 1 && (
-              <div className="space-y-5">
-                <div className="space-y-3">
-                  {ROLES.map((r) => (
-                    <button
-                      key={r.value}
-                      type="button"
-                      onClick={() => handleRoleSelect(r.value)}
-                      className={`w-full p-4 rounded-lg border-2 transition-all flex items-center gap-4 text-left ${selectedRole === r.value
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:border-primary/50 hover:bg-muted/50'
-                        }`}
-                    >
-                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${selectedRole === r.value ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'
-                        }`}>
-                        {r.icon}
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium">{r.label}</p>
-                        <p className="text-sm text-muted-foreground">{r.description}</p>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedRole === r.value ? 'border-primary bg-primary' : 'border-muted-foreground'
-                        }`}>
-                        {selectedRole === r.value && <CheckCircle className="h-3 w-3 text-white" />}
-                      </div>
-                    </button>
-                  ))}
+              <h1 className="mt-4 text-[2rem] font-semibold leading-tight text-[#111f1a]">Create patient account</h1>
+              <p className="mt-1 text-[1rem] text-[#4e6b5d]">Complete the guided flow to register securely.</p>
+
+              <div className="mt-4 rounded-2xl border border-[#c7e6d7] bg-white p-4 shadow-sm">
+                <div className="mb-3 h-2.5 w-full overflow-hidden rounded-full bg-[#e6f4ed]">
+                  <div className="h-full rounded-full bg-gradient-to-r from-[#12935f] to-[#22b573] transition-all duration-500" style={{ width: progressWidth }} />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Barangay/healthcare-provider onboarding is admin-managed and cannot be self-registered.
-                </p>
-
-                <Button onClick={handleStep1} className="w-full h-11 gap-2 rounded-lg font-medium shadow-sm">
-                  Continue
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  {STEP_LABELS.map((label, index) => {
+                    const itemStep = index + 1
+                    const active = itemStep <= step
+                    return (
+                      <div key={label} className="flex min-w-0 items-center gap-1.5">
+                        <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold ${active ? 'bg-[#12935f] text-white' : 'bg-[#e2ece7] text-[#60776b]'}`}>
+                          {itemStep}
+                        </span>
+                        <span className={`${active ? 'text-[#0f6f48]' : 'text-[#60776b]'} truncate`}>{label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-            )}
 
-            {/* ==================== PATIENT STEPS ==================== */}
+              {error ? (
+                <div className="mt-3 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                  {error}
+                </div>
+              ) : null}
 
-            {/* Step 2: Patient Personal Info */}
-            {step === 2 && selectedRole === 'patient' && (
-              <div className="space-y-4">
-                {/* Health Center Selection */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Health Center *</Label>
-                  <Select
-                    value={patientData.healthCenterId}
-                    onValueChange={(value) => setPatientData((prev) => ({ ...prev, healthCenterId: value }))}
-                    disabled={loadingHealthCenters}
+              <form onSubmit={handleSubmit} className="mt-4 flex min-h-0 flex-1 flex-col rounded-2xl border border-[#c7e6d7] bg-white p-5 shadow-sm">
+                <div key={step} className="min-h-0 flex-1 space-y-4 auth-enter-left">
+                  {step === 1 ? (
+                    <>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold text-[#163428]">Health Center *</Label>
+                        <Select
+                          value={patientData.healthCenterId}
+                          onValueChange={(value) => setPatientData((prev) => ({ ...prev, healthCenterId: value }))}
+                          disabled={loadingHealthCenters}
+                        >
+                          <SelectTrigger className="h-11 rounded-xl border-[#cfe5d9] bg-white text-[#173328] focus:ring-2 focus:ring-[#12b76a]/30">
+                            <SelectValue placeholder={loadingHealthCenters ? 'Loading health centers...' : 'Select your health center'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {healthCenters.map((hc) => (
+                              <SelectItem key={hc._id} value={hc._id}>
+                                {hc.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="lastName" className="text-sm font-semibold text-[#163428]">Last Name *</Label>
+                          <div className="auth-input-shell relative rounded-xl">
+                            <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a9387]" />
+                            <Input
+                              id="lastName"
+                              name="lastName"
+                              value={patientData.lastName}
+                              onChange={handleChange}
+                              placeholder="Dela Cruz"
+                              className="h-11 border-0 bg-transparent pl-10 text-[#173328] placeholder:text-[#8fa398] shadow-none focus-visible:ring-0"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="firstName" className="text-sm font-semibold text-[#163428]">First Name *</Label>
+                          <div className="auth-input-shell relative rounded-xl">
+                            <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a9387]" />
+                            <Input
+                              id="firstName"
+                              name="firstName"
+                              value={patientData.firstName}
+                              onChange={handleChange}
+                              placeholder="Juan"
+                              className="h-11 border-0 bg-transparent pl-10 text-[#173328] placeholder:text-[#8fa398] shadow-none focus-visible:ring-0"
+                              required
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="middleInitial" className="text-sm font-semibold text-[#163428]">Middle Initial *</Label>
+                          <div className="auth-input-shell relative rounded-xl">
+                            <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a9387]" />
+                            <Input
+                              id="middleInitial"
+                              name="middleInitial"
+                              value={patientData.middleInitial}
+                              onChange={handleChange}
+                              placeholder="A"
+                              maxLength={1}
+                              className="h-11 border-0 bg-transparent pl-10 text-[#173328] placeholder:text-[#8fa398] shadow-none focus-visible:ring-0"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="nameExtension" className="text-sm font-semibold text-[#163428]">Name Extension</Label>
+                          <div className="auth-input-shell relative rounded-xl">
+                            <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a9387]" />
+                            <Input
+                              id="nameExtension"
+                              name="nameExtension"
+                              value={patientData.nameExtension}
+                              onChange={handleChange}
+                              placeholder="Jr."
+                              className="h-11 border-0 bg-transparent pl-10 text-[#173328] placeholder:text-[#8fa398] shadow-none focus-visible:ring-0"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+
+                  {step === 2 ? (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="email" className="text-sm font-semibold text-[#163428]">Email Address *</Label>
+                        <div className="auth-input-shell relative rounded-xl">
+                          <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a9387]" />
+                          <Input
+                            id="email"
+                            name="email"
+                            type="email"
+                            value={patientData.email}
+                            onChange={handleChange}
+                            placeholder="your@gmail.com or your@yahoo.com"
+                            className="h-11 border-0 bg-transparent pl-10 text-[#173328] placeholder:text-[#8fa398] shadow-none focus-visible:ring-0"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="address" className="text-sm font-semibold text-[#163428]">Address *</Label>
+                        <div className="auth-input-shell relative rounded-xl">
+                          <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a9387]" />
+                          <Input
+                            id="address"
+                            name="address"
+                            value={patientData.address}
+                            onChange={handleChange}
+                            placeholder="123 Main Street"
+                            className="h-11 border-0 bg-transparent pl-10 text-[#173328] placeholder:text-[#8fa398] shadow-none focus-visible:ring-0"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="contactNumber" className="text-sm font-semibold text-[#163428]">Contact Number *</Label>
+                        <div className="auth-input-shell relative rounded-xl">
+                          <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a9387]" />
+                          <Input
+                            id="contactNumber"
+                            name="contactNumber"
+                            value={patientData.contactNumber}
+                            onChange={handleChange}
+                            placeholder="09123456789"
+                            className="h-11 border-0 bg-transparent pl-10 text-[#173328] placeholder:text-[#8fa398] shadow-none focus-visible:ring-0"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+
+                  {step === 3 ? (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="password" className="text-sm font-semibold text-[#163428]">Password *</Label>
+                          <div className="auth-input-shell relative rounded-xl">
+                            <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a9387]" />
+                            <Input
+                              id="password"
+                              name="password"
+                              type={showPassword ? 'text' : 'password'}
+                              value={patientData.password}
+                              onChange={handleChange}
+                              placeholder="********"
+                              className="h-11 border-0 bg-transparent pl-10 pr-11 text-[#173328] placeholder:text-[#8fa398] shadow-none focus-visible:ring-0"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword((prev) => !prev)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-[#628175] transition-colors hover:text-[#173328]"
+                              aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            >
+                              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="confirmPassword" className="text-sm font-semibold text-[#163428]">Confirm Password *</Label>
+                          <div className="auth-input-shell relative rounded-xl">
+                            <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a9387]" />
+                            <Input
+                              id="confirmPassword"
+                              name="confirmPassword"
+                              type={showConfirmPassword ? 'text' : 'password'}
+                              value={patientData.confirmPassword}
+                              onChange={handleChange}
+                              placeholder="********"
+                              className="h-11 border-0 bg-transparent pl-10 pr-11 text-[#173328] placeholder:text-[#8fa398] shadow-none focus-visible:ring-0"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowConfirmPassword((prev) => !prev)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-[#628175] transition-colors hover:text-[#173328]"
+                              aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                            >
+                              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-[#cfe5d9] bg-[#f7fcf9] px-4 py-3">
+                        <label htmlFor="patientTerms" className="flex items-start gap-3">
+                          <Checkbox
+                            id="patientTerms"
+                            checked={patientData.termsAccepted}
+                            onCheckedChange={(checked: boolean | 'indeterminate') =>
+                              setPatientData((prev) => ({ ...prev, termsAccepted: checked === true }))
+                            }
+                            className="mt-0.5"
+                          />
+                          <span className="text-sm text-[#244638]">
+                            I accept the terms and conditions and consent to health data processing for monitoring and care.
+                            <span className="mt-1 block text-xs text-[#5b786d]">
+                              <button
+                                type="button"
+                                onClick={() => window.dispatchEvent(new CustomEvent('openPolicy', { detail: { mode: 'privacy' } }))}
+                                className="underline underline-offset-2 hover:text-[#0f8f60]"
+                              >
+                                Privacy Policy
+                              </button>
+                              <span className="px-2">•</span>
+                              <button
+                                type="button"
+                                onClick={() => window.dispatchEvent(new CustomEvent('openPolicy', { detail: { mode: 'terms' } }))}
+                                className="underline underline-offset-2 hover:text-[#0f8f60]"
+                              >
+                                Terms of Service
+                              </button>
+                            </span>
+                          </span>
+                        </label>
+                      </div>
+
+                      <div className="rounded-xl border border-[#cbeedd] bg-[#ecfff4] px-4 py-3 text-sm text-[#0f6f48]">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4" />
+                          Admin accounts are fixed and provisioned by the system owner.
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-3 pt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleBack}
+                    disabled={step === 1 || isLoading}
+                    className="h-11 rounded-xl border-[#cfe5d9] bg-white text-[#1f3c30] hover:bg-[#f3faf6]"
                   >
-                    <SelectTrigger className="h-11 rounded-lg">
-                      <SelectValue placeholder={loadingHealthCenters ? 'Loading...' : 'Select your health center'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {healthCenters.map((hc) => (
-                        <SelectItem key={hc._id} value={hc._id}>
-                          {hc.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Name Fields */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName" className="text-sm font-medium">Last Name *</Label>
-                    <div className="relative group">
-                      <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                      <Input
-                        id="lastName"
-                        name="lastName"
-                        placeholder="Dela Cruz"
-                        value={patientData.lastName}
-                        onChange={handlePatientChange}
-                        className="pl-10 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName" className="text-sm font-medium">First Name *</Label>
-                    <Input
-                      id="firstName"
-                      name="firstName"
-                      placeholder="Juan"
-                      value={patientData.firstName}
-                      onChange={handlePatientChange}
-                      className="h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="middleInitial" className="text-sm font-medium">Middle Initial *</Label>
-                    <Input
-                      id="middleInitial"
-                      name="middleInitial"
-                      placeholder="A"
-                      value={patientData.middleInitial}
-                      onChange={handlePatientChange}
-                      className="h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      maxLength={1}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="nameExtension" className="text-sm font-medium">Suffix</Label>
-                    <Input
-                      id="nameExtension"
-                      name="nameExtension"
-                      placeholder="Jr., Sr., III"
-                      value={patientData.nameExtension}
-                      onChange={handlePatientChange}
-                      className="h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                    />
-                  </div>
-                </div>
-
-                {/* Email */}
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-sm font-medium">Email Address *</Label>
-                  <div className="relative group">
-                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      placeholder="you@gmail.com"
-                      value={patientData.email}
-                      onChange={handlePatientChange}
-                      className="pl-10 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Address & Contact */}
-                <div className="space-y-2">
-                  <Label htmlFor="address" className="text-sm font-medium">Address *</Label>
-                  <div className="relative group">
-                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="address"
-                      name="address"
-                      placeholder="123 Main St, Barangay, City"
-                      value={patientData.address}
-                      onChange={handlePatientChange}
-                      className="pl-10 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="contactNumber" className="text-sm font-medium">Contact Number *</Label>
-                  <div className="relative group">
-                    <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="contactNumber"
-                      name="contactNumber"
-                      placeholder="09123456789"
-                      value={patientData.contactNumber}
-                      onChange={handlePatientChange}
-                      className="pl-10 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Buttons */}
-                <div className="flex gap-3">
-                  <Button type="button" variant="outline" onClick={() => setStep(1)} className="flex-1 h-11 rounded-lg gap-2">
-                    <ArrowLeft className="h-4 w-4" />
+                    <ArrowLeft className="mr-2 h-4 w-4" />
                     Back
                   </Button>
-                  <Button type="button" onClick={handlePatientStep2} className="flex-1 h-11 gap-2 rounded-lg font-medium shadow-sm">
-                    Continue
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
 
-            {/* Step 3: Patient Account Security */}
-            {step === 3 && selectedRole === 'patient' && (
-              <form onSubmit={handlePatientSubmit} className="space-y-4">
-                {/* Password Fields */}
-                <div className="space-y-2">
-                  <Label htmlFor="password" className="text-sm font-medium">Password *</Label>
-                  <div className="relative group">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="password"
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={patientData.password}
-                      onChange={handlePatientChange}
-                      className="pl-10 pr-11 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                    <button
+                  {step < STEP_LABELS.length ? (
+                    <Button
                       type="button"
-                      onClick={() => setShowPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      onClick={handleNext}
+                      disabled={isLoading}
+                      className="h-11 rounded-xl bg-[#0f8f60] px-6 text-white shadow-md shadow-[#0f8f60]/25 transition-all hover:-translate-y-0.5 hover:bg-[#0c7a52]"
                     >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Min 8 characters with uppercase, lowercase, number, and special character
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword" className="text-sm font-medium">Confirm Password *</Label>
-                  <div className="relative group">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={patientData.confirmPassword}
-                      onChange={handlePatientChange}
-                      className="pl-10 pr-11 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
-                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      Next
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      disabled={isLoading}
+                      className="h-11 rounded-xl bg-[#0f8f60] px-6 text-white shadow-md shadow-[#0f8f60]/25 transition-all hover:-translate-y-0.5 hover:bg-[#0c7a52]"
                     >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Terms */}
-                {renderTermsSection(
-                  patientData.termsAccepted,
-                  (checked) => setPatientData((prev) => ({ ...prev, termsAccepted: checked })),
-                  'patientTerms'
-                )}
-
-                {/* Buttons */}
-                <div className="flex gap-3">
-                  <Button type="button" variant="outline" onClick={() => setStep(2)} className="flex-1 h-11 rounded-lg gap-2">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
-                  </Button>
-                  <Button type="submit" disabled={isLoading} className="flex-1 h-11 gap-2 rounded-lg font-medium shadow-sm">
-                    {isLoading ? 'Creating...' : 'Create Account'}
-                    <CheckCircle className="h-4 w-4" />
-                  </Button>
+                      {isLoading ? 'Creating account...' : 'Create Account'}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </form>
-            )}
+            </div>
 
-            {/* ==================== HEALTH CENTER STEPS ==================== */}
-
-            {/* Step 2: Health Center Info */}
-            {step === 2 && selectedRole === 'provider' && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="hcName" className="text-sm font-medium">Health Center Name *</Label>
-                  <div className="relative group">
-                    <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="hcName"
-                      name="name"
-                      placeholder="City Health Center"
-                      value={healthCenterData.name}
-                      onChange={handleHealthCenterChange}
-                      className="pl-10 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="holderName" className="text-sm font-medium">Holder Name *</Label>
-                  <div className="relative group">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="holderName"
-                      name="holderName"
-                      placeholder="Dr. Juan Dela Cruz"
-                      value={healthCenterData.holderName}
-                      onChange={handleHealthCenterChange}
-                      className="pl-10 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="hcEmail" className="text-sm font-medium">Email Address *</Label>
-                  <div className="relative group">
-                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="hcEmail"
-                      name="email"
-                      type="email"
-                      placeholder="center@gmail.com"
-                      value={healthCenterData.email}
-                      onChange={handleHealthCenterChange}
-                      className="pl-10 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="hcAddress" className="text-sm font-medium">Address</Label>
-                  <div className="relative group">
-                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="hcAddress"
-                      name="address"
-                      placeholder="123 Main St, City"
-                      value={healthCenterData.address}
-                      onChange={handleHealthCenterChange}
-                      className="pl-10 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="hcContact" className="text-sm font-medium">Contact Number</Label>
-                  <div className="relative group">
-                    <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="hcContact"
-                      name="contactNumber"
-                      placeholder="09123456789"
-                      value={healthCenterData.contactNumber}
-                      onChange={handleHealthCenterChange}
-                      className="pl-10 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                    />
-                  </div>
-                </div>
-
-                {/* Buttons */}
-                <div className="flex gap-3">
-                  <Button type="button" variant="outline" onClick={() => setStep(1)} className="flex-1 h-11 rounded-lg gap-2">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
-                  </Button>
-                  <Button type="button" onClick={handleHealthCenterStep2} className="flex-1 h-11 gap-2 rounded-lg font-medium shadow-sm">
-                    Continue
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Health Center Account Security */}
-            {step === 3 && selectedRole === 'provider' && (
-              <form onSubmit={handleHealthCenterSubmit} className="space-y-4">
-                {/* Password Fields */}
-                <div className="space-y-2">
-                  <Label htmlFor="hcPassword" className="text-sm font-medium">Password *</Label>
-                  <div className="relative group">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="hcPassword"
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={healthCenterData.password}
-                      onChange={handleHealthCenterChange}
-                      className="pl-10 pr-11 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Min 8 characters with uppercase, lowercase, number, and special character
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="hcConfirmPassword" className="text-sm font-medium">Confirm Password *</Label>
-                  <div className="relative group">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="hcConfirmPassword"
-                      name="confirmPassword"
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={healthCenterData.confirmPassword}
-                      onChange={handleHealthCenterChange}
-                      className="pl-10 pr-11 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Terms */}
-                {renderTermsSection(
-                  healthCenterData.termsAccepted,
-                  (checked) => setHealthCenterData((prev) => ({ ...prev, termsAccepted: checked })),
-                  'hcTerms'
-                )}
-
-                {/* Buttons */}
-                <div className="flex gap-3">
-                  <Button type="button" variant="outline" onClick={() => setStep(2)} className="flex-1 h-11 rounded-lg gap-2">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
-                  </Button>
-                  <Button type="submit" disabled={isLoading} className="flex-1 h-11 gap-2 rounded-lg font-medium shadow-sm">
-                    {isLoading ? 'Creating...' : 'Create Account'}
-                    <CheckCircle className="h-4 w-4" />
-                  </Button>
-                </div>
-              </form>
-            )}
-
-            {/* ==================== ADMIN STEPS ==================== */}
-
-            {/* Step 2: Admin Account Info */}
-            {step === 2 && selectedRole === 'admin' && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="adminEmail" className="text-sm font-medium">Email Address *</Label>
-                  <div className="relative group">
-                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="adminEmail"
-                      name="email"
-                      type="email"
-                      placeholder="admin@gmail.com"
-                      value={adminData.email}
-                      onChange={handleAdminChange}
-                      className="pl-10 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Password Fields */}
-                <div className="space-y-2">
-                  <Label htmlFor="adminPassword" className="text-sm font-medium">Password *</Label>
-                  <div className="relative group">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="adminPassword"
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={adminData.password}
-                      onChange={handleAdminChange}
-                      className="pl-10 pr-11 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Min 8 characters with uppercase, lowercase, number, and special character
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="adminConfirmPassword" className="text-sm font-medium">Confirm Password *</Label>
-                  <div className="relative group">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input
-                      id="adminConfirmPassword"
-                      name="confirmPassword"
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={adminData.confirmPassword}
-                      onChange={handleAdminChange}
-                      className="pl-10 pr-11 h-11 rounded-lg border-border/80 focus-visible:ring-2"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Buttons */}
-                <div className="flex gap-3">
-                  <Button type="button" variant="outline" onClick={() => setStep(1)} className="flex-1 h-11 rounded-lg gap-2">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
-                  </Button>
-                  <Button type="button" onClick={handleAdminStep2} className="flex-1 h-11 gap-2 rounded-lg font-medium shadow-sm">
-                    Continue
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Admin Confirmation */}
-            {step === 3 && selectedRole === 'admin' && (
-              <form onSubmit={handleAdminSubmit} className="space-y-4">
-                {/* Summary */}
-                <div className="p-4 rounded-lg bg-muted/50 border border-border">
-                  <p className="text-sm font-semibold mb-3">Account Summary</p>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Role:</span>
-                      <span className="font-medium">Administrator</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Email:</span>
-                      <span className="font-medium">{adminData.email}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Terms */}
-                {renderTermsSection(
-                  adminData.termsAccepted,
-                  (checked) => setAdminData((prev) => ({ ...prev, termsAccepted: checked })),
-                  'adminTerms'
-                )}
-
-                {/* Buttons */}
-                <div className="flex gap-3">
-                  <Button type="button" variant="outline" onClick={() => setStep(2)} className="flex-1 h-11 rounded-lg gap-2">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
-                  </Button>
-                  <Button type="submit" disabled={isLoading} className="flex-1 h-11 gap-2 rounded-lg font-medium shadow-sm">
-                    {isLoading ? 'Creating...' : 'Create Account'}
-                    <CheckCircle className="h-4 w-4" />
-                  </Button>
-                </div>
-              </form>
-            )}
-
-            <p className="text-center text-sm text-muted-foreground pt-2">
+            <p className="mt-3 text-center text-sm text-[#57756a]">
               Already have an account?{' '}
-              <Link href="/login" className="text-primary hover:underline font-semibold">
+              <Link href="/login" className="font-semibold text-[#0f8f60] underline-offset-4 hover:underline">
                 Sign in
               </Link>
             </p>
-          </CardContent>
-        </Card>
 
-        <div className="mt-6 text-center text-xs text-muted-foreground">
-          <p>© 2026 BioTrack. All rights reserved.</p>
-        </div>
+            <p className="mt-2 text-center text-xs text-[#6b8579]">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('openPolicy', { detail: { mode: 'privacy' } }))}
+                className="underline underline-offset-2 hover:text-[#0f8f60]"
+              >
+                Privacy Policy
+              </button>
+              <span className="px-2">•</span>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('openPolicy', { detail: { mode: 'terms' } }))}
+                className="underline underline-offset-2 hover:text-[#0f8f60]"
+              >
+                Terms of Service
+              </button>
+            </p>
+
+            <p className="mt-2 text-center text-xs text-[#7f998f]">Copyright 2026 BioTrack. All rights reserved.</p>
+          </div>
+        </section>
+
+        <RegisterHeroPanel />
       </div>
     </div>
   )
