@@ -61,7 +61,7 @@
         "url": { "raw": "{{baseUrl}}/api/admin/healthcenters", "host": ["{{baseUrl}}"], "path": ["api", "admin", "healthcenters"] },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"sanfabiam@gmail.com\",\n  \"password\": \"StrongPassword123!\",\n  \"name\": \"San Fabian Barangay Health Center\",\n  \"holderName\": \"Dr. John Doe\",\n  \"address\": \"San Fabian, Pangasinan\",\n  \"contactNumber\": \"09171234567\"\n}\n"
+          "raw": "{\n  \"email\": \"sanfabian.provider@example.com\",\n  \"password\": \"StrongPassword123!\",\n  \"status\": \"active\",\n  \"barangayName\": \"Longos Barangay\",\n  \"cityMunicipality\": \"San Fabian\",\n  \"healthCenterName\": \"Longos Health Center\",\n  \"officialContactInfo\": \"09171234567\",\n  \"latitude\": 16.1554,\n  \"longitude\": 120.4128,\n  \"assignedHealthcareProviders\": [\n    { \"name\": \"Nurse 1\" }\n  ]\n}\n"
         }
       }
     },
@@ -96,7 +96,7 @@
         "url": { "raw": "{{baseUrl}}/api/healthcenters/login", "host": ["{{baseUrl}}"], "path": ["api", "healthcenters", "login"] },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"sanfabiam@gmail.com\",\n  \"password\": \"StrongPassword123!\"\n}\n"
+          "raw": "{\n  \"email\": \"sanfabian.provider@example.com\",\n  \"password\": \"StrongPassword123!\"\n}\n"
         }
       },
       "event": [

@@ -3,12 +3,14 @@
 This repository contains:
 - `backend/`: Express + MongoDB API
 - `web/`: Next.js web app
+- `lib/`, `android/`, `ios/`: Flutter mobile app
 
 ## Local Requirements
 
-- Node.js 18+ (Node.js 20 recommended)
+- Node.js 20.9+ (required for `web/` with Next.js 16)
 - npm 9+
 - MongoDB running locally or remotely
+- Flutter SDK (only for mobile development/testing)
 
 ## Install Dependencies
 
@@ -20,35 +22,22 @@ npm install
 
 ## Environment Setup
 
-### 1) Backend env
+Use the centralized env onboarding guide:
+- `README-ENV.md`
 
-Create `backend/.env` (copy from `backend/env.example`) and set at least:
+Quick start:
 
-```env
-PORT=3000
-NODE_ENV=development
-CORS_ORIGIN=http://127.0.0.1:3001,http://localhost:3001
-MONGODB_URI=mongodb://127.0.0.1:27017/biotrack
-ADMIN_JWT_SECRET=change_me_admin_secret
-HEALTHCENTER_JWT_SECRET=change_me_healthcenter_secret
-SESSION_JWT_SECRET=change_me_session_secret
-OPENROUTER_API_KEY=dev-placeholder
+```bash
+cp backend/env.example backend/.env
+cp web/.env.example web/.env.local
 ```
 
-Notes:
-- `OPENROUTER_API_KEY` is required by backend startup validation. Use a placeholder for local auth/routing tests if AI calls are not part of your run.
-- SMTP is optional for startup, but required if you want real provider/patient email delivery.
+PowerShell:
 
-### 2) Web env
-
-Create `web/.env.local`:
-
-```env
-NEXT_PUBLIC_API_URL=http://127.0.0.1:3000/api
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_key_optional
+```powershell
+Copy-Item backend/env.example backend/.env
+Copy-Item web/.env.example web/.env.local
 ```
-
-`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is optional. It is only needed for the Admin Google Maps location picker on `/admin/users`.
 
 ## Run Locally (Fixed Web Port)
 
@@ -70,6 +59,17 @@ URLs:
 - Backend API: `http://127.0.0.1:3000/api`
 - Web app: `http://127.0.0.1:3001`
 
+## Mobile Run (Optional)
+
+From repo root:
+
+```bash
+flutter pub get
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
+```
+
+Use your LAN IP instead of `10.0.2.2` when testing on a physical Android device.
+
 ## Core Auth and Onboarding Rules
 
 - Patient can self-register from `/register`.
@@ -88,4 +88,3 @@ URLs:
 - Backend auth/session/API checks: `README-AUTH.md`
 - Blockchain/integrity checks: `README-TESTING-BLOCKCHAIN.md`
 - Mobile testing: `README-TESTING-MOBILE.md`
-

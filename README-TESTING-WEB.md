@@ -11,7 +11,7 @@ Use `127.0.0.1` consistently to avoid localhost/host mismatch issues.
 
 ## 2. Prerequisites
 
-- Node.js 18+ (Node.js 20 recommended)
+- Node.js 20.9+ (required for Next.js 16 in `web/`)
 - MongoDB running
 - Repo dependencies installed from root:
 
@@ -20,6 +20,22 @@ npm install
 ```
 
 ## 3. Environment Configuration
+
+First-time setup:
+
+```bash
+cp backend/env.example backend/.env
+cp web/.env.example web/.env.local
+```
+
+PowerShell:
+
+```powershell
+Copy-Item backend/env.example backend/.env
+Copy-Item web/.env.example web/.env.local
+```
+
+For full details, see `README-ENV.md`.
 
 ### 3.1 Backend (`backend/.env`)
 

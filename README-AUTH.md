@@ -36,6 +36,8 @@ BioTrack uses three auth flows:
 
 ## 4. Backend Run Setup
 
+For full environment setup across backend/web/mobile, see `README-ENV.md`.
+
 Create `backend/.env` with at least:
 
 ```env

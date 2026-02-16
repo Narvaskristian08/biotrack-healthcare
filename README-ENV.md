@@ -1,0 +1,89 @@
+# BioTrack Environment Setup Guide
+
+This repository uses different environment inputs per app:
+
+- Backend: `backend/.env` (required)
+- Web: `web/.env.local` (required for web)
+- Mobile (Flutter): no `.env` file; use `--dart-define` at runtime
+
+## 1) Quick Setup Commands
+
+Bash:
+
+```bash
+cp backend/env.example backend/.env
+cp web/.env.example web/.env.local
+```
+
+PowerShell:
+
+```powershell
+Copy-Item backend/env.example backend/.env
+Copy-Item web/.env.example web/.env.local
+```
+
+## 2) Backend Env (`backend/.env`)
+
+Source template:
+- `backend/env.example`
+
+Minimum required to start backend:
+
+```env
+PORT=3000
+NODE_ENV=development
+CORS_ORIGIN=http://127.0.0.1:3001,http://localhost:3001
+MONGODB_URI=mongodb://127.0.0.1:27017/biotrack
+ADMIN_JWT_SECRET=change_me_admin_secret
+HEALTHCENTER_JWT_SECRET=change_me_healthcenter_secret
+SESSION_JWT_SECRET=change_me_session_secret
+OPENROUTER_API_KEY=dev-placeholder
+```
+
+Notes:
+- `OPENROUTER_API_KEY` must be non-empty due to startup validation.
+- SMTP/Twilio/Blockchain vars are optional unless you are testing those flows.
+
+## 3) Web Env (`web/.env.local`)
+
+Source template:
+- `web/.env.example`
+
+Minimum:
+
+```env
+NEXT_PUBLIC_API_URL=http://127.0.0.1:3000/api
+```
+
+Optional:
+
+```env
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+```
+
+Use this key only if testing the Admin map picker in `/admin/users`.
+
+## 4) Mobile Runtime Config (Flutter)
+
+Mobile reads API base URL from Dart defines, not from `.env` files.
+
+Android emulator:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
+```
+
+Physical Android device:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://<YOUR_PC_LAN_IP>:3000
+```
+
+Default when omitted:
+- `http://10.0.2.2:3000` (see `lib/core/config/app_config.dart`)
+
+## 5) Safety
+
+- Never commit real secrets to git.
+- Use placeholders in local examples.
+- Keep production keys in a secrets manager.

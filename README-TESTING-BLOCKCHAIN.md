@@ -17,19 +17,20 @@ The backend now supports:
 - A verification endpoint that checks DB hash integrity plus blockchain proof
 
 Main files involved:
-- `src/services/blockchain/client.js`
-- `src/services/blockchain/identity.service.js`
-- `src/services/blockchain/recordProof.service.js`
-- `src/controllers/patientRecordController.js`
-- `src/controllers/patientAuthController.js`
-- `src/controllers/healthCenterController.js`
+- `backend/src/services/blockchain/client.js`
+- `backend/src/services/blockchain/identity.service.js`
+- `backend/src/services/blockchain/recordProof.service.js`
+- `backend/src/controllers/patientRecordController.js`
+- `backend/src/controllers/patientAuthController.js`
+- `backend/src/controllers/healthCenterController.js`
 
 ## 2. API Endpoints Under Test
 
 - `POST /api/admin/register`
 - `POST /api/admin/login`
 - `POST /api/admin/healthcenters`
-- `POST /api/healthcenters/register`
+- `POST /api/admin/providers/:providerId/credential-status`
+- `POST /api/healthcenters/register` (negative test: expected `403`, self-register is blocked)
 - `POST /api/healthcenters/login`
 - `POST /api/sessions/start`
 - `POST /api/patients`
@@ -52,13 +53,21 @@ Main files involved:
 
 ## 4. Environment Setup
 
+For full env setup across backend/web/mobile, see `README-ENV.md`.
+
 1. Copy env template:
 
 ```bash
-cp env.example .env
+cp backend/env.example backend/.env
 ```
 
-2. Set required backend values in `.env`:
+PowerShell:
+
+```powershell
+Copy-Item backend/env.example backend/.env
+```
+
+2. Set required backend values in `backend/.env`:
 
 - `PORT`
 - `MONGODB_URI`
@@ -85,7 +94,7 @@ cp env.example .env
 
 ```bash
 npm install
-npm run dev
+npm run dev:backend
 ```
 
 Expected startup message:
@@ -110,7 +119,7 @@ Environment variables used:
 
 ## 7. Test Flow A: Local-Only (Blockchain Disabled)
 
-Set in `.env`:
+Set in `backend/.env`:
 
 ```text
 BLOCKCHAIN_ENABLED=false
@@ -121,13 +130,16 @@ Run this request order:
 
 1. `Admin - Register (bootstrap)`
 2. `Admin - Login`
-3. `Admin - Create HealthCenter`
+3. `Admin - Create HealthCenter` (create with status `active`, or activate before login)
 4. `HealthCenter - Login`
 5. `Session - Start (Shared)`
 6. `Patient - Create`
 7. `PatientRecord - Add`
 8. `PatientRecord - Verify Integrity`
 9. `AuditLogs - List`
+
+If provider is not `active` yet:
+- `POST /api/admin/providers/:providerId/credential-status` with `{"status":"active"}`
 
 Expected behavior:
 - Registration/login responses include `blockchainIdentity` object
@@ -158,7 +170,7 @@ Example verify response shape:
 
 ## 8. Test Flow B: On-Chain (Blockchain Enabled)
 
-Set in `.env`:
+Set in `backend/.env`:
 
 ```text
 BLOCKCHAIN_ENABLED=true
@@ -222,7 +234,7 @@ function verifyRecord(
 ```
 
 Reference ABI file:
-- `src/services/blockchain/abi.js`
+- `backend/src/services/blockchain/abi.js`
 
 ## 10. Tamper Detection Test
 
@@ -265,7 +277,7 @@ BLOCKCHAIN_STRICT_MODE=true
 2. Intentionally break one blockchain setting (example: wrong `BLOCKCHAIN_RPC_URL`).
 3. Restart server.
 4. Try one of:
-- HealthCenter register/login
+- HealthCenter login
 - Patient register/login
 - Add patient record with blockchain enabled
 
@@ -324,7 +336,7 @@ Check these collections in MongoDB:
 ## 14. Troubleshooting
 
 1. Server exits on startup:
-- Check required envs in `src/config/env.js`
+- Check required envs in `backend/src/config/env.js`
 - Ensure `OPENROUTER_API_KEY` is set (non-empty)
 
 2. Blockchain enabled but no txId:
@@ -341,7 +353,7 @@ Check these collections in MongoDB:
 - Confirm record was anchored and same hash was used
 
 5. CORS/browser issues:
-- Backend CORS currently allows `http://localhost:3000` in `src/index.js`
+- Check CORS behavior in `backend/src/index.js` and `backend/.env` (`CORS_ORIGIN`)
 
 ## 15. Quick Pass/Fail Matrix
 
@@ -355,7 +367,7 @@ Check these collections in MongoDB:
 
 ## 16. Suggested Demo Script (Capstone)
 
-1. Register/login health center
+1. Admin create health center (active), then login health center
 2. Create patient (show blockchain identity in response)
 3. Create patient record with blockchain enabled (show `recordHash` and `txId`)
 4. Run integrity verify endpoint (`status: verified`)

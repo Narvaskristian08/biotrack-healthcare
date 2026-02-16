@@ -19,7 +19,7 @@ From repo root:
 
 ```bash
 npm install
-npm run dev
+npm run dev:backend
 ```
 
 Expected:
@@ -27,6 +27,11 @@ Expected:
 ```text
 Server running at http://localhost:3000
 ```
+
+Backend env note:
+- Create `backend/.env` from `backend/env.example` before starting the backend.
+- `OPENROUTER_API_KEY` must be non-empty (use `dev-placeholder` for local testing).
+- For full env setup details, see `README-ENV.md`.
 
 ## 3. Run Mobile App
 
