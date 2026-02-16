@@ -8,27 +8,48 @@ import DashboardLayout from '@/components/dashboard-layout';
 import { fetchMyAlerts, fetchMyHealthSummary, fetchMyTrendInsight } from '@/lib/patient-role';
 
 export default function AIHealthAdvisoryPage() {
+  const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState('');
+  const [summaryObservations, setSummaryObservations] = useState<string[]>([]);
+  const [riskLevel, setRiskLevel] = useState('LOW');
+  const [fallEvents, setFallEvents] = useState(0);
   const [trend, setTrend] = useState('INSUFFICIENT_DATA');
+  const [trendInsight, setTrendInsight] = useState('');
   const [alerts, setAlerts] = useState<{ id: string; type: string; severity: string; message: string }[]>([]);
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<string[]>([]);
 
   useEffect(() => {
     let active = true;
     (async () => {
+      setLoading(true);
       const [summaryRes, trendRes, alertsRes] = await Promise.all([fetchMyHealthSummary(7), fetchMyTrendInsight(), fetchMyAlerts(10)]);
       if (!active) return;
+      const nextErrors: string[] = [];
+
       if (summaryRes.error) {
-        setError(summaryRes.error);
+        nextErrors.push(`Summary endpoint: ${summaryRes.error}`);
       } else {
         setSummary(summaryRes.data?.insight ?? '');
+        setSummaryObservations(summaryRes.data?.summaryData?.observations ?? []);
+        setRiskLevel(summaryRes.data?.summaryData?.overallRisk ?? 'LOW');
+        setFallEvents(Number(summaryRes.data?.summaryData?.fallEvents ?? 0));
       }
-      if (!trendRes.error) {
+
+      if (trendRes.error) {
+        nextErrors.push(`Trend endpoint: ${trendRes.error}`);
+      } else {
         setTrend(trendRes.data?.trendData?.trend ?? 'INSUFFICIENT_DATA');
+        setTrendInsight(trendRes.data?.insight ?? '');
       }
-      if (!alertsRes.error) {
+
+      if (alertsRes.error) {
+        nextErrors.push(`Alerts endpoint: ${alertsRes.error}`);
+      } else {
         setAlerts((alertsRes.alerts ?? []).map((a) => ({ id: a._id, type: a.type, severity: a.severity, message: a.message })));
       }
+
+      setErrors(nextErrors);
+      setLoading(false);
     })();
     return () => {
       active = false;
@@ -43,13 +64,26 @@ export default function AIHealthAdvisoryPage() {
           <p className="text-muted-foreground text-sm sm:text-base">AI-generated advisory summaries from your health data</p>
         </header>
 
-        {error ? (
-          <Card className="border-destructive/30 bg-destructive/5">
-            <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
+        {loading ? (
+          <Card>
+            <CardContent className="pt-6 text-sm text-muted-foreground">Loading AI advisory data...</CardContent>
           </Card>
         ) : null}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {errors.length > 0 ? (
+          <Card className="border-destructive/30 bg-destructive/5">
+            <CardContent className="pt-6 text-sm text-destructive">
+              <p>Some AI data could not be loaded:</p>
+              <ul className="mt-2 list-disc pl-5">
+                {errors.map((entry) => (
+                  <li key={entry}>{entry}</li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -59,6 +93,18 @@ export default function AIHealthAdvisoryPage() {
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold">{trend}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lightbulb className="h-5 w-5" />
+                Risk Level
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold">{riskLevel}</p>
+              <p className="text-xs text-muted-foreground mt-1">Fall events: {fallEvents}</p>
             </CardContent>
           </Card>
           <Card>
@@ -77,6 +123,19 @@ export default function AIHealthAdvisoryPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Trend Interpretation
+            </CardTitle>
+            <CardDescription>AI interpretation returned by the trend endpoint</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm">{trendInsight || 'No trend interpretation available yet.'}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
               <Lightbulb className="h-5 w-5" />
               AI Summary
             </CardTitle>
@@ -84,6 +143,13 @@ export default function AIHealthAdvisoryPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm">{summary || 'No advisory summary available yet.'}</p>
+            {summaryObservations.length > 0 ? (
+              <ul className="mt-3 list-disc pl-5 text-sm text-muted-foreground space-y-1">
+                {summaryObservations.map((observation) => (
+                  <li key={observation}>{observation}</li>
+                ))}
+              </ul>
+            ) : null}
           </CardContent>
         </Card>
 

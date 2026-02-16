@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../../common/widgets/primary_button.dart';
 import '../../../../../core/config/app_config.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../data/services/auth_api_service.dart';
+import '../../../data/services/auth_session_store.dart';
 import '../../widgets/auth_text_field.dart';
 
 class LoginPage extends StatefulWidget {
@@ -15,6 +17,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
+  final _api = AuthApiService();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
@@ -31,13 +34,42 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
+    final form = _formKey.currentState;
+    if (form == null || !form.validate()) {
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = '';
     });
 
-    if (!mounted) return;
-    context.go('/home');
+    try {
+      final result = await _api.loginPatient(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+      await AuthSessionStore.save(result);
+
+      if (!mounted) return;
+      context.go('/home');
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Login failed. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
