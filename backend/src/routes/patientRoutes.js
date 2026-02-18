@@ -9,13 +9,21 @@ import {
   sendPatientVerificationCode,
   verifyPatientRegistrationCode,
 } from '../controllers/patientAuthController.js';
+import { authLoginLimiter } from '../middleware/rateLimit.js';
+import { validateBody } from '../middleware/validate.js';
+import {
+  loginSchema,
+  patientPublicRegisterSchema,
+  verificationSendCodeSchema,
+  verificationVerifyCodeSchema,
+} from '../validation/authSchemas.js';
 
 export const patientRoutes = Router();
 
-patientRoutes.post('/register', asyncHandler(registerPatientPublic));
-patientRoutes.post('/verification/send-code', asyncHandler(sendPatientVerificationCode));
-patientRoutes.post('/verification/verify-code', asyncHandler(verifyPatientRegistrationCode));
-patientRoutes.post('/login', asyncHandler(loginPatient));
+patientRoutes.post('/register', validateBody(patientPublicRegisterSchema), asyncHandler(registerPatientPublic));
+patientRoutes.post('/verification/send-code', validateBody(verificationSendCodeSchema), asyncHandler(sendPatientVerificationCode));
+patientRoutes.post('/verification/verify-code', validateBody(verificationVerifyCodeSchema), asyncHandler(verifyPatientRegistrationCode));
+patientRoutes.post('/login', authLoginLimiter, validateBody(loginSchema), asyncHandler(loginPatient));
 
 patientRoutes.get('/', requireSessionAuth, requireRoles('healthcenter'), asyncHandler(listPatients));
 patientRoutes.post('/', requireSessionAuth, requireRoles('healthcenter'), asyncHandler(createPatient));
@@ -26,4 +34,3 @@ patientRoutes.get('/:id/login-history', requireSessionAuth, requireRoles('health
 patientRoutes.get('/:patientId/records', requireSessionAuth, requireRoles('healthcenter', 'patient'), requirePatientSelf('patientId'), asyncHandler(listPatientRecords));
 patientRoutes.post('/:patientId/records', requireSessionAuth, requireRoles('healthcenter'), asyncHandler(addPatientRecord));
 patientRoutes.get('/:patientId/records/:recordId/verify', requireSessionAuth, requireRoles('healthcenter', 'patient'), requirePatientSelf('patientId'), asyncHandler(verifyPatientRecordIntegrity));
-

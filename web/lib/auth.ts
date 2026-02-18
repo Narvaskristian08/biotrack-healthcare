@@ -103,12 +103,16 @@ async function startHealthCenterSession(
 ): Promise<{ sessionToken?: string; error?: string }> {
     try {
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000/api';
+        const csrf = await apiGet<{ csrfToken: string }>('/auth/csrf-token');
+        const csrfToken = csrf.data?.csrfToken ?? '';
         const response = await fetch(`${baseUrl}/sessions/start`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${healthCenterAccessToken}`,
+                ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
             },
+            credentials: 'include',
             body: JSON.stringify({}),
         });
 
@@ -157,6 +161,13 @@ export function clearSession(): void {
     if (typeof window !== 'undefined') {
         localStorage.removeItem(USER_SESSION_STORAGE_KEY);
         notifySessionChanged();
+    }
+}
+
+export async function logoutServerSession(): Promise<void> {
+    const result = await apiPost<{ ok: boolean }>('/auth/logout', {});
+    if (result.error) {
+        // Ignore network/logout errors so local sign-out still succeeds.
     }
 }
 
@@ -216,6 +227,32 @@ export async function loginPatient(data: LoginData): Promise<{ session?: UserSes
         accessToken: string;
         patient: { id: string; firstName: string; lastName: string; email: string; role: string };
     }>('/patients/login', data);
+
+    if (result.error) {
+        return { error: result.error.message };
+    }
+
+    const { accessToken, patient } = result.data!;
+    const session: UserSession = {
+        accessToken,
+        role: 'patient',
+        email: patient.email,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        name: `${patient.firstName} ${patient.lastName}`,
+        id: patient.id,
+        loginTime: new Date().toISOString(),
+    };
+
+    saveSession(session);
+    return { session };
+}
+
+export async function loginPatientWithGoogleIdToken(idToken: string): Promise<{ session?: UserSession; error?: string }> {
+    const result = await apiPost<{
+        accessToken: string;
+        patient: { id: string; firstName: string; lastName: string; email: string; role: string };
+    }>('/auth/oauth/google', { idToken });
 
     if (result.error) {
         return { error: result.error.message };

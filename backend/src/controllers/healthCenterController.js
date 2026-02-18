@@ -4,6 +4,8 @@ import { writeAuditLog } from '../services/auditService.js';
 import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
 import { blockchainEnabled } from '../services/blockchain/client.js';
 
+const GENERIC_LOGIN_ERROR = 'Invalid credentials';
+
 export async function registerHealthCenter(req, res) {
   await writeAuditLog({
     req,
@@ -23,15 +25,10 @@ export async function registerHealthCenter(req, res) {
 
 export async function loginHealthCenter(req, res) {
   const { email, password } = req.body ?? {};
-  if (!email || !password) return res.status(400).json({ error: { message: 'email and password are required' } });
+  if (!email || !password) return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
 
   const hc = await HealthCenter.findOne({ email: String(email).toLowerCase().trim() });
-  if (!hc) return res.status(401).json({ error: { message: 'Invalid credentials' } });
-  if (hc.status !== 'active') {
-    return res.status(403).json({
-      error: { message: `Barangay unit status is '${hc.status}'. Only 'active' barangays can access BioTrack services.` },
-    });
-  }
+  if (!hc) return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
 
   const ok = await verifyPassword(String(password), hc.passwordHash);
   if (!ok) {
@@ -43,7 +40,19 @@ export async function loginHealthCenter(req, res) {
       outcome: 'failure',
       reason: 'Invalid credentials',
     });
-    return res.status(401).json({ error: { message: 'Invalid credentials' } });
+    return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
+  }
+
+  if (hc.status !== 'active') {
+    await writeAuditLog({
+      req,
+      action: 'HEALTHCENTER.LOGIN',
+      entityType: 'HealthCenter',
+      entityId: hc._id,
+      outcome: 'failure',
+      reason: `Inactive status: ${hc.status}`,
+    });
+    return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
   const { identity } = await ensureBlockchainIdentityForDocument({
@@ -148,4 +157,3 @@ export async function listHealthCentersPublic(req, res) {
 
   return res.json({ healthCenters });
 }
-

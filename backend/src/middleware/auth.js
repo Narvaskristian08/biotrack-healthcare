@@ -1,8 +1,9 @@
-import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { Session } from '../models/Session.js';
 import { HealthCenter } from '../models/HealthCenter.js';
 import { sha256Hex } from '../utils/crypto.js';
+import { isTokenRevoked } from '../services/tokenRevocation.service.js';
+import { verifyJwtToken } from '../services/authService.js';
 
 function getBearerToken(req) {
   const header = req.headers.authorization ?? '';
@@ -12,10 +13,11 @@ function getBearerToken(req) {
 }
 
 export function requireHealthCenterAuth(req, res, next) {
-  try {
+  return (async () => {
     const token = getBearerToken(req);
     if (!token) return res.status(401).json({ error: { message: 'Missing Bearer token' } });
-    const payload = jwt.verify(token, env.HEALTHCENTER_JWT_SECRET);
+    if (await isTokenRevoked(token)) return res.status(401).json({ error: { message: 'Token revoked' } });
+    const payload = verifyJwtToken(token, env.HEALTHCENTER_JWT_SECRET);
     if (payload?.tokenType !== 'healthcenter') return res.status(401).json({ error: { message: 'Invalid token type' } });
     req.context = {
       ...(req.context ?? {}),
@@ -24,16 +26,17 @@ export function requireHealthCenterAuth(req, res, next) {
       role: 'healthcenter',
     };
     return next();
-  } catch (e) {
+  })().catch(() => {
     return res.status(401).json({ error: { message: 'Invalid or expired token' } });
-  }
+  });
 }
 
 export function requireAdminAuth(req, res, next) {
-  try {
+  return (async () => {
     const token = getBearerToken(req);
     if (!token) return res.status(401).json({ error: { message: 'Missing Bearer token' } });
-    const payload = jwt.verify(token, env.ADMIN_JWT_SECRET);
+    if (await isTokenRevoked(token)) return res.status(401).json({ error: { message: 'Token revoked' } });
+    const payload = verifyJwtToken(token, env.ADMIN_JWT_SECRET);
     if (payload?.tokenType !== 'admin') return res.status(401).json({ error: { message: 'Invalid token type' } });
     req.context = {
       ...(req.context ?? {}),
@@ -41,9 +44,9 @@ export function requireAdminAuth(req, res, next) {
       role: 'admin',
     };
     return next();
-  } catch (e) {
+  })().catch(() => {
     return res.status(401).json({ error: { message: 'Invalid or expired token' } });
-  }
+  });
 }
 
 
@@ -51,7 +54,8 @@ export async function requireSessionAuth(req, res, next) {
   try {
     const token = getBearerToken(req);
     if (!token) return res.status(401).json({ error: { message: 'Missing Bearer token' } });
-    const payload = jwt.verify(token, env.SESSION_JWT_SECRET);
+    if (await isTokenRevoked(token)) return res.status(401).json({ error: { message: 'Token revoked' } });
+    const payload = verifyJwtToken(token, env.SESSION_JWT_SECRET);
 
     // Support Patient Login (Stateless for now? Or check if payload has patientId)
     if (payload.tokenType === 'patient') {
@@ -157,4 +161,3 @@ export function requirePatientSelf(paramName = 'id') {
     return next();
   };
 }
-

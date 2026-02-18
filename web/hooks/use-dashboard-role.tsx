@@ -5,6 +5,7 @@ import {
   getSession,
   clearSession,
   saveSession,
+  logoutServerSession,
   USER_SESSION_CHANGED_EVENT,
   USER_SESSION_STORAGE_KEY,
   type AuthRole,
@@ -27,7 +28,7 @@ interface DashboardRoleContextType {
   sessionUser: SessionUser | null
   isAuthenticated: boolean
   isReady: boolean
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 const DashboardRoleContext = createContext<DashboardRoleContextType | undefined>(undefined)
@@ -100,7 +101,8 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const logout = () => {
+  const logout = async () => {
+    await logoutServerSession()
     clearSession()
     setRoleState('patient')
     setSessionUser(null)
