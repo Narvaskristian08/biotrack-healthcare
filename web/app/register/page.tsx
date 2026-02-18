@@ -42,6 +42,28 @@ const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()\-_=+[\]
 const NAME_REGEX = /^[a-zA-Z\s\-']+$/
 const STEP_LABELS = ['Identity', 'Contact', 'Security'] as const
 
+function buildHealthCenterPrimaryLabel(center: HealthCenter): string {
+  const barangay = String(center.barangayName ?? '').trim()
+  const city = String(center.cityMunicipality ?? '').trim()
+
+  if (barangay && city) return `${barangay}, ${city}`
+  if (barangay) return barangay
+  if (city) return city
+
+  const fallback = String(center.name ?? center.healthCenterName ?? '').trim()
+  return fallback || 'Unnamed Health Center'
+}
+
+function buildHealthCenterSecondaryLabel(center: HealthCenter): string {
+  const healthCenterName = String(center.healthCenterName ?? '').trim()
+  const address = String(center.address ?? '').trim()
+  const contact = String(center.contactNumber ?? center.officialContactInfo ?? '').trim()
+
+  const details = [healthCenterName, address, contact].filter(Boolean)
+  const unique = details.filter((entry, idx, arr) => arr.indexOf(entry) === idx)
+  return unique.join(' • ')
+}
+
 function RegisterHeroPanel() {
   return (
     <aside className="relative hidden overflow-hidden bg-gradient-to-br from-[#33c481] via-[#1fae6e] to-[#0f7a4e] lg:flex lg:items-center lg:justify-center lg:p-12">
@@ -141,6 +163,14 @@ export default function RegisterPage() {
   }, [])
 
   const progressWidth = useMemo(() => `${(step / STEP_LABELS.length) * 100}%`, [step])
+  const selectedHealthCenter = useMemo(
+    () => healthCenters.find((center) => center._id === patientData.healthCenterId) ?? null,
+    [healthCenters, patientData.healthCenterId]
+  )
+  const selectedHealthCenterDetails = useMemo(
+    () => (selectedHealthCenter ? buildHealthCenterSecondaryLabel(selectedHealthCenter) : ''),
+    [selectedHealthCenter]
+  )
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
@@ -309,14 +339,19 @@ export default function RegisterPage() {
                           <SelectTrigger className="h-11 rounded-xl border-[#cfe5d9] bg-white text-[#173328] focus:ring-2 focus:ring-[#12b76a]/30">
                             <SelectValue placeholder={loadingHealthCenters ? 'Loading health centers...' : 'Select your health center'} />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="z-[140] max-h-72">
                             {healthCenters.map((hc) => (
                               <SelectItem key={hc._id} value={hc._id}>
-                                {hc.name}
+                                {buildHealthCenterPrimaryLabel(hc)}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                        {selectedHealthCenterDetails ? (
+                          <p className="text-xs text-[#5b786d] mt-1 px-1 truncate">
+                            {selectedHealthCenterDetails}
+                          </p>
+                        ) : null}
                       </div>
 
                       <div className="grid gap-3 sm:grid-cols-2">

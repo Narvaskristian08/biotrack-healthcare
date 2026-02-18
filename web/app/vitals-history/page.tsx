@@ -5,6 +5,7 @@ import { Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import DashboardLayout from '@/components/dashboard-layout';
+import { PatientPageContentSkeleton } from '@/components/patient-page-skeleton';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { fetchMyTrendInsight } from '@/lib/patient-role';
 
@@ -12,6 +13,7 @@ type Range = 'daily' | 'weekly' | 'monthly';
 
 export default function VitalsHistoryPage() {
   const [timeRange, setTimeRange] = useState<Range>('weekly');
+  const [loading, setLoading] = useState(true);
   const [heartRates, setHeartRates] = useState<number[]>([]);
   const [trend, setTrend] = useState('INSUFFICIENT_DATA');
   const [error, setError] = useState('');
@@ -19,14 +21,24 @@ export default function VitalsHistoryPage() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const result = await fetchMyTrendInsight();
-      if (!active) return;
-      if (result.error) {
-        setError(result.error);
-        return;
+      setLoading(true);
+      try {
+        const result = await fetchMyTrendInsight();
+        if (!active) return;
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        setHeartRates(result.data?.trendData?.recentHeartRates ?? []);
+        setTrend(result.data?.trendData?.trend ?? 'INSUFFICIENT_DATA');
+      } catch (fetchError) {
+        if (!active) return;
+        setError(fetchError instanceof Error ? fetchError.message : 'Failed to load vitals data.');
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
-      setHeartRates(result.data?.trendData?.recentHeartRates ?? []);
-      setTrend(result.data?.trendData?.trend ?? 'INSUFFICIENT_DATA');
     })();
     return () => {
       active = false;
@@ -38,6 +50,14 @@ export default function VitalsHistoryPage() {
   const average = heartRates.length > 0 ? heartRates.reduce((a, b) => a + b, 0) / heartRates.length : null;
   const min = heartRates.length > 0 ? Math.min(...heartRates) : null;
   const max = heartRates.length > 0 ? Math.max(...heartRates) : null;
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <PatientPageContentSkeleton stats={0} controls={3} chartCards={1} listCards={1} listRows={4} />
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

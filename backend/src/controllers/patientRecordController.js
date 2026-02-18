@@ -67,7 +67,7 @@ export async function addPatientRecord(req, res) {
   const { healthCenterId, adminId, sessionId } = req.context;
   const actorType = adminId ? 'admin' : 'healthcenter';
   const actorId = adminId ?? healthCenterId;
-  const { type = 'note', data, blockchain = {}, capturedAt: capturedAtInput } = req.body ?? {};
+  const { type = 'note', data, capturedAt: capturedAtInput } = req.body ?? {};
   const patientId = req.params.patientId;
 
   if (!data) return res.status(400).json({ error: { message: 'data is required' } });
@@ -94,7 +94,8 @@ export async function addPatientRecord(req, res) {
     capturedAt,
     recordNonce,
   });
-  const shouldAnchor = Boolean(blockchain?.enabled ?? env.BLOCKCHAIN_ENABLED);
+  // Anchoring policy is controlled server-side only.
+  const shouldAnchor = Boolean(env.BLOCKCHAIN_ENABLED);
 
   const duplicateRecord = await PatientRecord.findOne({ recordHash }).select('_id').lean();
   if (duplicateRecord) {
@@ -113,14 +114,14 @@ export async function addPatientRecord(req, res) {
     capturedAt,
     blockchain: {
       enabled: shouldAnchor,
-      network: blockchain?.network ?? '',
-      contractAddress: blockchain?.contractAddress ?? '',
-      txId: blockchain?.txId ?? '',
-      blockNumber: blockchain?.blockNumber ?? null,
-      proofId: blockchain?.proofId ?? '',
-      anchoredAt: blockchain?.anchoredAt ? new Date(blockchain.anchoredAt) : null,
+      network: '',
+      contractAddress: '',
+      txId: '',
+      blockNumber: null,
+      proofId: '',
+      anchoredAt: null,
       lastVerifiedAt: null,
-      verificationStatus: blockchain?.verificationStatus ?? (shouldAnchor ? 'pending' : 'unanchored'),
+      verificationStatus: shouldAnchor ? 'pending' : 'unanchored',
       errorMessage: '',
     },
     createdByActorType: actorType,

@@ -314,9 +314,8 @@ class _SignupPageState extends State<SignupPage> {
                           (center) => DropdownMenuItem<HealthCenterOption>(
                             value: center,
                             child: Text(
-                              center.name.isNotEmpty
-                                  ? center.name
-                                  : 'Unnamed Health Center',
+                              center.primaryLabel,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         )

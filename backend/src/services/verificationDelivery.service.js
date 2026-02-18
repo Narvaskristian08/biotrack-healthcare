@@ -120,8 +120,74 @@ async function getTwilioClient() {
 
 async function deliverEmailCode({ email, code }) {
   const recipientMasked = maskEmailAddress(email);
+  const ttlMinutes = Math.max(1, Number(env.OTP_TTL_MINUTES ?? 10) || 10);
+  const safeCode = String(code ?? '').trim();
   const subject = 'BioTrack Verification Code';
-  const text = `Your BioTrack verification code is ${code}. This code expires in ${env.OTP_TTL_MINUTES} minutes.`;
+  const text = [
+    'BioTrack Verification Code',
+    '',
+    `Your verification code is: ${safeCode}`,
+    `This code expires in ${ttlMinutes} minutes.`,
+    '',
+    'Security reminder:',
+    '- Do not share this code with anyone.',
+    '- BioTrack support will never ask for your code.',
+    '',
+    'If you did not request this, you can ignore this message.',
+  ].join('\n');
+
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:24px;background:#ecfdf5;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:580px;margin:0 auto;">
+      <tr>
+        <td style="padding:0;">
+          <div style="background:#ffffff;border:1px solid #bbf7d0;border-radius:16px;overflow:hidden;box-shadow:0 10px 24px rgba(21,128,61,0.12);">
+            <div style="background:linear-gradient(90deg,#166534 0%,#16a34a 100%);padding:20px 24px;color:#ffffff;">
+              <p style="margin:0 0 10px 0;">
+                <span style="display:inline-block;padding:4px 10px;border:1px solid rgba(255,255,255,0.45);border-radius:999px;font-size:11px;letter-spacing:.06em;font-weight:700;text-transform:uppercase;">Patient MFA</span>
+              </p>
+              <h1 style="margin:0;font-size:24px;line-height:1.2;font-weight:700;">BioTrack Verification Code</h1>
+              <p style="margin:8px 0 0 0;font-size:13px;line-height:1.4;opacity:0.95;">Use this one-time code to complete your patient registration.</p>
+            </div>
+            <div style="padding:24px;">
+              <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;color:#1f2937;">Enter this code in the app:</p>
+              <div style="margin:0 0 16px 0;padding:16px 18px;border:1px dashed #22c55e;background:#f0fdf4;border-radius:12px;text-align:center;">
+                <span style="display:block;font-family:Consolas,Monaco,monospace;font-size:36px;line-height:1;font-weight:800;letter-spacing:8px;color:#14532d;">${escapeHtml(safeCode)}</span>
+              </div>
+              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 16px 0;">
+                <tr>
+                  <td style="padding:0;">
+                    <span style="display:inline-block;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;color:#166534;">
+                      Expires in ${ttlMinutes} minute${ttlMinutes === 1 ? '' : 's'}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin:0 0 14px 0;">
+                <p style="margin:0 0 8px 0;font-size:12px;font-weight:700;color:#166534;letter-spacing:.03em;text-transform:uppercase;">How to verify</p>
+                <p style="margin:0;font-size:13px;line-height:1.55;color:#334155;">
+                  1. Return to BioTrack registration.<br/>
+                  2. Enter the 6-digit code shown above.<br/>
+                  3. Submit before expiration.
+                </p>
+              </div>
+              <div style="background:#ecfdf5;border:1px solid #86efac;border-radius:10px;padding:12px 14px;">
+                <p style="margin:0 0 6px 0;font-size:12px;font-weight:700;color:#166534;letter-spacing:.02em;text-transform:uppercase;">Security reminder</p>
+                <p style="margin:0;font-size:13px;line-height:1.45;color:#166534;">Never share this code. BioTrack support will never ask for your verification code.</p>
+              </div>
+              <p style="margin:14px 0 0 0;font-size:12px;color:#64748b;">If you did not request this verification, you can safely ignore this email.</p>
+            </div>
+            <div style="padding:12px 24px;border-top:1px solid #dcfce7;background:#f8fafc;">
+              <p style="margin:0;font-size:11px;color:#64748b;">Sent to ${escapeHtml(recipientMasked)} by BioTrack.</p>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 
   if (hasSmtpConfig()) {
     const transporter = await getSmtpTransporter();
@@ -130,6 +196,7 @@ async function deliverEmailCode({ email, code }) {
       to: email,
       subject,
       text,
+      html,
     });
     return { recipientMasked, channel: 'smtp' };
   }

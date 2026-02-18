@@ -8,6 +8,7 @@ import { PatientLoginHistory } from '../models/PatientLoginHistory.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { hashPassword, hashPin, verifyPassword, verifyPin } from '../services/authService.js';
 import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
+import { blockchainEnabled } from '../services/blockchain/client.js';
 import { deliverPatientVerificationCode, maskContactNumber, maskEmailAddress } from '../services/verificationDelivery.service.js';
 import { sha256Hex } from '../utils/crypto.js';
 
@@ -394,6 +395,27 @@ export async function loginPatient(req, res) {
     subjectId: match._id,
     healthCenterId: match.healthCenterId,
   });
+
+  if (blockchainEnabled() && identityVerification.onChain && !identityVerification.verified) {
+    await writeAuditLog({
+      req,
+      action: 'PATIENT.LOGIN',
+      entityType: 'Patient',
+      entityId: match._id,
+      outcome: 'failure',
+      reason: 'Blockchain identity verification failed',
+      after: {
+        identityId: identity.identityId,
+        verificationReason: identityVerification.reason,
+      },
+    });
+    return res.status(403).json({
+      error: {
+        message: 'Blockchain identity verification failed for this account.',
+        code: 'BLOCKCHAIN_IDENTITY_NOT_VERIFIED',
+      },
+    });
+  }
 
   const token = jwt.sign(
     {

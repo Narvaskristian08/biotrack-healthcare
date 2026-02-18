@@ -30,6 +30,7 @@ import {
 
 type DashboardState = {
   loading: boolean;
+  refreshing: boolean;
   error: string;
   records: PatientRecord[];
   trend: number[];
@@ -37,24 +38,170 @@ type DashboardState = {
   summaryText: string;
   fallEvents: number;
   alerts: { id: string; severity: string; type: string; message: string; createdAt: string }[];
+  lastUpdatedAt: string | null;
 };
+
+const DASHBOARD_REFRESH_MS = 15_000;
 
 function parseNumeric(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
-    const n = Number(value);
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const n = Number(trimmed);
     if (Number.isFinite(n)) return n;
+
+    const match = trimmed.match(/-?\d+(\.\d+)?/);
+    if (match) {
+      const parsed = Number(match[0]);
+      if (Number.isFinite(parsed)) return parsed;
+    }
   }
   return null;
 }
 
-function extractActivityLevel(record: PatientRecord): number | null {
-  const data = record.data ?? {};
-  const direct = parseNumeric((data as Record<string, unknown>).activityLevel);
-  if (direct !== null) return direct;
-  const steps = parseNumeric((data as Record<string, unknown>).steps);
-  if (steps !== null) return Math.min(100, Math.round(steps / 120));
+function parseBoolean(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return null;
+    if (['true', '1', 'yes', 'y', 'detected', 'positive'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'n', 'none', 'negative'].includes(normalized)) return false;
+  }
   return null;
+}
+
+function toObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function extractHeartRate(record: PatientRecord): number | null {
+  const data = toObject(record.data);
+  const vitals = toObject(data.vitals);
+  const metrics = toObject(data.metrics);
+
+  const candidates = [
+    data.heartRate,
+    data.bpm,
+    data.pulse,
+    vitals.heartRate,
+    vitals.bpm,
+    metrics.heartRate,
+    metrics.bpm,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = parseNumeric(candidate);
+    if (parsed !== null && parsed > 0 && parsed <= 260) {
+      return Math.round(parsed);
+    }
+  }
+
+  return null;
+}
+
+function extractActivityLevel(record: PatientRecord): number | null {
+  const data = toObject(record.data);
+  const activity = toObject(data.activity);
+
+  const direct = parseNumeric(data.activityLevel);
+  if (direct !== null) return direct;
+
+  const activityValue = parseNumeric(data.activity ?? activity.level);
+  if (activityValue !== null) return activityValue;
+
+  const activityLabel = String(data.activityLevel ?? data.activity ?? activity.level ?? '').trim().toUpperCase();
+  if (activityLabel === 'LOW') return 25;
+  if (activityLabel === 'MODERATE') return 60;
+  if (activityLabel === 'HIGH') return 90;
+
+  const steps = parseNumeric(data.steps ?? activity.steps);
+  if (steps !== null) return Math.min(100, Math.round(steps / 120));
+
+  const activeMinutes = parseNumeric(data.activeMinutes ?? activity.activeMinutes);
+  if (activeMinutes !== null) return Math.min(100, Math.round(activeMinutes));
+
+  return null;
+}
+
+function extractFallDetected(record: PatientRecord): boolean {
+  const data = toObject(record.data);
+  const fall = toObject(data.fall);
+  const candidates = [data.fallDetected, data.fall, data.fallEvent, fall.detected];
+
+  for (const candidate of candidates) {
+    if (parseBoolean(candidate) === true) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function deriveTrendFromRecords(records: PatientRecord[]): number[] {
+  return records
+    .slice(0, 20)
+    .map((record) => extractHeartRate(record))
+    .filter((value): value is number => value !== null)
+    .reverse();
+}
+
+function deriveTrendLabelFromHeartRates(heartRates: number[]): string {
+  if (heartRates.length < 3) return 'INSUFFICIENT_DATA';
+
+  const midpoint = Math.max(1, Math.floor(heartRates.length / 2));
+  const baseline = heartRates.slice(0, midpoint).reduce((sum, value) => sum + value, 0) / midpoint;
+  const recentAvg = heartRates.slice(-3).reduce((sum, value) => sum + value, 0) / 3;
+
+  if (recentAvg > baseline + 10) return 'INCREASING';
+  if (recentAvg < baseline - 10) return 'DECREASING';
+  return 'STABLE';
+}
+
+function formatTrendLabel(label: string): string {
+  return label.replaceAll('_', ' ');
+}
+
+function formatSyncTimestamp(iso: string | null): string {
+  if (!iso) return 'Waiting for live samples';
+  const parsed = new Date(iso).getTime();
+  if (!Number.isFinite(parsed)) return 'Waiting for live samples';
+  return `Live sync: ${new Date(iso).toLocaleTimeString()}`;
+}
+
+function countFallEventsFromRecords(records: PatientRecord[], days: number): number {
+  const since = Date.now() - days * 24 * 60 * 60 * 1000;
+  return records.filter((record) => {
+    const createdAt = new Date(record.createdAt).getTime();
+    if (!Number.isFinite(createdAt) || createdAt < since) return false;
+    return extractFallDetected(record);
+  }).length;
+}
+
+function countFallAlertsInWindow(
+  alerts: { id: string; severity: string; type: string; message: string; createdAt: string }[],
+  days: number
+): number {
+  const since = Date.now() - days * 24 * 60 * 60 * 1000;
+  return alerts.filter((alert) => {
+    if (String(alert.type).toUpperCase() !== 'FALL_DETECTED') return false;
+    const createdAt = new Date(alert.createdAt).getTime();
+    if (!Number.isFinite(createdAt) || createdAt < since) return false;
+    return true;
+  }).length;
+}
+
+function getEffectiveFallEvents(
+  summaryFallEvents: number,
+  records: PatientRecord[],
+  alerts: { id: string; severity: string; type: string; message: string; createdAt: string }[]
+): number {
+  return Math.max(summaryFallEvents, countFallEventsFromRecords(records, 7), countFallAlertsInWindow(alerts, 7));
 }
 
 function PatientDashboardSkeleton() {
@@ -125,6 +272,7 @@ function PatientDashboardSkeleton() {
 export default function PatientDashboard() {
   const [state, setState] = useState<DashboardState>({
     loading: true,
+    refreshing: false,
     error: '',
     records: [],
     trend: [],
@@ -132,12 +280,18 @@ export default function PatientDashboard() {
     summaryText: '',
     fallEvents: 0,
     alerts: [],
+    lastUpdatedAt: null,
   });
 
   useEffect(() => {
     let active = true;
+    let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-    (async () => {
+    const loadDashboard = async (mode: 'initial' | 'refresh') => {
+      if (mode === 'refresh') {
+        setState((prev) => ({ ...prev, refreshing: true }));
+      }
+
       const [recordsRes, trendRes, summaryRes, alertsRes] = await Promise.all([
         fetchMyPatientRecords(),
         fetchMyTrendInsight(),
@@ -147,27 +301,53 @@ export default function PatientDashboard() {
 
       if (!active) return;
 
-      const errors = [recordsRes.error, trendRes.error, summaryRes.error, alertsRes.error].filter(Boolean);
-      setState({
-        loading: false,
-        error: errors.length > 0 ? errors[0] ?? 'Failed to load dashboard data' : '',
-        records: recordsRes.records ?? [],
-        trend: trendRes.data?.trendData?.recentHeartRates ?? [],
-        trendLabel: trendRes.data?.trendData?.trend ?? 'INSUFFICIENT_DATA',
-        summaryText: summaryRes.data?.insight ?? '',
-        fallEvents: Number(summaryRes.data?.summaryData?.fallEvents ?? 0),
-        alerts: (alertsRes.alerts ?? []).map((a) => ({
-          id: a._id,
-          severity: a.severity,
-          type: a.type,
-          message: a.message,
-          createdAt: a.createdAt,
-        })),
+      setState((prev) => {
+        const nextRecords = recordsRes.error ? prev.records : recordsRes.records ?? [];
+        const nextAlerts = alertsRes.error
+          ? prev.alerts
+          : (alertsRes.alerts ?? []).map((alert) => ({
+            id: alert._id,
+            severity: alert.severity,
+            type: alert.type,
+            message: alert.message,
+            createdAt: alert.createdAt,
+          }));
+
+        const trendFromApi = trendRes.error ? prev.trend : trendRes.data?.trendData?.recentHeartRates ?? [];
+        const trendFromRecords = deriveTrendFromRecords(nextRecords);
+        const nextTrend = trendFromApi.length > 0 ? trendFromApi : trendFromRecords;
+
+        const trendLabelFromApi = trendRes.error ? prev.trendLabel : trendRes.data?.trendData?.trend ?? '';
+        const nextTrendLabel = trendLabelFromApi || deriveTrendLabelFromHeartRates(nextTrend);
+
+        const nextSummaryFallEvents = summaryRes.error ? prev.fallEvents : Number(summaryRes.data?.summaryData?.fallEvents ?? 0);
+
+        const errors = [recordsRes.error, trendRes.error, summaryRes.error, alertsRes.error].filter(Boolean);
+        const hasAnySuccess = [recordsRes.error, trendRes.error, summaryRes.error, alertsRes.error].some((error) => !error);
+
+        return {
+          loading: false,
+          refreshing: false,
+          error: errors.length > 0 && !hasAnySuccess ? errors[0] ?? 'Failed to load dashboard data' : '',
+          records: nextRecords,
+          trend: nextTrend,
+          trendLabel: nextTrendLabel,
+          summaryText: summaryRes.error ? prev.summaryText : summaryRes.data?.insight ?? '',
+          fallEvents: nextSummaryFallEvents,
+          alerts: nextAlerts,
+          lastUpdatedAt: hasAnySuccess ? new Date().toISOString() : prev.lastUpdatedAt,
+        };
       });
-    })();
+    };
+
+    void loadDashboard('initial');
+    refreshTimer = setInterval(() => {
+      void loadDashboard('refresh');
+    }, DASHBOARD_REFRESH_MS);
 
     return () => {
       active = false;
+      if (refreshTimer) clearInterval(refreshTimer);
     };
   }, []);
 
@@ -175,6 +355,9 @@ export default function PatientDashboard() {
     if (state.trend.length === 0) return null;
     return state.trend[state.trend.length - 1];
   }, [state.trend]);
+
+  const displayedTrendLabel = useMemo(() => formatTrendLabel(state.trendLabel), [state.trendLabel]);
+  const syncLabel = useMemo(() => formatSyncTimestamp(state.lastUpdatedAt), [state.lastUpdatedAt]);
 
   const heartRateChartData = useMemo(
     () =>
@@ -186,16 +369,29 @@ export default function PatientDashboard() {
   );
 
   const activityChartData = useMemo(() => {
-    const latest = state.records.slice(0, 10).reverse();
-    return latest.map((record, idx) => ({
-      idx: `${idx + 1}`,
-      activity: extractActivityLevel(record) ?? 0,
-    }));
+    const latest = state.records.slice(0, 20).reverse();
+    return latest.flatMap((record, idx) => {
+      const activity = extractActivityLevel(record);
+      if (activity === null) return [];
+      return [
+        {
+          idx: `${idx + 1}`,
+          activity,
+        },
+      ];
+    });
   }, [state.records]);
 
-  const verifiedCount = useMemo(
-    () => state.records.filter((record) => String(record.blockchain?.verificationStatus ?? '').toLowerCase() === 'anchored').length,
-    [state.records]
+  const verifiedCount = useMemo(() => {
+    return state.records.filter((record) => {
+      const status = String(record.blockchain?.verificationStatus ?? '').toLowerCase();
+      return status === 'anchored' || status === 'verified';
+    }).length;
+  }, [state.records]);
+
+  const fallEventsLast7Days = useMemo(
+    () => getEffectiveFallEvents(state.fallEvents, state.records, state.alerts),
+    [state.fallEvents, state.records, state.alerts]
   );
 
   const downloadSummary = () => {
@@ -204,7 +400,7 @@ export default function PatientDashboard() {
       `Generated At: ${new Date().toISOString()}`,
       `Heart Rate Trend Label: ${state.trendLabel}`,
       `Latest Heart Rate: ${latestHeartRate ?? 'N/A'}`,
-      `Fall Events (7 days): ${state.fallEvents}`,
+      `Fall Events (7 days): ${fallEventsLast7Days}`,
       `Total Records: ${state.records.length}`,
       `Blockchain Verified Records: ${verifiedCount}`,
       '',
@@ -224,6 +420,10 @@ export default function PatientDashboard() {
         <div>
           <h1 className="text-4xl font-bold tracking-tight text-foreground">My Health Dashboard</h1>
           <p className="text-muted-foreground text-lg mt-1">Personal health monitoring and record access</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {syncLabel}
+            {state.refreshing ? ' (refreshing...)' : ''}
+          </p>
         </div>
         <Button variant="outline" className="gap-2" onClick={downloadSummary}>
           <Download className="h-4 w-4" />
@@ -241,23 +441,23 @@ export default function PatientDashboard() {
         <StatsCard
           title="Real-Time Heart Rate"
           value={latestHeartRate !== null ? `${latestHeartRate} bpm` : 'N/A'}
-          change={state.trendLabel}
+          change={latestHeartRate !== null ? displayedTrendLabel : 'Waiting for live samples'}
           icon={<Heart className="h-5 w-5" />}
           trend={state.trendLabel === 'INCREASING' ? 'up' : state.trendLabel === 'DECREASING' ? 'down' : 'stable'}
         />
         <StatsCard
           title="Activity History"
           value={`${activityChartData.length} samples`}
-          change="Recent records"
+          change={activityChartData.length > 0 ? 'Recent records' : 'No activity metrics yet'}
           icon={<Activity className="h-5 w-5" />}
           trend="stable"
         />
         <StatsCard
           title="Fall Detection Logs"
-          value={String(state.fallEvents)}
+          value={String(fallEventsLast7Days)}
           change="Last 7 days"
           icon={<AlertTriangle className="h-5 w-5" />}
-          trend={state.fallEvents > 0 ? 'up' : 'stable'}
+          trend={fallEventsLast7Days > 0 ? 'up' : 'stable'}
         />
         <StatsCard
           title="Verified Records"

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, Heart, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import DashboardLayout from '@/components/dashboard-layout';
+import { PatientPageContentSkeleton } from '@/components/patient-page-skeleton';
 import {
   LineChart,
   Line,
@@ -20,21 +21,32 @@ export default function HealthMonitoringPage() {
   const [heartRates, setHeartRates] = useState<number[]>([]);
   const [trend, setTrend] = useState('INSUFFICIENT_DATA');
   const [alerts, setAlerts] = useState<{ id: string; message: string; severity: string }[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
     (async () => {
-      const [trendRes, alertsRes] = await Promise.all([fetchMyTrendInsight(), fetchMyAlerts(10)]);
-      if (!active) return;
-      if (trendRes.error) {
-        setError(trendRes.error);
-      } else {
-        setHeartRates(trendRes.data?.trendData?.recentHeartRates ?? []);
-        setTrend(trendRes.data?.trendData?.trend ?? 'INSUFFICIENT_DATA');
-      }
-      if (!alertsRes.error) {
-        setAlerts((alertsRes.alerts ?? []).map((a) => ({ id: a._id, message: a.message, severity: a.severity })));
+      setLoading(true);
+      try {
+        const [trendRes, alertsRes] = await Promise.all([fetchMyTrendInsight(), fetchMyAlerts(10)]);
+        if (!active) return;
+        if (trendRes.error) {
+          setError(trendRes.error);
+        } else {
+          setHeartRates(trendRes.data?.trendData?.recentHeartRates ?? []);
+          setTrend(trendRes.data?.trendData?.trend ?? 'INSUFFICIENT_DATA');
+        }
+        if (!alertsRes.error) {
+          setAlerts((alertsRes.alerts ?? []).map((a) => ({ id: a._id, message: a.message, severity: a.severity })));
+        }
+      } catch (fetchError) {
+        if (!active) return;
+        setError(fetchError instanceof Error ? fetchError.message : 'Failed to load monitoring data.');
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
     })();
     return () => {
@@ -46,6 +58,14 @@ export default function HealthMonitoringPage() {
     () => heartRates.map((value, idx) => ({ time: `#${idx + 1}`, heartRate: value })),
     [heartRates]
   );
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <PatientPageContentSkeleton stats={3} chartCards={1} listCards={1} listRows={4} />
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

@@ -10,6 +10,8 @@
   --foreground: #374151;
   --card: #ffffff;
   --card-foreground: #374151;
+  --popover: #ffffff;
+  --popover-foreground: #374151;
 
   /* Primary: Official SDG 3 Green */
   --primary: #4c9f38;
@@ -59,6 +61,8 @@
   --foreground: #f5f7fa;
   --card: #111827;
   --card-foreground: #f5f7fa;
+  --popover: #111827;
+  --popover-foreground: #f5f7fa;
   --primary: #4c9f38;
   --primary-foreground: #ffffff;
   --secondary: #27ae60;
@@ -96,6 +100,8 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);

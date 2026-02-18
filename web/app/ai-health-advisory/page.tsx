@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle, Lightbulb, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import DashboardLayout from '@/components/dashboard-layout';
+import { PatientPageContentSkeleton } from '@/components/patient-page-skeleton';
 import { fetchMyAlerts, fetchMyHealthSummary, fetchMyTrendInsight } from '@/lib/patient-role';
 
 export default function AIHealthAdvisoryPage() {
@@ -56,6 +57,14 @@ export default function AIHealthAdvisoryPage() {
     };
   }, []);
 
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <PatientPageContentSkeleton stats={3} chartCards={2} listCards={1} listRows={4} footerNotice />
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-8 max-w-5xl">
@@ -63,12 +72,6 @@ export default function AIHealthAdvisoryPage() {
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">AI Health Advisory</h1>
           <p className="text-muted-foreground text-sm sm:text-base">AI-generated advisory summaries from your health data</p>
         </header>
-
-        {loading ? (
-          <Card>
-            <CardContent className="pt-6 text-sm text-muted-foreground">Loading AI advisory data...</CardContent>
-          </Card>
-        ) : null}
 
         {errors.length > 0 ? (
           <Card className="border-destructive/30 bg-destructive/5">

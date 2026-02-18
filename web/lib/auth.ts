@@ -14,6 +14,10 @@ export const USER_SESSION_CHANGED_EVENT = 'biotrack:user-session-changed';
 export interface HealthCenter {
     _id: string;
     name: string;
+    barangayName?: string;
+    cityMunicipality?: string;
+    healthCenterName?: string;
+    officialContactInfo?: string;
     address?: string;
     contactNumber?: string;
 }

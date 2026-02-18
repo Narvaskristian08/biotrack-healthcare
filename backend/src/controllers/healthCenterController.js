@@ -2,6 +2,7 @@ import { HealthCenter } from '../models/HealthCenter.js';
 import { signHealthCenterToken, verifyPassword } from '../services/authService.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
+import { blockchainEnabled } from '../services/blockchain/client.js';
 
 export async function registerHealthCenter(req, res) {
   await writeAuditLog({
@@ -54,6 +55,27 @@ export async function loginHealthCenter(req, res) {
     subjectType: 'healthcenter',
     subjectId: hc._id,
   });
+
+  if (blockchainEnabled() && identityVerification.onChain && !identityVerification.verified) {
+    await writeAuditLog({
+      req,
+      action: 'HEALTHCENTER.LOGIN',
+      entityType: 'HealthCenter',
+      entityId: hc._id,
+      outcome: 'failure',
+      reason: 'Blockchain identity verification failed',
+      after: {
+        identityId: identity.identityId,
+        verificationReason: identityVerification.reason,
+      },
+    });
+    return res.status(403).json({
+      error: {
+        message: 'Blockchain identity verification failed for this account.',
+        code: 'BLOCKCHAIN_IDENTITY_NOT_VERIFIED',
+      },
+    });
+  }
 
   const token = signHealthCenterToken({ healthCenterId: hc._id });
   await writeAuditLog({

@@ -5,6 +5,7 @@ import { Download, FileText } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import DashboardLayout from '@/components/dashboard-layout';
+import { PatientPageContentSkeleton } from '@/components/patient-page-skeleton';
 import { downloadTextFile, fetchMyHealthSummary, fetchMyPatientRecords, type PatientRecord } from '@/lib/patient-role';
 
 function recordsToCsv(records: PatientRecord[]): string {
@@ -81,6 +82,14 @@ export default function ReportsDownloadsPage() {
     ];
     downloadTextFile(`health-summary-${new Date().toISOString().slice(0, 10)}.txt`, lines.join('\n'));
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <PatientPageContentSkeleton stats={3} chartCards={0} listCards={0} actionButtons={3} footerNotice />
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

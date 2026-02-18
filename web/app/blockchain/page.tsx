@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import DashboardLayout from '@/components/dashboard-layout';
+import { PatientPageContentSkeleton } from '@/components/patient-page-skeleton';
 import { useDashboardRole } from '@/hooks/use-dashboard-role';
 import { fetchMyPatientRecords, verifyMyPatientRecord, type PatientRecord } from '@/lib/patient-role';
 
@@ -66,6 +67,14 @@ export default function BlockchainPage() {
     );
   }
 
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <PatientPageContentSkeleton stats={0} chartCards={0} listCards={3} listRows={3} />
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -83,46 +92,42 @@ export default function BlockchainPage() {
           </Card>
         ) : null}
 
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Loading blockchain records...</p>
-        ) : (
-          <div className="space-y-4">
-            {records.map((record) => (
-              <Card key={record._id}>
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <CardTitle>{record.type}</CardTitle>
-                      <CardDescription>{new Date(record.createdAt).toLocaleString()}</CardDescription>
-                    </div>
-                    <Badge variant={status[record._id]?.toLowerCase() === 'anchored' || status[record._id]?.toLowerCase() === 'verified' ? 'default' : 'secondary'}>
-                      {status[record._id] ?? 'pending'}
-                    </Badge>
+        <div className="space-y-4">
+          {records.map((record) => (
+            <Card key={record._id}>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle>{record.type}</CardTitle>
+                    <CardDescription>{new Date(record.createdAt).toLocaleString()}</CardDescription>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="text-sm break-all">
-                    <span className="font-semibold">Record Hash: </span>
-                    {record.recordHash}
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-semibold">Tx ID: </span>
-                    {record.blockchain?.txId || 'N/A'}
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-semibold">Timestamp: </span>
-                    {record.blockchain?.anchoredAt ? new Date(record.blockchain.anchoredAt).toLocaleString() : 'N/A'}
-                  </p>
-                  <Button variant="outline" className="gap-2" onClick={() => verify(record._id)} disabled={verifying === record._id}>
-                    {verifying === record._id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                    Verify Authenticity
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-            {records.length === 0 ? <p className="text-sm text-muted-foreground">No records found.</p> : null}
-          </div>
-        )}
+                  <Badge variant={status[record._id]?.toLowerCase() === 'anchored' || status[record._id]?.toLowerCase() === 'verified' ? 'default' : 'secondary'}>
+                    {status[record._id] ?? 'pending'}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm break-all">
+                  <span className="font-semibold">Record Hash: </span>
+                  {record.recordHash}
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold">Tx ID: </span>
+                  {record.blockchain?.txId || 'N/A'}
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold">Timestamp: </span>
+                  {record.blockchain?.anchoredAt ? new Date(record.blockchain.anchoredAt).toLocaleString() : 'N/A'}
+                </p>
+                <Button variant="outline" className="gap-2" onClick={() => verify(record._id)} disabled={verifying === record._id}>
+                  {verifying === record._id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Verify Authenticity
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+          {records.length === 0 ? <p className="text-sm text-muted-foreground">No records found.</p> : null}
+        </div>
       </div>
     </DashboardLayout>
   );

@@ -358,6 +358,7 @@ export async function adminUpsertUser(req, res) {
     email,
     password,
     status = 'pending',
+    walletAddress = '',
     // provider fields
     name = '',
     holderName = '',
@@ -431,15 +432,38 @@ export async function adminUpsertUser(req, res) {
       status: onboardingStatus,
       role: 'staff',
     });
+    const { identity } = await ensureBlockchainIdentityForDocument({
+      doc: provider,
+      subjectType: 'healthcenter',
+      uniqueSeed: provider.email,
+      walletAddress,
+    });
     await writeAuditLog({
       req,
       action: 'ADMIN.USER.CREATE',
       entityType: 'HealthCenter',
       entityId: provider._id,
-      after: { email: provider.email, status: provider.status, barangayName: provider.barangayName },
+      after: {
+        email: provider.email,
+        status: provider.status,
+        barangayName: provider.barangayName,
+        blockchainIdentityId: identity.identityId,
+      },
     });
     const notification = await notifyProviderOnboarding({ req, provider, temporaryPassword: String(password) });
-    return res.status(201).json({ user: { id: provider._id, role: 'provider', email: provider.email }, notification });
+    return res.status(201).json({
+      user: {
+        id: provider._id,
+        role: 'provider',
+        email: provider.email,
+        blockchainIdentity: {
+          identityId: identity.identityId,
+          verificationStatus: identity.verificationStatus,
+          txId: identity.txId,
+        },
+      },
+      notification,
+    });
   }
 
   if (normalizedRole === 'patient') {
@@ -472,14 +496,37 @@ export async function adminUpsertUser(req, res) {
       updatedByActorType: 'admin',
       updatedByActorId: actorId,
     });
+    const { identity } = await ensureBlockchainIdentityForDocument({
+      doc: patient,
+      subjectType: 'patient',
+      uniqueSeed: patient.email,
+      walletAddress,
+      healthCenterId: patient.healthCenterId,
+    });
     await writeAuditLog({
       req,
       action: 'ADMIN.USER.CREATE',
       entityType: 'Patient',
       entityId: patient._id,
-      after: { email: patient.email, healthCenterId: patient.healthCenterId, status: patient.status },
+      after: {
+        email: patient.email,
+        healthCenterId: patient.healthCenterId,
+        status: patient.status,
+        blockchainIdentityId: identity.identityId,
+      },
     });
-    return res.status(201).json({ user: { id: patient._id, role: 'patient', email: patient.email } });
+    return res.status(201).json({
+      user: {
+        id: patient._id,
+        role: 'patient',
+        email: patient.email,
+        blockchainIdentity: {
+          identityId: identity.identityId,
+          verificationStatus: identity.verificationStatus,
+          txId: identity.txId,
+        },
+      },
+    });
   }
 
   const existingAdmin = await Admin.findOne({ email: String(email).toLowerCase().trim() }).lean();
