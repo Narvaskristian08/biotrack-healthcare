@@ -6,12 +6,14 @@ import { Patient } from '../models/Patient.js';
 import { HealthCenter } from '../models/HealthCenter.js';
 import { PatientLoginHistory } from '../models/PatientLoginHistory.js';
 import { writeAuditLog } from '../services/auditService.js';
-import { hashPassword, hashPin, verifyPassword, verifyPin } from '../services/authService.js';
+import { hashPassword, hashPin, signPatientToken, verifyPassword, verifyPin } from '../services/authService.js';
 import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
 import { deliverPatientVerificationCode, maskContactNumber, maskEmailAddress } from '../services/verificationDelivery.service.js';
 import { sha256Hex } from '../utils/crypto.js';
+import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
 
 const OTP_REGEX = /^\d{6}$/;
+const GENERIC_LOGIN_ERROR = 'Invalid credentials';
 
 function normalizeVerificationMethod(value) {
   const method = String(value ?? '').trim().toLowerCase();
@@ -74,6 +76,8 @@ export async function registerPatientPublic(req, res) {
   if (!healthCenterId || !email || !password || !lastName || !firstName || !middleInitial || !address || !contactNumber) {
     return res.status(400).json({ error: { message: 'Missing required fields' } });
   }
+  const passwordCheck = validatePasswordPolicy(password);
+  if (!passwordCheck.ok) return res.status(400).json({ error: { message: passwordCheck.message } });
 
   const normalizedSex = String(sex ?? 'unknown').trim().toLowerCase() || 'unknown';
   if (!['male', 'female', 'other', 'unknown'].includes(normalizedSex)) {
@@ -334,14 +338,14 @@ export async function loginPatient(req, res) {
   const { email, password } = req.body ?? {};
 
   if (!email || !password) {
-    return res.status(400).json({ error: { message: 'Email and password required' } });
+    return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
   const normalizedEmail = String(email).toLowerCase().trim();
   const patients = await Patient.find({ email: normalizedEmail });
 
   if (patients.length === 0) {
-    return res.status(401).json({ error: { message: 'Invalid credentials' } });
+    return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
   let match = null;
@@ -353,34 +357,20 @@ export async function loginPatient(req, res) {
   }
 
   if (!match) {
-    return res.status(401).json({ error: { message: 'Invalid credentials' } });
+    return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
   if (match.status !== 'active') {
-    return res.status(403).json({ error: { message: 'Patient account is not active' } });
+    return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
   const owningHealthCenter = await HealthCenter.findById(match.healthCenterId).select('status').lean();
   if (!owningHealthCenter || String(owningHealthCenter.status) !== 'active') {
-    return res.status(403).json({
-      error: {
-        message: 'Your barangay unit is not active yet. Please contact your health center administrator.',
-        code: 'BARANGAY_NOT_ACTIVE',
-      },
-    });
+    return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
   if (getVerificationStatus(match) !== 'verified') {
-    return res.status(403).json({
-      error: {
-        message: 'Account not verified. Please verify via email or SMS first.',
-        code: 'ACCOUNT_NOT_VERIFIED',
-        details: {
-          patientId: String(match._id),
-          verification: buildVerificationSummary(match),
-        },
-      },
-    });
+    return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
   const { identity } = await ensureBlockchainIdentityForDocument({
@@ -395,15 +385,10 @@ export async function loginPatient(req, res) {
     healthCenterId: match.healthCenterId,
   });
 
-  const token = jwt.sign(
-    {
-      tokenType: 'patient',
-      patientId: match._id,
-      healthCenterId: match.healthCenterId,
-    },
-    env.SESSION_JWT_SECRET,
-    { expiresIn: env.SESSION_TOKEN_TTL }
-  );
+  const token = signPatientToken({
+    patientId: match._id,
+    healthCenterId: match.healthCenterId,
+  });
 
   const ip = String(req?.ip ?? req?.headers?.['x-forwarded-for'] ?? '').trim();
   const userAgent = String(req?.headers?.['user-agent'] ?? '').trim();

@@ -51,10 +51,10 @@ const PatientSchema = new mongoose.Schema(
     updatedByActorId: { type: mongoose.Schema.Types.ObjectId, default: null },
 
     blockchainIdentity: {
-      identityId: { type: String, default: '', index: true },
-      identityHash: { type: String, default: '', index: true },
+      identityId: { type: String, default: '' },
+      identityHash: { type: String, default: '' },
       identitySalt: { type: String, default: '' },
-      walletAddress: { type: String, default: '', trim: true, lowercase: true, index: true },
+      walletAddress: { type: String, default: '', trim: true, lowercase: true },
       network: { type: String, default: '' },
       txId: { type: String, default: '' },
       blockNumber: { type: Number, default: null },
@@ -91,4 +91,3 @@ PatientSchema.index(
 );
 
 export const Patient = mongoose.model('Patient', PatientSchema);
-

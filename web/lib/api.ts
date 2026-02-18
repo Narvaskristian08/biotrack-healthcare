@@ -3,6 +3,22 @@
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000/api';
+const CSRF_ENDPOINT = '/auth/csrf-token';
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+let csrfTokenCache = '';
+
+async function ensureCsrfToken(): Promise<string> {
+    if (csrfTokenCache) return csrfTokenCache;
+    const response = await fetch(`${API_BASE_URL}${CSRF_ENDPOINT}`, {
+        method: 'GET',
+        credentials: 'include',
+    });
+    if (!response.ok) return '';
+    const json = await response.json().catch(() => ({}));
+    csrfTokenCache = String(json?.csrfToken ?? '');
+    return csrfTokenCache;
+}
 
 export interface ApiError {
     message: string;
@@ -24,6 +40,7 @@ export async function apiFetch<T>(
     const url = `${API_BASE_URL}${endpoint}`;
 
     const headers = new Headers(options.headers);
+    const method = String(options.method ?? 'GET').toUpperCase();
     if (!headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json');
     }
@@ -43,10 +60,18 @@ export async function apiFetch<T>(
         }
     }
 
+    if (!SAFE_METHODS.has(method) && endpoint !== CSRF_ENDPOINT) {
+        const csrfToken = await ensureCsrfToken();
+        if (csrfToken) {
+            headers.set('x-csrf-token', csrfToken);
+        }
+    }
+
     try {
         const response = await fetch(url, {
             ...options,
             headers,
+            credentials: 'include',
         });
 
         const json = await response.json();

@@ -3,6 +3,7 @@ import { PatientLoginHistory } from '../models/PatientLoginHistory.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { hashPassword } from '../services/authService.js';
 import { ensureBlockchainIdentityForDocument } from '../services/blockchain/identity.service.js';
+import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
 
 export async function createPatient(req, res) {
   const { healthCenterId, adminId } = req.context;
@@ -38,6 +39,10 @@ export async function createPatient(req, res) {
 
   if (errors.length > 0) {
     return res.status(400).json({ error: { message: errors.join(', ') } });
+  }
+  const passwordCheck = validatePasswordPolicy(password);
+  if (!passwordCheck.ok) {
+    return res.status(400).json({ error: { message: passwordCheck.message } });
   }
 
   const existingEmail = await Patient.findOne({ healthCenterId, email: String(email).toLowerCase().trim() }).lean();
@@ -264,4 +269,3 @@ export async function listPatientLoginHistory(req, res) {
     })),
   });
 }
-

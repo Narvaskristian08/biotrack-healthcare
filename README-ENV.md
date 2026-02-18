@@ -43,6 +43,15 @@ OPENROUTER_API_KEY=dev-placeholder
 Notes:
 - `OPENROUTER_API_KEY` must be non-empty due to startup validation.
 - SMTP/Twilio/Blockchain vars are optional unless you are testing those flows.
+- Security defaults added:
+  - `PASSWORD_MIN_LENGTH=12`
+  - `LOGIN_RATE_LIMIT_WINDOW_MS=900000`
+  - `LOGIN_RATE_LIMIT_MAX=10`
+  - `CSRF_ENABLED=true`
+  - `CSRF_COOKIE_NAME=biotrack_csrf`
+  - `CSRF_HEADER_NAME=x-csrf-token`
+  - `JWT_ISSUER=biotrack-healthcare`
+  - `JWT_AUDIENCE=biotrack-app`
 
 ## 3) Web Env (`web/.env.local`)
 

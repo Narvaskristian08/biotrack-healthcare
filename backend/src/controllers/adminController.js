@@ -9,6 +9,9 @@ import { hashPassword, signAdminToken, verifyPassword } from '../services/authSe
 import { writeAuditLog } from '../services/auditService.js';
 import { ensureBlockchainIdentityForDocument } from '../services/blockchain/identity.service.js';
 import { deliverProviderOnboardingNotification } from '../services/verificationDelivery.service.js';
+import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
+
+const GENERIC_LOGIN_ERROR = 'Invalid credentials';
 
 const BARANGAY_STATUSES = ['pending', 'verified', 'active'];
 
@@ -74,6 +77,8 @@ async function notifyProviderOnboarding({ req, provider, temporaryPassword = '' 
 export async function registerAdmin(req, res) {
   const { email, password } = req.body ?? {};
   if (!email || !password) return res.status(400).json({ error: { message: 'email and password are required' } });
+  const passwordCheck = validatePasswordPolicy(password);
+  if (!passwordCheck.ok) return res.status(400).json({ error: { message: passwordCheck.message } });
 
   const existing = await Admin.findOne({ email: String(email).toLowerCase().trim() }).lean();
   if (existing) return res.status(409).json({ error: { message: 'Admin email already exists' } });
@@ -90,16 +95,19 @@ export async function registerAdmin(req, res) {
 
 export async function loginAdmin(req, res) {
   const { email, password } = req.body ?? {};
-  if (!email || !password) return res.status(400).json({ error: { message: 'email and password are required' } });
+  if (!email || !password) return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
 
   const admin = await Admin.findOne({ email: String(email).toLowerCase().trim() });
-  if (!admin) return res.status(401).json({ error: { message: 'Invalid credentials' } });
-  if (admin.status !== 'active') return res.status(403).json({ error: { message: 'Admin disabled' } });
+  if (!admin) return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
 
   const ok = await verifyPassword(String(password), admin.passwordHash);
   if (!ok) {
     await writeAuditLog({ req, action: 'ADMIN.LOGIN', entityType: 'Admin', entityId: admin._id, outcome: 'failure', reason: 'Invalid credentials' });
-    return res.status(401).json({ error: { message: 'Invalid credentials' } });
+    return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
+  }
+  if (admin.status !== 'active') {
+    await writeAuditLog({ req, action: 'ADMIN.LOGIN', entityType: 'Admin', entityId: admin._id, outcome: 'failure', reason: 'Admin disabled' });
+    return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
   const token = signAdminToken({ adminId: admin._id });
@@ -137,6 +145,8 @@ export async function adminCreateHealthCenter(req, res) {
       },
     });
   }
+  const passwordCheck = validatePasswordPolicy(password);
+  if (!passwordCheck.ok) return res.status(400).json({ error: { message: passwordCheck.message } });
   if (!onboardingStatus) {
     return res.status(400).json({ error: { message: "status must be one of: pending, verified, active" } });
   }
@@ -383,6 +393,8 @@ export async function adminUpsertUser(req, res) {
     return res.status(400).json({ error: { message: 'role must be patient, provider, or admin' } });
   }
   if (!email || !password) return res.status(400).json({ error: { message: 'email and password are required' } });
+  const passwordCheck = validatePasswordPolicy(password);
+  if (!passwordCheck.ok) return res.status(400).json({ error: { message: passwordCheck.message } });
 
   if (normalizedRole === 'provider') {
     if (!barangayName || !cityMunicipality || !healthCenterName || !officialContactInfo) {
@@ -791,4 +803,3 @@ export async function markRestoreOperation(req, res) {
   });
   return res.json({ message: 'Restore metadata updated', lastRestoreAt: cfg.dataGovernance.lastRestoreAt });
 }
-

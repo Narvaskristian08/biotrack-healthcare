@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { loginHealthCenter, registerHealthCenter, listHealthCentersPublic } from '../controllers/healthCenterController.js';
+import { authLoginLimiter } from '../middleware/rateLimit.js';
+import { validateBody } from '../middleware/validate.js';
+import { loginSchema } from '../validation/authSchemas.js';
 
 export const healthCenterRoutes = Router();
 
@@ -13,5 +16,4 @@ healthCenterRoutes.get('/', (req, res, next) => {
     next();
 }, listHealthCentersPublic);
 healthCenterRoutes.post('/register', asyncHandler(registerHealthCenter));
-healthCenterRoutes.post('/login', asyncHandler(loginHealthCenter));
-
+healthCenterRoutes.post('/login', authLoginLimiter, validateBody(loginSchema), asyncHandler(loginHealthCenter));

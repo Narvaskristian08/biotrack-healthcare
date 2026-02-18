@@ -189,8 +189,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     navigationItems.find((item) => pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`))) ?? null
   const pageTitle = activeNavItem?.label ?? toTitleCaseFromPath(pathname)
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     router.push('/login')
   }
 
