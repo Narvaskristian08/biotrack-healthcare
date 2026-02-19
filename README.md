@@ -88,3 +88,12 @@ Use your LAN IP instead of `10.0.2.2` when testing on a physical Android device.
 - Backend auth/session/API checks: `README-AUTH.md`
 - Blockchain/integrity checks: `README-TESTING-BLOCKCHAIN.md`
 - Mobile testing: `README-TESTING-MOBILE.md`
+
+## Documentation Hub
+
+- Main index: `docs/README.md`
+- Security documentation: `docs/SECURITY.md`
+- API documentation: `docs/API_REFERENCE.md`
+- Deployment guide: `docs/DEPLOYMENT.md`
+- Troubleshooting: `docs/TROUBLESHOOTING.md`
+- Maintenance notes: `docs/MAINTENANCE.md`

@@ -53,6 +53,12 @@ export const verificationVerifyCodeSchema = z.object({
   code: z.string().trim().regex(/^\d{6}$/, 'code must be a valid 6-digit number'),
 }).passthrough();
 
+export const patientLoginMfaVerifySchema = z.object({
+  patientId: z.string().trim().min(1, 'patientId is required'),
+  challengeId: z.string().trim().min(1, 'challengeId is required'),
+  code: z.string().trim().regex(/^\d{6}$/, 'code must be a valid 6-digit number'),
+}).passthrough();
+
 export const adminUpsertSchema = z.object({
   role: z.enum(['patient', 'provider', 'admin']),
   email: z.string().trim().email('email must be a valid email address'),

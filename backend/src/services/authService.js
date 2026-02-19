@@ -65,3 +65,15 @@ export function verifyJwtToken(token, secret) {
     audience: env.JWT_AUDIENCE || undefined,
   });
 }
+
+export function verifyAdminToken(token) {
+  return verifyJwtToken(token, env.ADMIN_JWT_SECRET);
+}
+
+export function verifyHealthCenterToken(token) {
+  return verifyJwtToken(token, env.HEALTHCENTER_JWT_SECRET);
+}
+
+export function verifySessionToken(token) {
+  return verifyJwtToken(token, env.SESSION_JWT_SECRET);
+}

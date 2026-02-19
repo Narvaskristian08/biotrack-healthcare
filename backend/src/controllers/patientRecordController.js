@@ -6,6 +6,7 @@ import { canonicalJsonStringify, sha256Hex } from '../utils/crypto.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { anchorRecordProof, verifyRecordProof } from '../services/blockchain/recordProof.service.js';
 import { env } from '../config/env.js';
+import { decryptRecordDataForResponse, encryptRecordDataForStorage } from '../services/recordDataEncryption.service.js';
 
 const RECORD_HASH_SCHEMA_VERSION = 2;
 const RECORD_HASH_SCHEMA_NAME = 'biotrack.record.v2';
@@ -63,6 +64,14 @@ function buildRecordHashForRecord(record) {
   });
 }
 
+function toRecordResponse(record, context = {}) {
+  const source = typeof record?.toObject === 'function' ? record.toObject() : record;
+  return {
+    ...source,
+    data: decryptRecordDataForResponse(source?.data, context),
+  };
+}
+
 export async function addPatientRecord(req, res) {
   const { healthCenterId, adminId, sessionId } = req.context;
   const actorType = adminId ? 'admin' : 'healthcenter';
@@ -85,12 +94,13 @@ export async function addPatientRecord(req, res) {
   }
 
   const recordNonce = randomBytes(16).toString('hex');
+  const storedData = encryptRecordDataForStorage(data, { healthCenterId, patientId });
   const recordHash = buildRecordHashV2({
     healthCenterId,
     patientId,
     recordId,
     type,
-    data,
+    data: storedData,
     capturedAt,
     recordNonce,
   });
@@ -107,7 +117,7 @@ export async function addPatientRecord(req, res) {
     healthCenterId,
     patientId,
     type,
-    data,
+    data: storedData,
     recordHash,
     hashSchemaVersion: RECORD_HASH_SCHEMA_VERSION,
     recordNonce,
@@ -180,14 +190,16 @@ export async function addPatientRecord(req, res) {
     after: { patientId, type: rec.type, recordHash: rec.recordHash, blockchain: rec.blockchain },
   });
 
-  return res.status(201).json({ record: rec });
+  return res.status(201).json({ record: toRecordResponse(rec, { healthCenterId, patientId }) });
 }
 
 export async function listPatientRecords(req, res) {
   const { healthCenterId } = req.context;
   const patientId = req.params.patientId;
   const records = await PatientRecord.find({ healthCenterId, patientId }).sort({ createdAt: -1 }).limit(200).lean();
-  return res.json({ records });
+  return res.json({
+    records: records.map((record) => toRecordResponse(record, { healthCenterId, patientId })),
+  });
 }
 
 export async function verifyPatientRecordIntegrity(req, res) {

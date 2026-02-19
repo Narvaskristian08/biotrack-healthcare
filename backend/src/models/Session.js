@@ -5,6 +5,7 @@ const SessionSchema = new mongoose.Schema(
     healthCenterId: { type: mongoose.Schema.Types.ObjectId, ref: 'HealthCenter', required: true, index: true },
     sessionTokenHash: { type: String, required: true, unique: true, index: true },
     startedAt: { type: Date, required: true, default: () => new Date(), index: true },
+    lastActivityAt: { type: Date, required: true, default: () => new Date(), index: true },
     expiresAt: { type: Date, required: true, index: true },
     revokedAt: { type: Date, default: null, index: true },
     ip: { type: String, default: '' },
@@ -14,6 +15,7 @@ const SessionSchema = new mongoose.Schema(
 );
 
 SessionSchema.index({ healthCenterId: 1, revokedAt: 1 });
+SessionSchema.index({ revokedAt: 1, expiresAt: 1, lastActivityAt: 1 });
 
 export const Session = mongoose.model('Session', SessionSchema);
 

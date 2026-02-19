@@ -5,15 +5,26 @@ import { AuditLog } from '../models/AuditLog.js';
 import { BlockchainProofLog } from '../models/BlockchainProofLog.js';
 import { Session } from '../models/Session.js';
 import { AdminConfig } from '../models/AdminConfig.js';
+import { env } from '../config/env.js';
 import { hashPassword, signAdminToken, verifyPassword } from '../services/authService.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { ensureBlockchainIdentityForDocument } from '../services/blockchain/identity.service.js';
 import { deliverProviderOnboardingNotification } from '../services/verificationDelivery.service.js';
+import { invalidateAdminRbacCache } from '../middleware/rbac.js';
+import { createEncryptedDatabaseBackup } from '../services/databaseBackup.service.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
+import { parseDurationMs } from '../utils/time.js';
 
 const GENERIC_LOGIN_ERROR = 'Invalid credentials';
 
 const BARANGAY_STATUSES = ['pending', 'verified', 'active'];
+const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const MIN_SESSION_IDLE_TIMEOUT_MS = 60 * 1000;
+
+function buildSafeRegex(value) {
+  const escaped = String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(escaped, 'i');
+}
 
 function normalizeBarangayStatus(value, fallback = 'pending') {
   const normalized = String(value ?? fallback).trim().toLowerCase();
@@ -25,6 +36,25 @@ function parseCoordinate(value) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return null;
   return parsed;
+}
+
+function resolveSessionIdleTimeoutMs() {
+  const parsed = parseDurationMs(env.SESSION_IDLE_TIMEOUT);
+  if (parsed <= 0) return DEFAULT_SESSION_IDLE_TIMEOUT_MS;
+  return Math.max(parsed, MIN_SESSION_IDLE_TIMEOUT_MS);
+}
+
+function buildActiveSessionQuery(now = new Date()) {
+  const idleCutoff = new Date(now.getTime() - resolveSessionIdleTimeoutMs());
+  return {
+    revokedAt: null,
+    expiresAt: { $gt: now },
+    $or: [
+      { lastActivityAt: { $gte: idleCutoff } },
+      { lastActivityAt: { $exists: false }, startedAt: { $gte: idleCutoff } },
+      { lastActivityAt: null, startedAt: { $gte: idleCutoff } },
+    ],
+  };
 }
 
 function sanitizeAssignedProviders(value) {
@@ -245,13 +275,15 @@ async function getOrCreateAdminConfig(adminId = null) {
 }
 
 export async function getAdminOverview(req, res) {
+  const now = new Date();
+  const activeSessionQuery = buildActiveSessionQuery(now);
   const [patients, providers, activeProviders, pendingProviders, admins, sessions, failedEvents, recentProofs] = await Promise.all([
     Patient.countDocuments({}),
     HealthCenter.countDocuments({}),
     HealthCenter.countDocuments({ status: 'active' }),
     HealthCenter.countDocuments({ status: { $in: ['pending', 'verified'] } }),
     Admin.countDocuments({ status: 'active' }),
-    Session.countDocuments({ revokedAt: null, expiresAt: { $gt: new Date() } }),
+    Session.countDocuments(activeSessionQuery),
     AuditLog.countDocuments({
       outcome: 'failure',
       createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
@@ -283,7 +315,7 @@ export async function listAdminUsers(req, res) {
   const adminFilter = {};
 
   if (q) {
-    const re = new RegExp(q, 'i');
+    const re = buildSafeRegex(q);
     patientFilter.$or = [{ firstName: re }, { lastName: re }, { email: re }, { mrn: re }];
     providerFilter.$or = [{ name: re }, { holderName: re }, { email: re }];
     adminFilter.$or = [{ email: re }];
@@ -709,12 +741,26 @@ export async function updateRbacSettings(req, res) {
   if (!patch || typeof patch !== 'object') {
     return res.status(400).json({ error: { message: 'rbac object is required' } });
   }
-  cfg.rbac = {
-    ...cfg.rbac,
-    ...patch,
+
+  const currentRbac = typeof cfg.rbac?.toObject === 'function' ? cfg.rbac.toObject() : cfg.rbac;
+  const nextRbac = {
+    ...currentRbac,
   };
+
+  if (patch.patient && typeof patch.patient === 'object') {
+    nextRbac.patient = { ...(currentRbac?.patient ?? {}), ...patch.patient };
+  }
+  if (patch.provider && typeof patch.provider === 'object') {
+    nextRbac.provider = { ...(currentRbac?.provider ?? {}), ...patch.provider };
+  }
+  if (patch.admin && typeof patch.admin === 'object') {
+    nextRbac.admin = { ...(currentRbac?.admin ?? {}), ...patch.admin };
+  }
+
+  cfg.rbac = nextRbac;
   cfg.updatedByAdminId = req.context.adminId;
   await cfg.save();
+  invalidateAdminRbacCache();
   await writeAuditLog({ req, action: 'ADMIN.RBAC.UPDATE', entityType: 'AdminConfig', entityId: cfg._id });
   return res.json({ rbac: cfg.rbac, updatedAt: cfg.updatedAt });
 }
@@ -729,7 +775,7 @@ export async function listSystemLogs(req, res) {
   if (action) filter.action = action;
   if (outcome) filter.outcome = outcome;
   if (q) {
-    const re = new RegExp(q, 'i');
+    const re = buildSafeRegex(q);
     filter.$or = [{ action: re }, { reason: re }, { actorName: re }, { userAgent: re }];
   }
 
@@ -739,8 +785,10 @@ export async function listSystemLogs(req, res) {
 }
 
 export async function getSystemMonitoring(req, res) {
+  const now = new Date();
+  const activeSessionQuery = buildActiveSessionQuery(now);
   const [activeSessions, totalSessions24h, failed24h, alerts24h, recentAudit, cfg] = await Promise.all([
-    Session.countDocuments({ revokedAt: null, expiresAt: { $gt: new Date() } }),
+    Session.countDocuments(activeSessionQuery),
     Session.countDocuments({ startedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
     AuditLog.countDocuments({ outcome: 'failure', createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
     AuditLog.countDocuments({ action: { $in: ['ALERT.GENERATED', 'RECORD.VERIFY'] }, createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
@@ -819,6 +867,19 @@ export async function updateDataGovernanceSettings(req, res) {
 
 export async function runDatabaseBackup(req, res) {
   const cfg = await getOrCreateAdminConfig(req.context.adminId);
+  if (cfg?.dataGovernance?.backupEnabled === false) {
+    return res.status(403).json({
+      error: {
+        message: 'Backups are currently disabled by governance policy',
+        code: 'BACKUP_DISABLED',
+      },
+    });
+  }
+
+  const backup = await createEncryptedDatabaseBackup({
+    initiatedBy: String(req.context.adminId ?? 'admin'),
+  });
+
   cfg.dataGovernance = {
     ...cfg.dataGovernance,
     lastBackupAt: new Date(),
@@ -830,8 +891,25 @@ export async function runDatabaseBackup(req, res) {
     action: 'ADMIN.BACKUP.RUN',
     entityType: 'AdminConfig',
     entityId: cfg._id,
+    after: {
+      backupFile: backup.fileName,
+      generatedAt: backup.generatedAt,
+      checksum: backup.checksum,
+      counts: backup.counts,
+    },
   });
-  return res.json({ message: 'Backup metadata updated', lastBackupAt: cfg.dataGovernance.lastBackupAt });
+  return res.json({
+    message: 'Encrypted backup created',
+    lastBackupAt: cfg.dataGovernance.lastBackupAt,
+    backup: {
+      fileName: backup.fileName,
+      filePath: backup.filePath,
+      generatedAt: backup.generatedAt,
+      checksum: backup.checksum,
+      counts: backup.counts,
+      totalCollections: backup.totalCollections,
+    },
+  });
 }
 
 export async function markRestoreOperation(req, res) {

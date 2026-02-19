@@ -1,9 +1,20 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { requireAdminAuth } from '../middleware/auth.js';
-import { validateBody } from '../middleware/validate.js';
+import { requireAdminCapability } from '../middleware/rbac.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validate.js';
 import { authLoginLimiter } from '../middleware/rateLimit.js';
 import { adminRegisterSchema, adminUpsertSchema, loginSchema, providerCreateSchema } from '../validation/authSchemas.js';
+import {
+  adminGovernanceUpdateSchema,
+  adminLogsQuerySchema,
+  adminRbacUpdateSchema,
+  adminUserUpdateParamsSchema,
+  adminUserUpdateSchema,
+  adminUsersQuerySchema,
+  providerStatusParamsSchema,
+  providerStatusUpdateSchema,
+} from '../validation/apiSchemas.js';
 import {
   adminCreateHealthCenter,
   adminUpdateUser,
@@ -33,22 +44,43 @@ adminRoutes.post('/login', authLoginLimiter, validateBody(loginSchema), asyncHan
 // Admin management
 adminRoutes.post('/healthcenters', requireAdminAuth, validateBody(providerCreateSchema), asyncHandler(adminCreateHealthCenter));
 adminRoutes.post('/barangays', requireAdminAuth, validateBody(providerCreateSchema), asyncHandler(adminCreateHealthCenter));
-adminRoutes.get('/overview', requireAdminAuth, asyncHandler(getAdminOverview));
-adminRoutes.get('/users', requireAdminAuth, asyncHandler(listAdminUsers));
-adminRoutes.post('/users', requireAdminAuth, validateBody(adminUpsertSchema), asyncHandler(adminUpsertUser));
-adminRoutes.patch('/users/:userRole/:userId', requireAdminAuth, asyncHandler(adminUpdateUser));
-adminRoutes.post('/providers/:providerId/credential-status', requireAdminAuth, asyncHandler(approveProviderCredentials));
-adminRoutes.post('/barangays/:providerId/status', requireAdminAuth, asyncHandler(approveProviderCredentials));
+adminRoutes.get('/overview', requireAdminAuth, requireAdminCapability('canMonitorSystem'), asyncHandler(getAdminOverview));
+adminRoutes.get('/users', requireAdminAuth, requireAdminCapability('canManageUsers'), validateQuery(adminUsersQuerySchema), asyncHandler(listAdminUsers));
+adminRoutes.post('/users', requireAdminAuth, requireAdminCapability('canManageUsers'), validateBody(adminUpsertSchema), asyncHandler(adminUpsertUser));
+adminRoutes.patch(
+  '/users/:userRole/:userId',
+  requireAdminAuth,
+  requireAdminCapability('canManageUsers'),
+  validateParams(adminUserUpdateParamsSchema),
+  validateBody(adminUserUpdateSchema),
+  asyncHandler(adminUpdateUser)
+);
+adminRoutes.post(
+  '/providers/:providerId/credential-status',
+  requireAdminAuth,
+  requireAdminCapability('canManageUsers'),
+  validateParams(providerStatusParamsSchema),
+  validateBody(providerStatusUpdateSchema),
+  asyncHandler(approveProviderCredentials)
+);
+adminRoutes.post(
+  '/barangays/:providerId/status',
+  requireAdminAuth,
+  requireAdminCapability('canManageUsers'),
+  validateParams(providerStatusParamsSchema),
+  validateBody(providerStatusUpdateSchema),
+  asyncHandler(approveProviderCredentials)
+);
 
-adminRoutes.get('/rbac', requireAdminAuth, asyncHandler(getRbacSettings));
-adminRoutes.patch('/rbac', requireAdminAuth, asyncHandler(updateRbacSettings));
+adminRoutes.get('/rbac', requireAdminAuth, requireAdminCapability('canManagePolicies'), asyncHandler(getRbacSettings));
+adminRoutes.patch('/rbac', requireAdminAuth, requireAdminCapability('canManagePolicies'), validateBody(adminRbacUpdateSchema), asyncHandler(updateRbacSettings));
 
-adminRoutes.get('/logs', requireAdminAuth, asyncHandler(listSystemLogs));
-adminRoutes.get('/monitoring', requireAdminAuth, asyncHandler(getSystemMonitoring));
+adminRoutes.get('/logs', requireAdminAuth, requireAdminCapability('canMonitorSystem'), validateQuery(adminLogsQuerySchema), asyncHandler(listSystemLogs));
+adminRoutes.get('/monitoring', requireAdminAuth, requireAdminCapability('canMonitorSystem'), asyncHandler(getSystemMonitoring));
 
-adminRoutes.get('/blockchain/overview', requireAdminAuth, asyncHandler(getBlockchainOverview));
+adminRoutes.get('/blockchain/overview', requireAdminAuth, requireAdminCapability('canMonitorBlockchain'), asyncHandler(getBlockchainOverview));
 
-adminRoutes.get('/governance', requireAdminAuth, asyncHandler(getDataGovernanceSettings));
-adminRoutes.patch('/governance', requireAdminAuth, asyncHandler(updateDataGovernanceSettings));
-adminRoutes.post('/governance/backup', requireAdminAuth, asyncHandler(runDatabaseBackup));
-adminRoutes.post('/governance/restore', requireAdminAuth, asyncHandler(markRestoreOperation));
+adminRoutes.get('/governance', requireAdminAuth, requireAdminCapability('canManagePolicies'), asyncHandler(getDataGovernanceSettings));
+adminRoutes.patch('/governance', requireAdminAuth, requireAdminCapability('canManagePolicies'), validateBody(adminGovernanceUpdateSchema), asyncHandler(updateDataGovernanceSettings));
+adminRoutes.post('/governance/backup', requireAdminAuth, requireAdminCapability('canManageBackups'), asyncHandler(runDatabaseBackup));
+adminRoutes.post('/governance/restore', requireAdminAuth, requireAdminCapability('canManageBackups'), asyncHandler(markRestoreOperation));

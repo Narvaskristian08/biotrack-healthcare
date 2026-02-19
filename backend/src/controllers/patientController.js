@@ -5,6 +5,11 @@ import { hashPassword } from '../services/authService.js';
 import { ensureBlockchainIdentityForDocument } from '../services/blockchain/identity.service.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
 
+function buildSafeRegex(value) {
+  const escaped = String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(escaped, 'i');
+}
+
 export async function createPatient(req, res) {
   const { healthCenterId, adminId } = req.context;
   const actorType = adminId ? 'admin' : 'healthcenter';
@@ -110,7 +115,7 @@ export async function listPatients(req, res) {
   const q = { healthCenterId, status: 'active' };
 
   if (search) {
-    const r = new RegExp(search, 'i');
+    const r = buildSafeRegex(search);
     q.$or = [
       { lastName: r },
       { firstName: r },

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 import { env } from '../config/env.js';
 import { Patient } from '../models/Patient.js';
@@ -8,7 +9,6 @@ import { PatientLoginHistory } from '../models/PatientLoginHistory.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { hashPassword, hashPin, signPatientToken, verifyPassword, verifyPin } from '../services/authService.js';
 import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
-import { blockchainEnabled } from '../services/blockchain/client.js';
 import { deliverPatientVerificationCode, maskContactNumber, maskEmailAddress } from '../services/verificationDelivery.service.js';
 import { sha256Hex } from '../utils/crypto.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
@@ -52,6 +52,84 @@ function generateVerificationCode() {
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(String(value ?? '').trim());
+}
+
+function createMfaChallengeId() {
+  return crypto.randomBytes(24).toString('hex');
+}
+
+function getMfaAttemptLimit() {
+  return Math.max(1, Number(env.MFA_LOGIN_MAX_ATTEMPTS ?? 5) || 5);
+}
+
+function clearPatientLoginMfa(patient) {
+  patient.set('loginMfa.challengeId', '');
+  patient.set('loginMfa.method', '');
+  patient.set('loginMfa.codeHash', '');
+  patient.set('loginMfa.codeExpiresAt', null);
+  patient.set('loginMfa.lastSentAt', null);
+  patient.set('loginMfa.attempts', 0);
+}
+
+async function recordPatientLoginHistory({ req, patient, token }) {
+  const ip = String(req?.ip ?? req?.headers?.['x-forwarded-for'] ?? '').trim();
+  const userAgent = String(req?.headers?.['user-agent'] ?? '').trim();
+  let expiresAt = null;
+  try {
+    const decoded = jwt.decode(token);
+    if (decoded?.exp) {
+      expiresAt = new Date(Number(decoded.exp) * 1000);
+    }
+  } catch {
+    expiresAt = null;
+  }
+
+  await PatientLoginHistory.create({
+    healthCenterId: patient.healthCenterId,
+    patientId: patient._id,
+    tokenHash: sha256Hex(token),
+    ip,
+    userAgent,
+    loginAt: new Date(),
+    expiresAt,
+  });
+}
+
+function buildPatientLoginPayload({ patient, identity, identityVerification, token }) {
+  return {
+    accessToken: token,
+    patient: {
+      id: patient._id,
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      email: patient.email,
+      role: 'patient',
+      blockchainIdentity: {
+        identityId: identity.identityId,
+        verificationStatus: identity.verificationStatus,
+        verified: identityVerification.verified,
+        onChain: identityVerification.onChain,
+      },
+    },
+  };
+}
+
+async function issuePatientAccessToken({ req, patient, identity, identityVerification }) {
+  const token = signPatientToken({
+    patientId: patient._id,
+    healthCenterId: patient.healthCenterId,
+  });
+
+  await recordPatientLoginHistory({ req, patient, token });
+  await writeAuditLog({
+    req,
+    action: 'PATIENT.LOGIN',
+    entityType: 'Patient',
+    entityId: patient._id,
+    outcome: 'success',
+  });
+
+  return buildPatientLoginPayload({ patient, identity, identityVerification, token });
 }
 
 export async function registerPatientPublic(req, res) {
@@ -336,7 +414,7 @@ export async function verifyPatientRegistrationCode(req, res) {
 }
 
 export async function loginPatient(req, res) {
-  const { email, password } = req.body ?? {};
+  const { email, password, mfaMethod } = req.body ?? {};
 
   if (!email || !password) {
     return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
@@ -374,67 +452,199 @@ export async function loginPatient(req, res) {
     return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
-  const { identity } = await ensureBlockchainIdentityForDocument({
-    doc: match,
-    subjectType: 'patient',
-    uniqueSeed: match.email,
-    healthCenterId: match.healthCenterId,
-  });
-  const identityVerification = await verifyBlockchainIdentity(identity, {
-    subjectType: 'patient',
-    subjectId: match._id,
-    healthCenterId: match.healthCenterId,
-  });
-
-  const token = signPatientToken({
-    patientId: match._id,
-    healthCenterId: match.healthCenterId,
-  });
-
-  const ip = String(req?.ip ?? req?.headers?.['x-forwarded-for'] ?? '').trim();
-  const userAgent = String(req?.headers?.['user-agent'] ?? '').trim();
-  let expiresAt = null;
-  try {
-    const decoded = jwt.decode(token);
-    if (decoded?.exp) {
-      expiresAt = new Date(Number(decoded.exp) * 1000);
-    }
-  } catch {
-    expiresAt = null;
+  if (!env.PATIENT_LOGIN_MFA_REQUIRED) {
+    const { identity } = await ensureBlockchainIdentityForDocument({
+      doc: match,
+      subjectType: 'patient',
+      uniqueSeed: match.email,
+      healthCenterId: match.healthCenterId,
+    });
+    const identityVerification = await verifyBlockchainIdentity(identity, {
+      subjectType: 'patient',
+      subjectId: match._id,
+      healthCenterId: match.healthCenterId,
+    });
+    return res.json(await issuePatientAccessToken({ req, patient: match, identity, identityVerification }));
   }
 
-  await PatientLoginHistory.create({
-    healthCenterId: match.healthCenterId,
-    patientId: match._id,
-    tokenHash: sha256Hex(token),
-    ip,
-    userAgent,
-    loginAt: new Date(),
-    expiresAt,
+  const method = normalizeVerificationMethod(mfaMethod) || 'email';
+  const retryAfterSeconds = resendCooldownRemainingSeconds(match.loginMfa?.lastSentAt);
+  if (retryAfterSeconds > 0) {
+    return res.status(429).json({
+      error: {
+        message: `Please wait ${retryAfterSeconds} seconds before requesting another code`,
+        code: 'OTP_RATE_LIMITED',
+      },
+    });
+  }
+
+  const code = generateVerificationCode();
+  const codeHash = await hashPin(code);
+  const challengeId = createMfaChallengeId();
+  const expiresAt = otpExpiryDate();
+  const now = new Date();
+
+  match.set('loginMfa.challengeId', challengeId);
+  match.set('loginMfa.method', method);
+  match.set('loginMfa.codeHash', codeHash);
+  match.set('loginMfa.codeExpiresAt', expiresAt);
+  match.set('loginMfa.lastSentAt', now);
+  match.set('loginMfa.attempts', 0);
+  await match.save();
+
+  const delivery = await deliverPatientVerificationCode({
+    method,
+    code,
+    email: match.email,
+    contactNumber: match.contactNumber,
   });
 
   await writeAuditLog({
     req,
-    action: 'PATIENT.LOGIN',
+    action: 'PATIENT.LOGIN.MFA.CHALLENGE',
     entityType: 'Patient',
     entityId: match._id,
     outcome: 'success',
+    after: {
+      method,
+      recipient: delivery.recipientMasked,
+      expiresAt,
+    },
   });
 
   return res.json({
-    accessToken: token,
-    patient: {
-      id: match._id,
-      firstName: match.firstName,
-      lastName: match.lastName,
-      email: match.email,
-      role: 'patient',
-      blockchainIdentity: {
-        identityId: identity.identityId,
-        verificationStatus: identity.verificationStatus,
-        verified: identityVerification.verified,
-        onChain: identityVerification.onChain,
+    mfaRequired: true,
+    challengeId,
+    patientId: match._id,
+    method,
+    recipientMasked: delivery.recipientMasked,
+    expiresAt,
+    devPreviewCode: delivery.devPreviewCode,
+  });
+}
+
+export async function verifyPatientLoginMfa(req, res) {
+  const patientId = String(req.body?.patientId ?? '').trim();
+  const challengeId = String(req.body?.challengeId ?? '').trim();
+  const code = String(req.body?.code ?? '').trim();
+
+  if (!isValidObjectId(patientId) || !challengeId || !OTP_REGEX.test(code)) {
+    return res.status(400).json({ error: { message: 'Invalid MFA payload' } });
+  }
+
+  const patient = await Patient.findById(patientId);
+  if (!patient) {
+    return res.status(401).json({ error: { message: 'Invalid or expired MFA challenge' } });
+  }
+  if (patient.status !== 'active') {
+    clearPatientLoginMfa(patient);
+    await patient.save();
+    return res.status(401).json({ error: { message: 'Invalid or expired MFA challenge' } });
+  }
+  if (getVerificationStatus(patient) !== 'verified') {
+    clearPatientLoginMfa(patient);
+    await patient.save();
+    return res.status(401).json({ error: { message: 'Invalid or expired MFA challenge' } });
+  }
+
+  const currentChallengeId = String(patient.loginMfa?.challengeId ?? '').trim();
+  const codeHash = String(patient.loginMfa?.codeHash ?? '').trim();
+  const codeExpiresAt = patient.loginMfa?.codeExpiresAt ? new Date(patient.loginMfa.codeExpiresAt) : null;
+  if (!currentChallengeId || currentChallengeId !== challengeId || !codeHash || !codeExpiresAt) {
+    return res.status(401).json({ error: { message: 'Invalid or expired MFA challenge' } });
+  }
+
+  if (codeExpiresAt.getTime() < Date.now()) {
+    clearPatientLoginMfa(patient);
+    await patient.save();
+    return res.status(401).json({ error: { message: 'MFA code expired. Please sign in again.' } });
+  }
+
+  const attempts = Number(patient.loginMfa?.attempts ?? 0);
+  const maxAttempts = getMfaAttemptLimit();
+  if (attempts >= maxAttempts) {
+    clearPatientLoginMfa(patient);
+    await patient.save();
+    return res.status(429).json({
+      error: {
+        message: 'Too many invalid MFA attempts. Please sign in again.',
+        code: 'MFA_ATTEMPTS_EXCEEDED',
       },
-    },
+    });
+  }
+
+  const validCode = await verifyPin(code, codeHash);
+  if (!validCode) {
+    const nextAttempts = attempts + 1;
+    patient.set('loginMfa.attempts', nextAttempts);
+    if (nextAttempts >= maxAttempts) {
+      clearPatientLoginMfa(patient);
+      await patient.save();
+      await writeAuditLog({
+        req,
+        action: 'PATIENT.LOGIN.MFA.VERIFY',
+        entityType: 'Patient',
+        entityId: patient._id,
+        outcome: 'failure',
+        reason: 'MFA attempts exceeded',
+      });
+      return res.status(429).json({
+        error: {
+          message: 'Too many invalid MFA attempts. Please sign in again.',
+          code: 'MFA_ATTEMPTS_EXCEEDED',
+        },
+      });
+    }
+
+    await patient.save();
+    await writeAuditLog({
+      req,
+      action: 'PATIENT.LOGIN.MFA.VERIFY',
+      entityType: 'Patient',
+      entityId: patient._id,
+      outcome: 'failure',
+      reason: 'Invalid MFA code',
+      after: { attempts: nextAttempts },
+    });
+    return res.status(401).json({
+      error: {
+        message: 'Invalid MFA code',
+        code: 'MFA_INVALID',
+      },
+    });
+  }
+
+  clearPatientLoginMfa(patient);
+  await patient.save();
+
+  const owningHealthCenter = await HealthCenter.findById(patient.healthCenterId).select('status').lean();
+  if (!owningHealthCenter || String(owningHealthCenter.status) !== 'active') {
+    return res.status(401).json({ error: { message: 'Invalid or expired MFA challenge' } });
+  }
+
+  const { identity } = await ensureBlockchainIdentityForDocument({
+    doc: patient,
+    subjectType: 'patient',
+    uniqueSeed: patient.email,
+    healthCenterId: patient.healthCenterId,
+  });
+  const identityVerification = await verifyBlockchainIdentity(identity, {
+    subjectType: 'patient',
+    subjectId: patient._id,
+    healthCenterId: patient.healthCenterId,
+  });
+
+  await writeAuditLog({
+    req,
+    action: 'PATIENT.LOGIN.MFA.VERIFY',
+    entityType: 'Patient',
+    entityId: patient._id,
+    outcome: 'success',
+  });
+
+  const payload = await issuePatientAccessToken({ req, patient, identity, identityVerification });
+  return res.json({
+    ...payload,
+    mfaVerified: true,
   });
 }

@@ -17,9 +17,10 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { loginWithDetectedRole } from '@/lib/auth'
+import { loginWithDetectedRole, type PatientLoginMfaChallenge, verifyPatientLoginMfa } from '@/lib/auth'
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()\-_=+[\]{}|;:,.<>])[A-Za-z\d@$!%*?&#^()\-_=+[\]{}|;:,.<>]{8,}$/
+const OTP_REGEX = /^\d{6}$/
 
 function LoginHeroPanel() {
   return (
@@ -79,6 +80,8 @@ export default function LoginPage() {
     email: '',
     password: '',
   })
+  const [mfaChallenge, setMfaChallenge] = useState<PatientLoginMfaChallenge | null>(null)
+  const [mfaCode, setMfaCode] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -94,6 +97,30 @@ export default function LoginPage() {
     e.preventDefault()
     setError('')
     setSuccess('')
+
+    if (mfaChallenge) {
+      if (!OTP_REGEX.test(mfaCode.trim())) {
+        setError('Enter the 6-digit verification code')
+        return
+      }
+
+      setIsLoading(true)
+      const verifyResult = await verifyPatientLoginMfa({
+        patientId: mfaChallenge.patientId,
+        challengeId: mfaChallenge.challengeId,
+        code: mfaCode.trim(),
+      })
+      setIsLoading(false)
+
+      if (verifyResult.error) {
+        setError(verifyResult.error)
+        return
+      }
+
+      setSuccess('Login successful. Redirecting...')
+      router.replace('/')
+      return
+    }
 
     if (!formData.email.trim()) {
       setError('Please enter your email address')
@@ -121,6 +148,16 @@ export default function LoginPage() {
 
     if (result.error) {
       setError(result.error)
+      return
+    }
+
+    if (result.mfaRequired && result.mfaChallenge) {
+      setMfaChallenge(result.mfaChallenge)
+      setMfaCode('')
+      const devCodeHint = result.mfaChallenge.devPreviewCode
+        ? ` Dev code: ${result.mfaChallenge.devPreviewCode}`
+        : ''
+      setSuccess(`Verification code sent via ${result.mfaChallenge.method} to ${result.mfaChallenge.recipientMasked || 'your account'}.${devCodeHint}`)
       return
     }
 
@@ -167,73 +204,110 @@ export default function LoginPage() {
                 </div>
               ) : null}
 
-              <form onSubmit={handleSubmit} className="mt-6 space-y-5 auth-enter-left" style={{ animationDelay: '110ms' }}>
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-sm font-semibold text-[#163428]">Email address</Label>
-                  <div className="auth-input-shell relative rounded-xl">
+                <form onSubmit={handleSubmit} className="mt-6 space-y-5 auth-enter-left" style={{ animationDelay: '110ms' }}>
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-sm font-semibold text-[#163428]">Email address</Label>
+                    <div className="auth-input-shell relative rounded-xl">
                     <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8f83]" />
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      placeholder="your@gmail.com or your@yahoo.com"
-                      className="h-12 border-0 bg-transparent pl-11 text-[#163428] placeholder:text-[#93a79d] shadow-none focus-visible:ring-0"
-                      required
-                    />
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        placeholder="your@gmail.com or your@yahoo.com"
+                        className="h-12 border-0 bg-transparent pl-11 text-[#163428] placeholder:text-[#93a79d] shadow-none focus-visible:ring-0"
+                        disabled={Boolean(mfaChallenge)}
+                        required
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="password" className="text-sm font-semibold text-[#163428]">Password</Label>
-                  <div className="auth-input-shell relative rounded-xl">
-                    <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8f83]" />
-                    <Input
-                      id="password"
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      value={formData.password}
-                      onChange={handleChange}
-                      placeholder="********"
-                      className="h-12 border-0 bg-transparent pl-11 pr-12 text-[#163428] placeholder:text-[#93a79d] shadow-none focus-visible:ring-0"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-[#628175] transition-colors hover:text-[#173328]"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
+                  {!mfaChallenge ? (
+                    <div className="space-y-5">
+                      <div className="space-y-2">
+                        <Label htmlFor="password" className="text-sm font-semibold text-[#163428]">Password</Label>
+                        <div className="auth-input-shell relative rounded-xl">
+                          <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8f83]" />
+                          <Input
+                            id="password"
+                            name="password"
+                            type={showPassword ? 'text' : 'password'}
+                            value={formData.password}
+                            onChange={handleChange}
+                            placeholder="********"
+                            className="h-12 border-0 bg-transparent pl-11 pr-12 text-[#163428] placeholder:text-[#93a79d] shadow-none focus-visible:ring-0"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((prev) => !prev)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-[#628175] transition-colors hover:text-[#173328]"
+                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
 
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <label className="inline-flex items-center gap-2.5 text-[#1f3c30]">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="h-4 w-4 rounded border-[#aacfc0] text-[#12935f] focus:ring-[#12935f]/30"
-                    />
-                    Remember for 30 days
-                  </label>
-                  <Link href="/forgot-password" className="font-medium text-[#0f8f60] underline-offset-4 hover:underline">
-                    Forgot password
-                  </Link>
-                </div>
+                      <div className="flex items-center justify-between gap-4 text-sm">
+                        <label className="inline-flex items-center gap-2.5 text-[#1f3c30]">
+                          <input
+                            type="checkbox"
+                            checked={rememberMe}
+                            onChange={(e) => setRememberMe(e.target.checked)}
+                            className="h-4 w-4 rounded border-[#aacfc0] text-[#12935f] focus:ring-[#12935f]/30"
+                          />
+                          Remember for 30 days
+                        </label>
+                        <Link href="/forgot-password" className="font-medium text-[#0f8f60] underline-offset-4 hover:underline">
+                          Forgot password
+                        </Link>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-[#bde7d2] bg-[#eef9f3] px-4 py-3 text-sm text-[#1f5c43]">
+                        Enter the 6-digit code sent to {mfaChallenge.recipientMasked || 'your account'}.
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="mfaCode" className="text-sm font-semibold text-[#163428]">Verification code</Label>
+                        <Input
+                          id="mfaCode"
+                          name="mfaCode"
+                          type="text"
+                          inputMode="numeric"
+                          value={mfaCode}
+                          onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          placeholder="123456"
+                          className="h-12 rounded-xl border-[#cfe5d9] bg-white text-center text-lg tracking-[0.35em] text-[#163428]"
+                          required
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMfaChallenge(null)
+                          setMfaCode('')
+                          setSuccess('')
+                          setError('')
+                        }}
+                        className="text-sm font-medium text-[#0f8f60] underline-offset-4 hover:underline"
+                      >
+                        Use a different account
+                      </button>
+                    </div>
+                  )}
 
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="h-[3.15rem] w-full rounded-xl bg-[#0f8f60] text-base font-medium text-white shadow-md shadow-[#0f8f60]/30 transition-all hover:-translate-y-0.5 hover:bg-[#0c7a52]"
-                >
-                  {isLoading ? 'Signing in...' : 'Sign in'}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </form>
+                 <Button
+                   type="submit"
+                   disabled={isLoading}
+                   className="h-[3.15rem] w-full rounded-xl bg-[#0f8f60] text-base font-medium text-white shadow-md shadow-[#0f8f60]/30 transition-all hover:-translate-y-0.5 hover:bg-[#0c7a52]"
+                 >
+                   {isLoading ? (mfaChallenge ? 'Verifying...' : 'Signing in...') : (mfaChallenge ? 'Verify code' : 'Sign in')}
+                   <ArrowRight className="ml-2 h-4 w-4" />
+                 </Button>
+               </form>
 
               <div className="my-7 flex items-center gap-4">
                 <div className="h-px flex-1 bg-[#cfe5d9]" />

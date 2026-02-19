@@ -21,9 +21,12 @@ export async function startSession(req, res) {
   }
 
   const expiresAt = sessionExpiryDateFromNow();
+  const now = new Date();
   const session = await Session.create({
     healthCenterId,
     sessionTokenHash: 'pending',
+    startedAt: now,
+    lastActivityAt: now,
     expiresAt,
     ip: req.ip ?? '',
     userAgent: req.headers['user-agent'] ?? '',

@@ -87,6 +87,22 @@ export interface VerificationCodeSendResult {
     devPreviewCode?: string;
 }
 
+export interface PatientLoginMfaChallenge {
+    patientId: string;
+    challengeId: string;
+    method: VerificationMethod;
+    recipientMasked?: string;
+    expiresAt?: string;
+    devPreviewCode?: string;
+}
+
+export interface LoginOutcome {
+    session?: UserSession;
+    error?: string;
+    mfaRequired?: boolean;
+    mfaChallenge?: PatientLoginMfaChallenge;
+}
+
 const CREDENTIAL_ERROR_MESSAGES = new Set([
     'Invalid credentials',
     'email and password are required',
@@ -222,17 +238,84 @@ export async function verifyPatientRegistrationCode(
     return { success: true, message: result.data?.message };
 }
 
-export async function loginPatient(data: LoginData): Promise<{ session?: UserSession; error?: string }> {
+export async function loginPatient(data: LoginData): Promise<LoginOutcome> {
     const result = await apiPost<{
-        accessToken: string;
-        patient: { id: string; firstName: string; lastName: string; email: string; role: string };
+        accessToken?: string;
+        patient?: { id: string; firstName: string; lastName: string; email: string; role: string };
+        mfaRequired?: boolean;
+        patientId?: string;
+        challengeId?: string;
+        method?: VerificationMethod;
+        recipientMasked?: string;
+        expiresAt?: string;
+        devPreviewCode?: string;
     }>('/patients/login', data);
 
     if (result.error) {
         return { error: result.error.message };
     }
 
+    if (result.data?.mfaRequired) {
+        const challengeId = String(result.data.challengeId ?? '').trim();
+        const patientId = String(result.data.patientId ?? '').trim();
+        if (!challengeId || !patientId) {
+            return { error: 'MFA challenge could not be created. Please try again.' };
+        }
+        return {
+            mfaRequired: true,
+            mfaChallenge: {
+                patientId,
+                challengeId,
+                method: (result.data.method === 'sms' ? 'sms' : 'email'),
+                recipientMasked: result.data.recipientMasked,
+                expiresAt: result.data.expiresAt,
+                devPreviewCode: result.data.devPreviewCode,
+            },
+        };
+    }
+
     const { accessToken, patient } = result.data!;
+    if (!accessToken || !patient?.id) {
+        return { error: 'Login response is missing access token or patient profile.' };
+    }
+    const session: UserSession = {
+        accessToken,
+        role: 'patient',
+        email: patient.email,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        name: `${patient.firstName} ${patient.lastName}`,
+        id: patient.id,
+        loginTime: new Date().toISOString(),
+    };
+
+    saveSession(session);
+    return { session };
+}
+
+export async function verifyPatientLoginMfa({
+    patientId,
+    challengeId,
+    code,
+}: {
+    patientId: string;
+    challengeId: string;
+    code: string;
+}): Promise<{ session?: UserSession; error?: string }> {
+    const result = await apiPost<{
+        accessToken: string;
+        patient: { id: string; firstName: string; lastName: string; email: string; role: string };
+    }>('/patients/login/verify-mfa', { patientId, challengeId, code });
+
+    if (result.error) {
+        return { error: result.error.message };
+    }
+
+    const { accessToken, patient } = result.data!;
+    if (!accessToken || !patient?.id) {
+        return { error: 'MFA verify response is missing access token or patient profile.' };
+    }
+
     const session: UserSession = {
         accessToken,
         role: 'patient',
@@ -274,12 +357,15 @@ export async function loginPatientWithGoogleIdToken(idToken: string): Promise<{ 
     return { session };
 }
 
-export async function loginWithDetectedRole(data: LoginData): Promise<{ session?: UserSession; error?: string }> {
+export async function loginWithDetectedRole(data: LoginData): Promise<LoginOutcome> {
     const attempts = [loginPatient, loginHealthCenter, loginAdmin];
     const nonCredentialErrors: string[] = [];
 
     for (const loginAttempt of attempts) {
         const result = await loginAttempt(data);
+        if (result.mfaRequired) {
+            return result;
+        }
         if (result.session) {
             return { session: result.session };
         }
@@ -304,7 +390,7 @@ export async function registerHealthCenter(data: HealthCenterRegisterData): Prom
     };
 }
 
-export async function loginHealthCenter(data: LoginData): Promise<{ session?: UserSession; error?: string }> {
+export async function loginHealthCenter(data: LoginData): Promise<LoginOutcome> {
     const result = await apiPost<{
         accessToken: string;
         healthCenter: { id: string; email: string; name: string; holderName: string };
@@ -360,7 +446,7 @@ export async function registerAdmin(data: AdminRegisterData): Promise<{ success:
     return { success: true, session };
 }
 
-export async function loginAdmin(data: LoginData): Promise<{ session?: UserSession; error?: string }> {
+export async function loginAdmin(data: LoginData): Promise<LoginOutcome> {
     const result = await apiPost<{
         accessToken: string;
         admin: { id: string; email: string };

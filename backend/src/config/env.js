@@ -14,11 +14,42 @@ function toNumber(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function looksLikePlaceholderSecret(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) return true;
+  return [
+    'change_me',
+    'placeholder',
+    'example',
+    'your-project-id',
+    'xxxxxxxx',
+  ].some((pattern) => normalized.includes(pattern));
+}
+
+function isStrongSecret(value, minLength = 32) {
+  const normalized = String(value ?? '').trim();
+  return normalized.length >= minLength && !looksLikePlaceholderSecret(normalized);
+}
+
 export const env = {
   NODE_ENV: process.env.NODE_ENV ?? 'development',
   PORT: Number(process.env.PORT ?? 3000),
   MONGODB_URI: process.env.MONGODB_URI ?? '',
+  MONGODB_APP_NAME: process.env.MONGODB_APP_NAME ?? 'biotrack-backend',
+  MONGODB_REQUIRE_TLS: toBool(process.env.MONGODB_REQUIRE_TLS, process.env.NODE_ENV === 'production'),
+  MONGODB_TLS_ENABLED: toBool(process.env.MONGODB_TLS_ENABLED, process.env.NODE_ENV === 'production'),
+  MONGODB_TLS_CA_FILE: process.env.MONGODB_TLS_CA_FILE ?? '',
+  MONGODB_TLS_CERT_KEY_FILE: process.env.MONGODB_TLS_CERT_KEY_FILE ?? '',
+  MONGODB_TLS_ALLOW_INVALID_CERTS: toBool(process.env.MONGODB_TLS_ALLOW_INVALID_CERTS, false),
+  MONGODB_MAX_POOL_SIZE: toNumber(process.env.MONGODB_MAX_POOL_SIZE, 20),
+  MONGODB_MIN_POOL_SIZE: toNumber(process.env.MONGODB_MIN_POOL_SIZE, 0),
+  MONGODB_SERVER_SELECTION_TIMEOUT_MS: toNumber(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS, 10000),
+  MONGODB_SOCKET_TIMEOUT_MS: toNumber(process.env.MONGODB_SOCKET_TIMEOUT_MS, 45000),
+  MONGODB_MAX_IDLE_TIME_MS: toNumber(process.env.MONGODB_MAX_IDLE_TIME_MS, 30000),
+  MONGODB_HEARTBEAT_FREQUENCY_MS: toNumber(process.env.MONGODB_HEARTBEAT_FREQUENCY_MS, 10000),
+  MONGODB_AUTO_INDEX: toBool(process.env.MONGODB_AUTO_INDEX, process.env.NODE_ENV !== 'production'),
   TRUST_PROXY: toBool(process.env.TRUST_PROXY, false),
+  ENFORCE_STRONG_SECRETS: toBool(process.env.ENFORCE_STRONG_SECRETS, process.env.NODE_ENV === 'production'),
 
   ADMIN_JWT_SECRET: process.env.ADMIN_JWT_SECRET ?? '',
   HEALTHCENTER_JWT_SECRET: process.env.HEALTHCENTER_JWT_SECRET ?? '',
@@ -28,12 +59,18 @@ export const env = {
 
   ACCESS_TOKEN_TTL: process.env.ACCESS_TOKEN_TTL ?? '12h',
   SESSION_TOKEN_TTL: process.env.SESSION_TOKEN_TTL ?? '12h',
+  SESSION_IDLE_TIMEOUT: process.env.SESSION_IDLE_TIMEOUT ?? '30m',
+  SESSION_ACTIVITY_TOUCH_INTERVAL: process.env.SESSION_ACTIVITY_TOUCH_INTERVAL ?? '60s',
   OTP_TTL_MINUTES: Number(process.env.OTP_TTL_MINUTES ?? 10),
   OTP_RESEND_COOLDOWN_SECONDS: Number(process.env.OTP_RESEND_COOLDOWN_SECONDS ?? 30),
+  PATIENT_LOGIN_MFA_REQUIRED: toBool(process.env.PATIENT_LOGIN_MFA_REQUIRED, true),
+  MFA_LOGIN_MAX_ATTEMPTS: toNumber(process.env.MFA_LOGIN_MAX_ATTEMPTS, 5),
   PASSWORD_MIN_LENGTH: toNumber(process.env.PASSWORD_MIN_LENGTH, 12),
 
   LOGIN_RATE_LIMIT_WINDOW_MS: toNumber(process.env.LOGIN_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
   LOGIN_RATE_LIMIT_MAX: toNumber(process.env.LOGIN_RATE_LIMIT_MAX, 10),
+  MFA_VERIFY_RATE_LIMIT_WINDOW_MS: toNumber(process.env.MFA_VERIFY_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
+  MFA_VERIFY_RATE_LIMIT_MAX: toNumber(process.env.MFA_VERIFY_RATE_LIMIT_MAX, 10),
 
   CSRF_ENABLED: toBool(process.env.CSRF_ENABLED, true),
   CSRF_COOKIE_NAME: process.env.CSRF_COOKIE_NAME ?? 'biotrack_csrf',
@@ -66,10 +103,18 @@ export const env = {
   SMS_DEFAULT_COUNTRY_CODE: process.env.SMS_DEFAULT_COUNTRY_CODE ?? '+63',
 
   GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID ?? '',
+
+  DATA_ENCRYPTION_ENABLED: toBool(process.env.DATA_ENCRYPTION_ENABLED, process.env.NODE_ENV !== 'test'),
+  DATA_ENCRYPTION_KEY: process.env.DATA_ENCRYPTION_KEY ?? '',
+  BACKUP_OUTPUT_DIR: process.env.BACKUP_OUTPUT_DIR ?? '../backups',
+  BACKUP_ENCRYPTION_KEY: process.env.BACKUP_ENCRYPTION_KEY ?? '',
+  BACKUP_ENCRYPTION_REQUIRED: toBool(process.env.BACKUP_ENCRYPTION_REQUIRED, true),
+  BACKUP_MAX_DOCUMENTS_PER_COLLECTION: toNumber(process.env.BACKUP_MAX_DOCUMENTS_PER_COLLECTION, 5000),
 };
 
 export function assertRequiredEnv() {
   const missing = [];
+  const weakSecrets = [];
 
   if (!env.MONGODB_URI) missing.push('MONGODB_URI');
   if (!env.ADMIN_JWT_SECRET) missing.push('ADMIN_JWT_SECRET');
@@ -84,8 +129,27 @@ export function assertRequiredEnv() {
     if (!env.BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS) missing.push('BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS');
   }
 
+  if (env.NODE_ENV === 'production' && env.DATA_ENCRYPTION_ENABLED && !env.DATA_ENCRYPTION_KEY) {
+    missing.push('DATA_ENCRYPTION_KEY');
+  }
+
+  if (env.NODE_ENV === 'production' && env.BACKUP_ENCRYPTION_REQUIRED && !env.BACKUP_ENCRYPTION_KEY) {
+    missing.push('BACKUP_ENCRYPTION_KEY');
+  }
+
+  if (env.ENFORCE_STRONG_SECRETS) {
+    if (!isStrongSecret(env.ADMIN_JWT_SECRET)) weakSecrets.push('ADMIN_JWT_SECRET');
+    if (!isStrongSecret(env.HEALTHCENTER_JWT_SECRET)) weakSecrets.push('HEALTHCENTER_JWT_SECRET');
+    if (!isStrongSecret(env.SESSION_JWT_SECRET)) weakSecrets.push('SESSION_JWT_SECRET');
+  }
+
   if (missing.length) {
     console.error(`Missing required env vars: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+
+  if (weakSecrets.length) {
+    console.error(`Weak secret values detected: ${weakSecrets.join(', ')}`);
     process.exit(1);
   }
 }

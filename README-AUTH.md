@@ -31,6 +31,7 @@ BioTrack uses three auth flows:
 - Admin must create providers.
 - Provider status lifecycle: `pending`, `verified`, `active`.
 - Provider login is only allowed when status is `active`.
+- Provider session can expire due to inactivity before absolute token expiry.
 - Patient registration to a provider is only allowed when provider status is `active`.
 - Patient login requires account verification status `verified`.
 
@@ -158,6 +159,9 @@ curl http://127.0.0.1:3000/api/patients \
 Expected:
 - `200` when session valid and provider active
 
+Idle timeout note:
+- If the session is inactive beyond `SESSION_IDLE_TIMEOUT`, protected calls return `401` with `Session expired due to inactivity`.
+
 ### 5.3 Patient Flow
 
 ### A. Public registration
@@ -208,7 +212,18 @@ curl -X POST http://127.0.0.1:3000/api/patients/login \
 
 Expected:
 - login succeeds only if patient is `active`, verified, and health center is `active`
-- response includes patient `accessToken`
+- response returns MFA challenge payload (`mfaRequired`, `patientId`, `challengeId`)
+
+### E. Verify patient MFA code
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/patients/login/verify-mfa \
+  -H "Content-Type: application/json" \
+  -d "{\"patientId\":\"PATIENT_ID\",\"challengeId\":\"CHALLENGE_ID\",\"code\":\"123456\"}"
+```
+
+Expected:
+- valid challenge + code returns patient `accessToken`
 
 ## 6. Public Endpoint Checks
 
@@ -233,6 +248,8 @@ Expected:
   - expected `403`
 - wrong role token on protected endpoint:
   - expected `403` or `401`
+- idle provider session on protected endpoint:
+  - expected `401` with `Session expired due to inactivity`
 
 ## 8. Email Notification Behavior
 

@@ -5,18 +5,30 @@ import { createPatient, getPatient, listPatientLoginHistory, listPatients, updat
 import { addPatientRecord, listPatientRecords, verifyPatientRecordIntegrity } from '../controllers/patientRecordController.js';
 import {
   loginPatient,
+  verifyPatientLoginMfa,
   registerPatientPublic,
   sendPatientVerificationCode,
   verifyPatientRegistrationCode,
 } from '../controllers/patientAuthController.js';
-import { authLoginLimiter } from '../middleware/rateLimit.js';
-import { validateBody } from '../middleware/validate.js';
+import { authLoginLimiter, authMfaVerifyLimiter } from '../middleware/rateLimit.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validate.js';
 import {
   loginSchema,
+  patientLoginMfaVerifySchema,
   patientPublicRegisterSchema,
   verificationSendCodeSchema,
   verificationVerifyCodeSchema,
 } from '../validation/authSchemas.js';
+import {
+  patientCreateSchema,
+  patientIdParamsSchema,
+  patientListQuerySchema,
+  patientLoginHistoryQuerySchema,
+  patientRecordCreateSchema,
+  patientRecordParamsSchema,
+  patientRecordVerifyParamsSchema,
+  patientUpdateSchema,
+} from '../validation/apiSchemas.js';
 
 export const patientRoutes = Router();
 
@@ -24,13 +36,58 @@ patientRoutes.post('/register', validateBody(patientPublicRegisterSchema), async
 patientRoutes.post('/verification/send-code', validateBody(verificationSendCodeSchema), asyncHandler(sendPatientVerificationCode));
 patientRoutes.post('/verification/verify-code', validateBody(verificationVerifyCodeSchema), asyncHandler(verifyPatientRegistrationCode));
 patientRoutes.post('/login', authLoginLimiter, validateBody(loginSchema), asyncHandler(loginPatient));
+patientRoutes.post('/login/verify-mfa', authMfaVerifyLimiter, validateBody(patientLoginMfaVerifySchema), asyncHandler(verifyPatientLoginMfa));
 
-patientRoutes.get('/', requireSessionAuth, requireRoles('healthcenter'), asyncHandler(listPatients));
-patientRoutes.post('/', requireSessionAuth, requireRoles('healthcenter'), asyncHandler(createPatient));
-patientRoutes.get('/:id', requireSessionAuth, requireRoles('healthcenter', 'patient'), requirePatientSelf('id'), asyncHandler(getPatient));
-patientRoutes.patch('/:id', requireSessionAuth, requireRoles('healthcenter', 'patient'), requirePatientSelf('id'), asyncHandler(updatePatient));
-patientRoutes.get('/:id/login-history', requireSessionAuth, requireRoles('healthcenter', 'patient'), requirePatientSelf('id'), asyncHandler(listPatientLoginHistory));
+patientRoutes.get('/', requireSessionAuth, requireRoles('healthcenter'), validateQuery(patientListQuerySchema), asyncHandler(listPatients));
+patientRoutes.post('/', requireSessionAuth, requireRoles('healthcenter'), validateBody(patientCreateSchema), asyncHandler(createPatient));
+patientRoutes.get(
+  '/:id',
+  requireSessionAuth,
+  requireRoles('healthcenter', 'patient'),
+  validateParams(patientIdParamsSchema),
+  requirePatientSelf('id'),
+  asyncHandler(getPatient)
+);
+patientRoutes.patch(
+  '/:id',
+  requireSessionAuth,
+  requireRoles('healthcenter', 'patient'),
+  validateParams(patientIdParamsSchema),
+  validateBody(patientUpdateSchema),
+  requirePatientSelf('id'),
+  asyncHandler(updatePatient)
+);
+patientRoutes.get(
+  '/:id/login-history',
+  requireSessionAuth,
+  requireRoles('healthcenter', 'patient'),
+  validateParams(patientIdParamsSchema),
+  validateQuery(patientLoginHistoryQuerySchema),
+  requirePatientSelf('id'),
+  asyncHandler(listPatientLoginHistory)
+);
 
-patientRoutes.get('/:patientId/records', requireSessionAuth, requireRoles('healthcenter', 'patient'), requirePatientSelf('patientId'), asyncHandler(listPatientRecords));
-patientRoutes.post('/:patientId/records', requireSessionAuth, requireRoles('healthcenter'), asyncHandler(addPatientRecord));
-patientRoutes.get('/:patientId/records/:recordId/verify', requireSessionAuth, requireRoles('healthcenter', 'patient'), requirePatientSelf('patientId'), asyncHandler(verifyPatientRecordIntegrity));
+patientRoutes.get(
+  '/:patientId/records',
+  requireSessionAuth,
+  requireRoles('healthcenter', 'patient'),
+  validateParams(patientRecordParamsSchema),
+  requirePatientSelf('patientId'),
+  asyncHandler(listPatientRecords)
+);
+patientRoutes.post(
+  '/:patientId/records',
+  requireSessionAuth,
+  requireRoles('healthcenter'),
+  validateParams(patientRecordParamsSchema),
+  validateBody(patientRecordCreateSchema),
+  asyncHandler(addPatientRecord)
+);
+patientRoutes.get(
+  '/:patientId/records/:recordId/verify',
+  requireSessionAuth,
+  requireRoles('healthcenter', 'patient'),
+  validateParams(patientRecordVerifyParamsSchema),
+  requirePatientSelf('patientId'),
+  asyncHandler(verifyPatientRecordIntegrity)
+);

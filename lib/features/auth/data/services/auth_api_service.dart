@@ -16,6 +16,22 @@ class AuthApiException implements Exception {
   String toString() => message;
 }
 
+class AuthMfaRequiredException extends AuthApiException {
+  const AuthMfaRequiredException({
+    required this.patientId,
+    required this.challengeId,
+    required this.method,
+    this.recipientMasked = '',
+    this.devPreviewCode = '',
+  }) : super('MFA verification required');
+
+  final String patientId;
+  final String challengeId;
+  final String method;
+  final String recipientMasked;
+  final String devPreviewCode;
+}
+
 class AuthApiService {
   AuthApiService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -138,6 +154,25 @@ class AuthApiService {
       throw AuthApiException(_extractErrorMessage(body, response));
     }
 
+    if (body['mfaRequired'] == true) {
+      final patientId = (body['patientId'] ?? '').toString().trim();
+      final challengeId = (body['challengeId'] ?? '').toString().trim();
+      if (patientId.isEmpty || challengeId.isEmpty) {
+        throw const AuthApiException(
+          'MFA challenge is invalid. Please try signing in again.',
+        );
+      }
+      throw AuthMfaRequiredException(
+        patientId: patientId,
+        challengeId: challengeId,
+        method: (body['method'] ?? 'email').toString().toLowerCase() == 'sms'
+            ? 'sms'
+            : 'email',
+        recipientMasked: (body['recipientMasked'] ?? '').toString(),
+        devPreviewCode: (body['devPreviewCode'] ?? '').toString(),
+      );
+    }
+
     final patient = (body['patient'] as Map<String, dynamic>? ?? const {});
     final token = (body['accessToken'] ?? '').toString();
     final patientId = (patient['id'] ?? '').toString();
@@ -151,6 +186,51 @@ class AuthApiService {
     return AuthLoginResult(
       accessToken: token,
       patientId: patientId,
+      firstName: (patient['firstName'] ?? '').toString(),
+      lastName: (patient['lastName'] ?? '').toString(),
+      email: (patient['email'] ?? '').toString(),
+    );
+  }
+
+  Future<AuthLoginResult> verifyPatientLoginMfa({
+    required String patientId,
+    required String challengeId,
+    required String code,
+  }) async {
+    late final http.Response response;
+    try {
+      response = await _client.post(
+        _buildUri('/api/patients/login/verify-mfa'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'patientId': patientId.trim(),
+          'challengeId': challengeId.trim(),
+          'code': code.trim(),
+        }),
+      );
+    } on SocketException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    }
+
+    final body = _safeDecodeJson(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(_extractErrorMessage(body, response));
+    }
+
+    final patient = (body['patient'] as Map<String, dynamic>? ?? const {});
+    final token = (body['accessToken'] ?? '').toString();
+    final resolvedPatientId = (patient['id'] ?? '').toString();
+    if (token.isEmpty || resolvedPatientId.isEmpty) {
+      throw const AuthApiException(
+        'MFA verification response is missing access token or patient profile.',
+      );
+    }
+
+    return AuthLoginResult(
+      accessToken: token,
+      patientId: resolvedPatientId,
       firstName: (patient['firstName'] ?? '').toString(),
       lastName: (patient['lastName'] ?? '').toString(),
       email: (patient['email'] ?? '').toString(),

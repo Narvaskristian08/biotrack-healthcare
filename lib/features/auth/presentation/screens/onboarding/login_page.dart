@@ -20,23 +20,42 @@ class _LoginPageState extends State<LoginPage> {
   final _api = AuthApiService();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _mfaCodeController = TextEditingController();
 
   bool _isLoading = false;
   bool _showPassword = false;
   String _errorMessage = '';
+  String _mfaPatientId = '';
+  String _mfaChallengeId = '';
+  String _mfaMethod = 'email';
+  String _mfaRecipientMasked = '';
+  String _mfaDevPreviewCode = '';
+
+  bool get _isMfaStep => _mfaPatientId.isNotEmpty && _mfaChallengeId.isNotEmpty;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _mfaCodeController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
-    final form = _formKey.currentState;
-    if (form == null || !form.validate()) {
-      return;
+    if (_isMfaStep) {
+      final code = _mfaCodeController.text.trim();
+      if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+        setState(() {
+          _errorMessage = 'Enter the 6-digit verification code.';
+        });
+        return;
+      }
+    } else {
+      final form = _formKey.currentState;
+      if (form == null || !form.validate()) {
+        return;
+      }
     }
 
     setState(() {
@@ -45,14 +64,31 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final result = await _api.loginPatient(
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
+      final result = _isMfaStep
+          ? await _api.verifyPatientLoginMfa(
+              patientId: _mfaPatientId,
+              challengeId: _mfaChallengeId,
+              code: _mfaCodeController.text,
+            )
+          : await _api.loginPatient(
+              email: _emailController.text,
+              password: _passwordController.text,
+            );
       await AuthSessionStore.save(result);
 
       if (!mounted) return;
       context.go('/home');
+    } on AuthMfaRequiredException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _mfaPatientId = error.patientId;
+        _mfaChallengeId = error.challengeId;
+        _mfaMethod = error.method;
+        _mfaRecipientMasked = error.recipientMasked;
+        _mfaDevPreviewCode = error.devPreviewCode;
+        _mfaCodeController.clear();
+        _errorMessage = '';
+      });
     } on AuthApiException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -126,6 +162,7 @@ class _LoginPageState extends State<LoginPage> {
                 controller: _emailController,
                 label: 'Email',
                 hintText: 'name@example.com',
+                readOnly: _isMfaStep,
                 keyboardType: TextInputType.emailAddress,
                 autofillHints: const [AutofillHints.username, AutofillHints.email],
                 validator: (value) {
@@ -137,26 +174,69 @@ class _LoginPageState extends State<LoginPage> {
                 },
               ),
               const SizedBox(height: 12),
-              AuthTextField(
-                controller: _passwordController,
-                label: 'Password',
-                hintText: 'Enter your password',
-                obscureText: !_showPassword,
-                textInputAction: TextInputAction.done,
-                autofillHints: const [AutofillHints.password],
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+              if (_isMfaStep) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE9EFE3),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  onPressed: () => setState(() => _showPassword = !_showPassword),
+                  child: Text(
+                    'Enter the 6-digit code sent via ${_mfaMethod.toUpperCase()} to ${_mfaRecipientMasked.isEmpty ? 'your account' : _mfaRecipientMasked}.',
+                    style: const TextStyle(fontSize: 12, color: AppColors.bodyText),
+                  ),
                 ),
-                validator: (value) {
-                  if ((value ?? '').isEmpty) {
-                    return 'Password is required';
-                  }
-                  return null;
-                },
-              ),
+                const SizedBox(height: 12),
+                AuthTextField(
+                  controller: _mfaCodeController,
+                  label: 'Verification code',
+                  hintText: '123456',
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  validator: (value) {
+                    final code = (value ?? '').trim();
+                    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+                      return 'Enter a valid 6-digit code';
+                    }
+                    return null;
+                  },
+                ),
+                if (_mfaDevPreviewCode.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE9EFE3),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Dev code: $_mfaDevPreviewCode',
+                      style: const TextStyle(fontSize: 12, color: AppColors.bodyText),
+                    ),
+                  ),
+                ],
+              ] else ...[
+                AuthTextField(
+                  controller: _passwordController,
+                  label: 'Password',
+                  hintText: 'Enter your password',
+                  obscureText: !_showPassword,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.password],
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    ),
+                    onPressed: () => setState(() => _showPassword = !_showPassword),
+                  ),
+                  validator: (value) {
+                    if ((value ?? '').isEmpty) {
+                      return 'Password is required';
+                    }
+                    return null;
+                  },
+                ),
+              ],
               if (_errorMessage.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Container(
@@ -176,20 +256,48 @@ class _LoginPageState extends State<LoginPage> {
               ],
               const SizedBox(height: 16),
               PrimaryButton(
-                text: _isLoading ? 'Signing in...' : 'Log In',
+                text: _isLoading
+                    ? (_isMfaStep ? 'Verifying...' : 'Signing in...')
+                    : (_isMfaStep ? 'Verify Code' : 'Log In'),
                 onTap: _isLoading ? () {} : _submit,
               ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: _isLoading ? null : () => context.go('/signup'),
-                child: const Text(
-                  'Create patient account',
-                  style: TextStyle(
-                    color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.w600,
+              if (_isMfaStep) ...[
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: _isLoading
+                      ? null
+                      : () {
+                          setState(() {
+                            _mfaPatientId = '';
+                            _mfaChallengeId = '';
+                            _mfaMethod = 'email';
+                            _mfaRecipientMasked = '';
+                            _mfaDevPreviewCode = '';
+                            _mfaCodeController.clear();
+                            _errorMessage = '';
+                          });
+                        },
+                  child: const Text(
+                    'Use different account',
+                    style: TextStyle(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
+              ] else ...[
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: _isLoading ? null : () => context.go('/signup'),
+                  child: const Text(
+                    'Create patient account',
+                    style: TextStyle(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

@@ -47,11 +47,31 @@ Notes:
   - `PASSWORD_MIN_LENGTH=12`
   - `LOGIN_RATE_LIMIT_WINDOW_MS=900000`
   - `LOGIN_RATE_LIMIT_MAX=10`
+  - `SESSION_IDLE_TIMEOUT=30m`
+  - `SESSION_ACTIVITY_TOUCH_INTERVAL=60s`
   - `CSRF_ENABLED=true`
   - `CSRF_COOKIE_NAME=biotrack_csrf`
   - `CSRF_HEADER_NAME=x-csrf-token`
   - `JWT_ISSUER=biotrack-healthcare`
   - `JWT_AUDIENCE=biotrack-app`
+  - `MONGODB_REQUIRE_TLS=false` (set `true` in production)
+  - `ENFORCE_STRONG_SECRETS=false` (set `true` in production)
+
+Database security settings (recommended for production):
+
+```env
+MONGODB_REQUIRE_TLS=true
+MONGODB_TLS_ENABLED=true
+ENFORCE_STRONG_SECRETS=true
+DATA_ENCRYPTION_ENABLED=true
+DATA_ENCRYPTION_KEY=<32-byte key>
+BACKUP_ENCRYPTION_KEY=<32-byte key>
+```
+
+Notes:
+- `DATA_ENCRYPTION_KEY` encrypts sensitive patient record payloads at rest.
+- `BACKUP_ENCRYPTION_KEY` encrypts generated database backup files.
+- Both keys accept: 64-char hex, base64-encoded 32-byte key, or 32-char UTF-8 string.
 
 ## 3) Web Env (`web/.env.local`)
 
