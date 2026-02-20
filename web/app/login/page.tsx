@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -17,9 +17,62 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { loginWithDetectedRole, type PatientLoginMfaChallenge, verifyPatientLoginMfa } from '@/lib/auth'
+import {
+  loginPatientWithGoogleIdToken,
+  loginWithDetectedRole,
+  type PatientLoginMfaChallenge,
+  verifyPatientLoginMfa,
+} from '@/lib/auth'
 
 const OTP_REGEX = /^\d{6}$/
+const GOOGLE_IDENTITY_SCRIPT_ID = 'google-identity-services'
+const GOOGLE_OAUTH_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID ?? ''
+
+type GoogleCredentialResponse = {
+  credential?: string
+}
+
+type GoogleAccountsId = {
+  initialize: (config: {
+    client_id: string
+    callback: (response: GoogleCredentialResponse) => void
+    auto_select?: boolean
+  }) => void
+  renderButton: (container: HTMLElement, options?: Record<string, unknown>) => void
+}
+
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        id?: GoogleAccountsId
+      }
+    }
+  }
+}
+
+function loadGoogleIdentityScript(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve()
+  if (window.google?.accounts?.id) return Promise.resolve()
+
+  return new Promise((resolve, reject) => {
+    const existing = document.getElementById(GOOGLE_IDENTITY_SCRIPT_ID) as HTMLScriptElement | null
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true })
+      existing.addEventListener('error', () => reject(new Error('Failed to load Google identity script')), { once: true })
+      return
+    }
+
+    const script = document.createElement('script')
+    script.id = GOOGLE_IDENTITY_SCRIPT_ID
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Failed to load Google identity script'))
+    document.head.appendChild(script)
+  })
+}
 
 function LoginHeroPanel() {
   return (
@@ -83,6 +136,73 @@ export default function LoginPage() {
   const [mfaCode, setMfaCode] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [googleReady, setGoogleReady] = useState(false)
+  const googleButtonRef = useRef<HTMLDivElement | null>(null)
+  const googleOauthEnabled = GOOGLE_OAUTH_CLIENT_ID.trim().length > 0
+
+  useEffect(() => {
+    if (!googleOauthEnabled || mfaChallenge) {
+      setGoogleReady(false)
+      return
+    }
+
+    let cancelled = false
+
+    const setupGoogleButton = async () => {
+      try {
+        await loadGoogleIdentityScript()
+        const googleIdentity = window.google?.accounts?.id
+        if (!googleIdentity || !googleButtonRef.current || cancelled) {
+          return
+        }
+
+        googleIdentity.initialize({
+          client_id: GOOGLE_OAUTH_CLIENT_ID,
+          auto_select: false,
+          callback: async (response: GoogleCredentialResponse) => {
+            const idToken = String(response?.credential ?? '').trim()
+            if (!idToken) {
+              setError('Google sign-in failed. Please try again.')
+              return
+            }
+
+            setError('')
+            setSuccess('')
+            setIsLoading(true)
+            const oauthResult = await loginPatientWithGoogleIdToken(idToken)
+            setIsLoading(false)
+
+            if (oauthResult.error) {
+              setError(oauthResult.error)
+              return
+            }
+
+            setSuccess('Google login successful. Redirecting...')
+            router.replace('/')
+          },
+        })
+
+        googleButtonRef.current.innerHTML = ''
+        googleIdentity.renderButton(googleButtonRef.current, {
+          theme: 'outline',
+          size: 'large',
+          shape: 'pill',
+          text: 'signin_with',
+        })
+        setGoogleReady(true)
+      } catch {
+        if (!cancelled) {
+          setGoogleReady(false)
+        }
+      }
+    }
+
+    void setupGoogleButton()
+
+    return () => {
+      cancelled = true
+    }
+  }, [googleOauthEnabled, mfaChallenge, router])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -309,10 +429,19 @@ export default function LoginPage() {
                 <div className="h-px flex-1 bg-[#cfe5d9]" />
               </div>
 
-              <div className="grid grid-cols-2 gap-3 auth-enter-left" style={{ animationDelay: '160ms' }}>
-                <Button type="button" variant="outline" disabled className="h-12 rounded-xl border-[#cfe5d9] bg-white text-[#1f3c30] hover:bg-white">
-                  Google
-                </Button>
+              <div className="grid grid-cols-1 gap-3 auth-enter-left" style={{ animationDelay: '160ms' }}>
+                {googleOauthEnabled ? (
+                  <div className="flex h-12 items-center justify-center rounded-xl border border-[#cfe5d9] bg-white px-2">
+                    <div ref={googleButtonRef} className="w-full" />
+                  </div>
+                ) : (
+                  <Button type="button" variant="outline" disabled className="h-12 rounded-xl border-[#cfe5d9] bg-white text-[#1f3c30] hover:bg-white">
+                    Google (Not Configured)
+                  </Button>
+                )}
+                {!googleReady && googleOauthEnabled ? (
+                  <p className="text-center text-xs text-[#6b8579]">Loading Google sign-in...</p>
+                ) : null}
                 <Button type="button" variant="outline" disabled className="h-12 rounded-xl border-[#cfe5d9] bg-white text-[#1f3c30] hover:bg-white">
                   Apple
                 </Button>

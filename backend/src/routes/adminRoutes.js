@@ -6,6 +6,7 @@ import { validateBody, validateParams, validateQuery } from '../middleware/valid
 import { authLoginLimiter } from '../middleware/rateLimit.js';
 import { adminRegisterSchema, adminUpsertSchema, loginSchema, providerCreateSchema } from '../validation/authSchemas.js';
 import {
+  emptyBodySchema,
   adminGovernanceUpdateSchema,
   adminLogsQuerySchema,
   adminRbacUpdateSchema,
@@ -82,5 +83,5 @@ adminRoutes.get('/blockchain/overview', requireAdminAuth, requireAdminCapability
 
 adminRoutes.get('/governance', requireAdminAuth, requireAdminCapability('canManagePolicies'), asyncHandler(getDataGovernanceSettings));
 adminRoutes.patch('/governance', requireAdminAuth, requireAdminCapability('canManagePolicies'), validateBody(adminGovernanceUpdateSchema), asyncHandler(updateDataGovernanceSettings));
-adminRoutes.post('/governance/backup', requireAdminAuth, requireAdminCapability('canManageBackups'), asyncHandler(runDatabaseBackup));
-adminRoutes.post('/governance/restore', requireAdminAuth, requireAdminCapability('canManageBackups'), asyncHandler(markRestoreOperation));
+adminRoutes.post('/governance/backup', requireAdminAuth, requireAdminCapability('canManageBackups'), validateBody(emptyBodySchema), asyncHandler(runDatabaseBackup));
+adminRoutes.post('/governance/restore', requireAdminAuth, requireAdminCapability('canManageBackups'), validateBody(emptyBodySchema), asyncHandler(markRestoreOperation));

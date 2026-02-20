@@ -47,14 +47,20 @@ Notes:
   - `PASSWORD_MIN_LENGTH=12`
   - `LOGIN_RATE_LIMIT_WINDOW_MS=900000`
   - `LOGIN_RATE_LIMIT_MAX=10`
-  - `SESSION_IDLE_TIMEOUT=30m`
+  - `SESSION_IDLE_TIMEOUT=30m` (legacy fallback)
+  - `PROVIDER_SESSION_IDLE_TIMEOUT=15m`
+  - `PATIENT_SESSION_IDLE_TIMEOUT=30m`
+  - `ADMIN_SESSION_IDLE_TIMEOUT=15m`
   - `SESSION_ACTIVITY_TOUCH_INTERVAL=60s`
+  - `XSS_INPUT_PROTECTION_ENABLED=true`
+  - `UPLOAD_MAX_BYTES=5242880`
+  - `UPLOAD_ALLOWED_MIME_TYPES=application/pdf,image/jpeg,image/png`
   - `CSRF_ENABLED=true`
   - `CSRF_COOKIE_NAME=biotrack_csrf`
   - `CSRF_HEADER_NAME=x-csrf-token`
   - `JWT_ISSUER=biotrack-healthcare`
   - `JWT_AUDIENCE=biotrack-app`
-  - `MONGODB_REQUIRE_TLS=false` (set `true` in production)
+  - `MONGODB_REQUIRE_TLS=true` (set `false` only for local non-TLS MongoDB)
   - `ENFORCE_STRONG_SECRETS=false` (set `true` in production)
 
 Database security settings (recommended for production):
@@ -88,9 +94,11 @@ Optional:
 
 ```env
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID=
 ```
 
 Use this key only if testing the Admin map picker in `/admin/users`.
+Set `NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID` to enable Google OAuth sign-in on `/login`.
 
 ## 4) Mobile Runtime Config (Flutter)
 

@@ -139,10 +139,10 @@ export async function updateMyPatientProfile(
   }
 }
 
-export async function fetchMyPatientRecords(): Promise<{ records?: PatientRecord[]; error?: string }> {
+export async function fetchMyPatientRecords(requestOptions: RequestInit = {}): Promise<{ records?: PatientRecord[]; error?: string }> {
   try {
     const patientId = getPatientIdFromSession();
-    const result = await apiGet<{ records: PatientRecord[] }>(`/patients/${patientId}/records`);
+    const result = await apiGet<{ records: PatientRecord[] }>(`/patients/${patientId}/records`, requestOptions);
     if (result.error) return { error: result.error.message };
     return { records: result.data?.records ?? [] };
   } catch (error) {
@@ -161,20 +161,20 @@ export async function verifyMyPatientRecord(recordId: string): Promise<{ data?: 
   }
 }
 
-export async function fetchMyTrendInsight(): Promise<{ data?: TrendInsightResponse; error?: string }> {
-  const result = await apiGet<TrendInsightResponse>('/ai/trend-insight');
+export async function fetchMyTrendInsight(requestOptions: RequestInit = {}): Promise<{ data?: TrendInsightResponse; error?: string }> {
+  const result = await apiGet<TrendInsightResponse>('/ai/trend-insight', requestOptions);
   if (result.error) return { error: result.error.message };
   return { data: result.data };
 }
 
-export async function fetchMyHealthSummary(days = 7): Promise<{ data?: SummaryInsightResponse; error?: string }> {
-  const result = await apiGet<SummaryInsightResponse>(`/ai/summary?days=${days}`);
+export async function fetchMyHealthSummary(days = 7, requestOptions: RequestInit = {}): Promise<{ data?: SummaryInsightResponse; error?: string }> {
+  const result = await apiGet<SummaryInsightResponse>(`/ai/summary?days=${days}`, requestOptions);
   if (result.error) return { error: result.error.message };
   return { data: result.data };
 }
 
-export async function fetchMyAlerts(limit = 20): Promise<{ alerts?: AlertEntry[]; error?: string }> {
-  const result = await apiGet<{ success: boolean; alerts: AlertEntry[] }>(`/ai/alerts?limit=${limit}`);
+export async function fetchMyAlerts(limit = 20, requestOptions: RequestInit = {}): Promise<{ alerts?: AlertEntry[]; error?: string }> {
+  const result = await apiGet<{ success: boolean; alerts: AlertEntry[] }>(`/ai/alerts?limit=${limit}`, requestOptions);
   if (result.error) return { error: result.error.message };
   return { alerts: result.data?.alerts ?? [] };
 }

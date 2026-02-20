@@ -11,7 +11,16 @@ function makeValidator(schema, sourceKey, fallbackMessage) {
       });
     }
 
-    req[sourceKey] = parsed.data;
+    if (sourceKey === 'query') {
+      // In Express 5, req.query can be getter-only; mutate the query object instead.
+      const query = req.query ?? {};
+      for (const key of Object.keys(query)) {
+        delete query[key];
+      }
+      Object.assign(query, parsed.data);
+    } else {
+      req[sourceKey] = parsed.data;
+    }
     return next();
   };
 }

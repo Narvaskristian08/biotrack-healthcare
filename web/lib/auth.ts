@@ -121,7 +121,7 @@ async function startHealthCenterSession(
     healthCenterAccessToken: string
 ): Promise<{ sessionToken?: string; error?: string }> {
     try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000/api';
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
         const csrf = await apiGet<{ csrfToken: string }>('/auth/csrf-token');
         const csrfToken = csrf.data?.csrfToken ?? '';
         const response = await fetch(`${baseUrl}/sessions/start`, {

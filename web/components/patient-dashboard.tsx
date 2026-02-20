@@ -292,11 +292,20 @@ export default function PatientDashboard() {
         setState((prev) => ({ ...prev, refreshing: true }));
       }
 
+      const requestOptions =
+        mode === 'refresh'
+          ? {
+            headers: {
+              'x-biotrack-background': '1',
+            },
+          }
+          : {};
+
       const [recordsRes, trendRes, summaryRes, alertsRes] = await Promise.all([
-        fetchMyPatientRecords(),
-        fetchMyTrendInsight(),
-        fetchMyHealthSummary(7),
-        fetchMyAlerts(20),
+        fetchMyPatientRecords(requestOptions),
+        fetchMyTrendInsight(requestOptions),
+        fetchMyHealthSummary(7, requestOptions),
+        fetchMyAlerts(20, requestOptions),
       ]);
 
       if (!active) return;

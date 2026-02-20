@@ -1,0 +1,93 @@
+{
+  "sessionStart": {
+    "status": 201,
+    "body": {
+      "sessionToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlblR5cGUiOiJzZXNzaW9uIiwic2Vzc2lvbklkIjoiNjk5N2Y5Mjk1M2I3YTFlOWFjNTMwNWIxIiwiaGVhbHRoQ2VudGVySWQiOiI2OTk3ZjhjZTUzYjdhMWU5YWM1MzA1NGIiLCJzdGFmZklkIjpudWxsLCJkZXZpY2VJZCI6bnVsbCwiaWF0IjoxNzcxNTY3NDAxLCJleHAiOjE3NzE2MTA2MDEsImF1ZCI6ImJpb3RyYWNrLWFwcCIsImlzcyI6ImJpb3RyYWNrLWhlYWx0aGNhcmUifQ.N8O2f0VDtP37ZV4XUCB308MFWZfjdVJ66hNnFWl4K64",
+      "session": {
+        "id": "6997f92953b7a1e9ac5305b1",
+        "expiresAt": "2026-02-20T18:03:21.342Z"
+      }
+    }
+  },
+  "nosqlProbe": {
+    "status": 400,
+    "body": {
+      "error": {
+        "message": "Expected string, received object",
+        "code": "VALIDATION_ERROR"
+      }
+    }
+  },
+  "uploadInvalidType": {
+    "status": 415,
+    "body": {
+      "error": {
+        "message": "Unsupported file type. Allowed types: application/pdf, image/jpeg, image/png",
+        "code": "UPLOAD_TYPE_INVALID"
+      }
+    }
+  },
+  "recordCreate": {
+    "status": 201,
+    "body": {
+      "record": {
+        "healthCenterId": "6997f8ce53b7a1e9ac53054b",
+        "patientId": "6997f8d453b7a1e9ac530563",
+        "type": "vitals",
+        "data": {
+          "heartRate": 89,
+          "note": "enc-check"
+        },
+        "recordHash": "2cdc770c4522d9f398be6043562129d24f7abb87b18c879a72accd0a6647bf49",
+        "hashSchemaVersion": 2,
+        "recordNonce": "16dfecbed9babbad1a17e9f91cbf4849",
+        "capturedAt": "2026-02-20T06:03:21.383Z",
+        "blockchain": {
+          "enabled": false,
+          "network": "",
+          "contractAddress": "",
+          "txId": "",
+          "blockNumber": null,
+          "proofId": "",
+          "anchoredAt": null,
+          "lastVerifiedAt": null,
+          "verificationStatus": "unanchored",
+          "errorMessage": ""
+        },
+        "createdByActorType": "healthcenter",
+        "createdByActorId": "6997f8ce53b7a1e9ac53054b",
+        "sessionId": "6997f92953b7a1e9ac5305b1",
+        "_id": "6997f92953b7a1e9ac5305bd",
+        "createdAt": "2026-02-20T06:03:21.389Z",
+        "updatedAt": "2026-02-20T06:03:21.389Z",
+        "__v": 0
+      }
+    }
+  },
+  "aiAnalyze": {
+    "status": 200,
+    "body": {
+      "success": true,
+      "aiResult": "📊 AI Health Insight\n\nRisk Level:\nLOW\n\nSummary:\nAI analysis is temporarily unavailable.\n\nClinical Interpretation:\nThe system could not complete full AI reasoning at this time. A baseline risk level was estimated using predefined thresholds.\n\nPossible Contributing Factors:\n- Temporary service interruption\n\nRecommended Actions:\n- Rest and monitor vital signs\n- Retry analysis later\n\nUrgency Guidance:\nIf concerning symptoms occur, seek medical evaluation.\n\n⚠️ This system does not diagnose medical conditions. It provides risk assessment and decision support only.",
+      "record": {
+        "id": "6997f92953b7a1e9ac5305c8",
+        "userId": "6997f8d453b7a1e9ac530563",
+        "riskLevel": "LOW"
+      },
+      "trend": "INSUFFICIENT_DATA",
+      "alerts": []
+    }
+  },
+  "auditLogsApi": {
+    "status": 200,
+    "bodySummary": {
+      "count": 4,
+      "message": ""
+    }
+  },
+  "dbEvidence": {
+    "patientRecordEncryptedFlag": "biotrack-record-aesgcm-v1",
+    "telemetryEncryptedFlag": "biotrack-health-telemetry-aesgcm-v1",
+    "auditCountRecent": 42
+  }
+}

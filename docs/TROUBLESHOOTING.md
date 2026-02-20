@@ -154,3 +154,36 @@ Reference:
 
 - `README-TESTING-MOBILE.md`
 
+## 10. Google OAuth Button Disabled or Missing
+
+Symptoms:
+
+- Google sign-in is unavailable on `/login`.
+
+Fix:
+
+- Set `NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID` in `web/.env.local`.
+- Set `GOOGLE_OAUTH_CLIENT_ID` in `backend/.env`.
+- Restart both backend and web dev servers.
+
+Reference:
+
+- `web/app/login/page.tsx`
+- `backend/src/controllers/authController.js`
+
+## 11. Upload Validation Fails
+
+Symptoms:
+
+- `415 UPLOAD_TYPE_INVALID` or `413 PAYLOAD_TOO_LARGE`.
+
+Fix:
+
+- Use one of allowed MIME types (`application/pdf`, `image/jpeg`, `image/png` by default).
+- Keep payload size below `UPLOAD_MAX_BYTES`.
+- Include optional `x-file-name` with safe characters only.
+
+Reference:
+
+- `backend/src/middleware/fileUpload.js`
+- `docs/API_REFERENCE.md`

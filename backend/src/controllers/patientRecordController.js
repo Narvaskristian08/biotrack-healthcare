@@ -202,6 +202,42 @@ export async function listPatientRecords(req, res) {
   });
 }
 
+export async function validatePatientRecordUpload(req, res) {
+  const { healthCenterId, adminId } = req.context;
+  const actorType = adminId ? 'admin' : 'healthcenter';
+  const actorId = adminId ?? healthCenterId;
+  const patientId = req.params.patientId;
+  const uploadMeta = req.uploadMeta ?? null;
+
+  if (!uploadMeta) {
+    return res.status(400).json({ error: { message: 'Upload metadata is missing' } });
+  }
+
+  const patient = await Patient.findOne({ _id: patientId, healthCenterId }).select('_id').lean();
+  if (!patient) {
+    return res.status(404).json({ error: { message: 'Patient not found' } });
+  }
+
+  await writeAuditLog({
+    req,
+    action: 'RECORD.UPLOAD.VALIDATE',
+    entityType: 'Patient',
+    entityId: patientId,
+    after: {
+      fileName: uploadMeta.fileName,
+      mimeType: uploadMeta.mimeType,
+      sizeBytes: uploadMeta.sizeBytes,
+      actorType,
+      actorId,
+    },
+  });
+
+  return res.status(201).json({
+    accepted: true,
+    upload: uploadMeta,
+  });
+}
+
 export async function verifyPatientRecordIntegrity(req, res) {
   const { healthCenterId } = req.context;
   const { patientId, recordId } = req.params;

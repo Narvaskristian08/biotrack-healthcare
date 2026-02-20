@@ -28,6 +28,13 @@ export async function getCsrfToken(req, res) {
   });
 }
 
+export async function pingAuthenticatedSession(req, res) {
+  return res.json({
+    ok: true,
+    serverTime: new Date().toISOString(),
+  });
+}
+
 export async function logoutAnySession(req, res) {
   const token = getBearerToken(req);
   if (!token) return res.status(400).json({ error: { message: 'Missing Bearer token' } });
@@ -120,6 +127,7 @@ export async function loginWithGoogle(req, res) {
       ip: String(req?.ip ?? req?.headers?.['x-forwarded-for'] ?? '').trim(),
       userAgent: String(req?.headers?.['user-agent'] ?? '').trim(),
       loginAt: new Date(),
+      lastActivityAt: new Date(),
     });
 
     await writeAuditLog({

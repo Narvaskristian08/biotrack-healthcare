@@ -2,11 +2,27 @@
  * API utilities for making requests to the backend
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 const CSRF_ENDPOINT = '/auth/csrf-token';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const SESSION_TIMEOUT_FALLBACK_SECONDS = 10;
+const SESSION_TIMEOUT_CODES = new Set(['SESSION_IDLE_TIMEOUT', 'TOKEN_REVOKED', 'SESSION_REVOKED']);
+const SESSION_TIMEOUT_MESSAGE_PATTERNS = [
+    'session expired due to inactivity',
+    'session expired',
+    'token revoked',
+    'session revoked',
+];
+
+export const SESSION_TIMEOUT_EVENT = 'biotrack:session-timeout';
 
 let csrfTokenCache = '';
+
+export interface SessionTimeoutEventDetail {
+    message: string;
+    code?: string;
+    countdownSeconds: number;
+}
 
 async function ensureCsrfToken(): Promise<string> {
     if (csrfTokenCache) return csrfTokenCache;
@@ -23,11 +39,38 @@ async function ensureCsrfToken(): Promise<string> {
 export interface ApiError {
     message: string;
     status?: number;
+    code?: string;
+    countdownSeconds?: number;
 }
 
 export interface ApiResponse<T> {
     data?: T;
     error?: ApiError;
+}
+
+function hasStoredAuthSession(): boolean {
+    if (typeof window === 'undefined') return false;
+    const raw = localStorage.getItem('userSession');
+    if (!raw) return false;
+    try {
+        const parsed = JSON.parse(raw);
+        return Boolean(parsed?.accessToken);
+    } catch {
+        return false;
+    }
+}
+
+function shouldEmitSessionTimeout(status: number, message: string, code: string): boolean {
+    if (status !== 401) return false;
+    if (!hasStoredAuthSession()) return false;
+    if (SESSION_TIMEOUT_CODES.has(code)) return true;
+    const normalizedMessage = message.trim().toLowerCase();
+    return SESSION_TIMEOUT_MESSAGE_PATTERNS.some((pattern) => normalizedMessage.includes(pattern));
+}
+
+function emitSessionTimeout(detail: SessionTimeoutEventDetail): void {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent(SESSION_TIMEOUT_EVENT, { detail }));
 }
 
 /**
@@ -74,13 +117,30 @@ export async function apiFetch<T>(
             credentials: 'include',
         });
 
-        const json = await response.json();
+        const json = await response.json().catch(() => ({}));
 
         if (!response.ok) {
+            const message = String(json?.error?.message ?? 'An error occurred');
+            const code = String(json?.error?.code ?? '').trim();
+            const rawCountdown = Number(json?.error?.countdownSeconds);
+            const countdownSeconds = Number.isFinite(rawCountdown) && rawCountdown > 0
+                ? Math.floor(rawCountdown)
+                : SESSION_TIMEOUT_FALLBACK_SECONDS;
+
+            if (shouldEmitSessionTimeout(response.status, message, code)) {
+                emitSessionTimeout({
+                    message,
+                    code: code || undefined,
+                    countdownSeconds,
+                });
+            }
+
             return {
                 error: {
-                    message: json.error?.message || 'An error occurred',
+                    message,
                     status: response.status,
+                    code: code || undefined,
+                    countdownSeconds,
                 },
             };
         }
@@ -98,8 +158,8 @@ export async function apiFetch<T>(
 /**
  * GET request helper
  */
-export function apiGet<T>(endpoint: string) {
-    return apiFetch<T>(endpoint, { method: 'GET' });
+export function apiGet<T>(endpoint: string, options: RequestInit = {}) {
+    return apiFetch<T>(endpoint, { ...options, method: 'GET' });
 }
 
 /**

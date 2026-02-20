@@ -1,4 +1,5 @@
 import HealthRecord from '../models/HealthRecord.js';
+import { resolveHealthTelemetry } from './healthTelemetryEncryption.service.js';
 
 export function computeTrend(heartRates) {
   if (heartRates.length < 3) {
@@ -32,7 +33,13 @@ export async function analyzeUserTrend(userId, healthCenterId = null) {
     .limit(10);
 
   const heartRates = records
-    .map(r => Number(r.heartRate))
+    .map((record) => {
+      const telemetry = resolveHealthTelemetry(record, {
+        healthCenterId,
+        userId,
+      });
+      return Number(telemetry.heartRate);
+    })
     .filter(n => Number.isFinite(n));
 
   const { trend, baseline } = computeTrend(heartRates);

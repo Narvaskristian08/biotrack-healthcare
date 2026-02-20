@@ -2,6 +2,7 @@ import HealthRecord from '../models/HealthRecord.js';
 import { evaluateAlerts } from '../services/alertEngine.service.js';
 import { computeRiskLevel, runHealthInference } from '../services/ai/inference.service.js';
 import { resolveInsightPatientId } from '../services/ai/subjectResolver.service.js';
+import { encryptHealthTelemetryForStorage } from '../services/healthTelemetryEncryption.service.js';
 import { analyzeUserTrend } from '../services/trendAnalysis.service.js';
 
 function httpError(statusCode, message, code = 'REQUEST_INVALID') {
@@ -56,6 +57,7 @@ export async function analyzeVitals(req, res, next) {
 
     const aiResult = await runHealthInference(normalizedVitals);
     const riskLevel = computeRiskLevel(normalizedVitals);
+    const activityLevel = normalizeActivityLevel(vitals.activity);
 
     const previous = await HealthRecord.findOne({
       healthCenterId: req.context.healthCenterId,
@@ -67,10 +69,15 @@ export async function analyzeVitals(req, res, next) {
     const record = await HealthRecord.create({
       healthCenterId: req.context.healthCenterId,
       userId: patientId,
-      heartRate,
-      activityLevel: normalizeActivityLevel(vitals.activity),
+      telemetry: encryptHealthTelemetryForStorage(
+        {
+          heartRate,
+          activityLevel,
+          fallDetected: normalizedVitals.fallDetected,
+        },
+        { healthCenterId: req.context.healthCenterId, userId: patientId }
+      ),
       riskLevel,
-      fallDetected: normalizedVitals.fallDetected,
     });
 
     const trendData = await analyzeUserTrend(patientId, req.context.healthCenterId);

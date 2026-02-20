@@ -14,6 +14,31 @@ function toNumber(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function toCsvList(value, fallback = []) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return Array.isArray(fallback) ? fallback : [];
+  }
+  return String(value)
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function isLocalMongoUri(value) {
+  const mongoUri = String(value ?? '').trim();
+  if (!mongoUri || mongoUri.startsWith('mongodb+srv://')) return false;
+  const normalized = mongoUri.replace(/^mongodb:\/\//i, '');
+  const hostSection = normalized.split('/')[0] ?? '';
+  if (!hostSection) return false;
+  const hosts = hostSection.split('@').pop()?.split(',') ?? [];
+  if (hosts.length === 0) return false;
+
+  return hosts.every((hostEntry) => {
+    const host = String(hostEntry).split(':')[0].trim().toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  });
+}
+
 function looksLikePlaceholderSecret(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
   if (!normalized) return true;
@@ -36,8 +61,14 @@ export const env = {
   PORT: Number(process.env.PORT ?? 3000),
   MONGODB_URI: process.env.MONGODB_URI ?? '',
   MONGODB_APP_NAME: process.env.MONGODB_APP_NAME ?? 'biotrack-backend',
-  MONGODB_REQUIRE_TLS: toBool(process.env.MONGODB_REQUIRE_TLS, process.env.NODE_ENV === 'production'),
-  MONGODB_TLS_ENABLED: toBool(process.env.MONGODB_TLS_ENABLED, process.env.NODE_ENV === 'production'),
+  MONGODB_REQUIRE_TLS: toBool(
+    process.env.MONGODB_REQUIRE_TLS,
+    process.env.NODE_ENV === 'production' || !isLocalMongoUri(process.env.MONGODB_URI ?? '')
+  ),
+  MONGODB_TLS_ENABLED: toBool(
+    process.env.MONGODB_TLS_ENABLED,
+    process.env.NODE_ENV === 'production' || !isLocalMongoUri(process.env.MONGODB_URI ?? '')
+  ),
   MONGODB_TLS_CA_FILE: process.env.MONGODB_TLS_CA_FILE ?? '',
   MONGODB_TLS_CERT_KEY_FILE: process.env.MONGODB_TLS_CERT_KEY_FILE ?? '',
   MONGODB_TLS_ALLOW_INVALID_CERTS: toBool(process.env.MONGODB_TLS_ALLOW_INVALID_CERTS, false),
@@ -59,7 +90,10 @@ export const env = {
 
   ACCESS_TOKEN_TTL: process.env.ACCESS_TOKEN_TTL ?? '12h',
   SESSION_TOKEN_TTL: process.env.SESSION_TOKEN_TTL ?? '12h',
-  SESSION_IDLE_TIMEOUT: process.env.SESSION_IDLE_TIMEOUT ?? '30m',
+  SESSION_IDLE_TIMEOUT: process.env.SESSION_IDLE_TIMEOUT ?? '5s',
+  PROVIDER_SESSION_IDLE_TIMEOUT: process.env.PROVIDER_SESSION_IDLE_TIMEOUT ?? process.env.SESSION_IDLE_TIMEOUT ?? '5s',
+  PATIENT_SESSION_IDLE_TIMEOUT: process.env.PATIENT_SESSION_IDLE_TIMEOUT ?? process.env.SESSION_IDLE_TIMEOUT ?? '5s',
+  ADMIN_SESSION_IDLE_TIMEOUT: process.env.ADMIN_SESSION_IDLE_TIMEOUT ?? process.env.SESSION_IDLE_TIMEOUT ?? '5s',
   SESSION_ACTIVITY_TOUCH_INTERVAL: process.env.SESSION_ACTIVITY_TOUCH_INTERVAL ?? '60s',
   OTP_TTL_MINUTES: Number(process.env.OTP_TTL_MINUTES ?? 10),
   OTP_RESEND_COOLDOWN_SECONDS: Number(process.env.OTP_RESEND_COOLDOWN_SECONDS ?? 30),
@@ -71,10 +105,16 @@ export const env = {
   DEFAULT_ADMIN_PASSWORD: process.env.DEFAULT_ADMIN_PASSWORD ?? '',
 
   LOGIN_RATE_LIMIT_WINDOW_MS: toNumber(process.env.LOGIN_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000), // 15 minutes
-  LOGIN_RATE_LIMIT_MAX: toNumber(process.env.LOGIN_RATE_LIMIT_MAX, 10) // max 10 attempts per window
-  ,
+  LOGIN_RATE_LIMIT_MAX: toNumber(process.env.LOGIN_RATE_LIMIT_MAX, 10), // max 10 attempts per window
   MFA_VERIFY_RATE_LIMIT_WINDOW_MS: toNumber(process.env.MFA_VERIFY_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
   MFA_VERIFY_RATE_LIMIT_MAX: toNumber(process.env.MFA_VERIFY_RATE_LIMIT_MAX, 10),
+  XSS_INPUT_PROTECTION_ENABLED: toBool(process.env.XSS_INPUT_PROTECTION_ENABLED, true),
+  UPLOAD_MAX_BYTES: toNumber(process.env.UPLOAD_MAX_BYTES, 5 * 1024 * 1024),
+  UPLOAD_ALLOWED_MIME_TYPES: toCsvList(process.env.UPLOAD_ALLOWED_MIME_TYPES, [
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+  ]),
 
   CSRF_ENABLED: toBool(process.env.CSRF_ENABLED, true),
   CSRF_COOKIE_NAME: process.env.CSRF_COOKIE_NAME ?? 'biotrack_csrf',
@@ -144,6 +184,11 @@ export function assertRequiredEnv() {
   if (env.DEFAULT_ADMIN_BOOTSTRAP_ENABLED) {
     if (!String(env.DEFAULT_ADMIN_EMAIL).trim()) missing.push('DEFAULT_ADMIN_EMAIL');
     if (!String(env.DEFAULT_ADMIN_PASSWORD).trim()) missing.push('DEFAULT_ADMIN_PASSWORD');
+  }
+
+  if (env.NODE_ENV === 'production' && !env.MONGODB_REQUIRE_TLS) {
+    console.error('MONGODB_REQUIRE_TLS must remain enabled in production');
+    process.exit(1);
   }
 
   if (env.ENFORCE_STRONG_SECRETS) {

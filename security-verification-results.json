@@ -1,0 +1,345 @@
+{
+  "meta": {
+    "generatedAt": "2026-02-20T06:01:48.814Z",
+    "baseUrl": "http://127.0.0.1:3000",
+    "accounts": {
+      "adminEmail": "sec.admin.1771567308813@example.test",
+      "hcEmail": "sec.hc.1771567308813@example.test",
+      "patientEmail": "sec.patient.1771567308813@example.test"
+    }
+  },
+  "category1": {
+    "strong_password_hashing": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "admin password hash prefix: $2b$",
+        "healthcenter password hash prefix: $2b$",
+        "patient password hash prefix: $2b$"
+      ],
+      "details": "Hashes verified in Mongo documents."
+    },
+    "generic_login_errors": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "admin wrong: 401 Invalid credentials",
+        "admin missing user: 401 Invalid credentials",
+        "healthcenter wrong: 401 Invalid credentials",
+        "patient wrong: 401 Invalid credentials"
+      ],
+      "details": ""
+    },
+    "mfa_enforced_for_patient_login": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "login status=200 mfaRequired=true",
+        "challengeId present=true devCode present=true",
+        "verify-mfa status=200 token=true"
+      ],
+      "details": ""
+    },
+    "validated_tokens_jwt": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "GET /api/patients with invalid token => 401 Invalid or expired token"
+      ],
+      "details": ""
+    },
+    "secure_sessions_with_expiry": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "before forced expiry => 200",
+        "after forced expiry => 401 Session expired"
+      ],
+      "details": ""
+    },
+    "logout_invalidates_session": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "logout => 200",
+        "reuse token => 401 Token revoked"
+      ],
+      "details": ""
+    },
+    "oauth_or_advanced_auth": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "oauth/google => 503 Google OAuth is not configured"
+      ],
+      "details": ""
+    },
+    "rate_limiting_for_logins": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "attempt 1: 429 Too many login attempts. Please try again later.",
+        "attempt 2: 429 Too many login attempts. Please try again later.",
+        "attempt 3: 429 Too many login attempts. Please try again later.",
+        "attempt 4: 429 Too many login attempts. Please try again later.",
+        "attempt 5: 429 Too many login attempts. Please try again later.",
+        "attempt 6: 429 Too many login attempts. Please try again later.",
+        "attempt 7: 429 Too many login attempts. Please try again later.",
+        "attempt 8: 429 Too many login attempts. Please try again later.",
+        "attempt 9: 429 Too many login attempts. Please try again later.",
+        "attempt 10: 429 Too many login attempts. Please try again later.",
+        "attempt 11: 429 Too many login attempts. Please try again later."
+      ],
+      "details": ""
+    }
+  },
+  "category2": {
+    "all_inputs_validated_server_side": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "/api/admin/login invalid body => 400 code=VALIDATION_ERROR"
+      ],
+      "details": ""
+    },
+    "nosql_injection_protection": {
+      "status": "FAIL",
+      "pass": false,
+      "evidence": [
+        "object email payload => 429 code=RATE_LIMITED"
+      ],
+      "details": ""
+    },
+    "xss_protection": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "xss probe => 400 code=XSS_INPUT_REJECTED"
+      ],
+      "details": ""
+    },
+    "file_upload_validation": {
+      "status": "FAIL",
+      "pass": false,
+      "evidence": [
+        "upload invalid mime => 401 code=TOKEN_REVOKED"
+      ],
+      "details": ""
+    },
+    "csrf_tokens_enabled": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "without csrf => 403 code=CSRF_INVALID",
+        "with csrf => 400 message=Missing Bearer token"
+      ],
+      "details": ""
+    },
+    "api_schema_validation": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "invalid verify-code payload => 400 code=VALIDATION_ERROR"
+      ],
+      "details": ""
+    },
+    "parameterized_sql_queries": {
+      "status": "N/A",
+      "pass": null,
+      "evidence": [
+        "Stack uses MongoDB/Mongoose; no SQL query layer present."
+      ],
+      "details": "Not applicable by architecture."
+    }
+  },
+  "category3": {
+    "role_based_access_control": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "patient token on provider-only route => 403 Forbidden for role 'patient'"
+      ],
+      "details": ""
+    },
+    "database_encryption_at_rest": {
+      "status": "FAIL",
+      "pass": false,
+      "evidence": [
+        "patientrecords.data.__enc => ",
+        "healthrecords.telemetry.__enc => ",
+        "ai/analyze status => 401"
+      ],
+      "details": ""
+    },
+    "encrypted_backups": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "backup endpoint => 200",
+        "backup schema => biotrack.encrypted-backup.v1",
+        "backup file => C:\\Users\\ITSD\\Documents\\GitHub\\biotrack-healthcare\\backups\\biotrack-backup-2026-02-20T060158158Z.enc.json"
+      ],
+      "details": ""
+    },
+    "audit_logging_enabled": {
+      "status": "FAIL",
+      "pass": false,
+      "evidence": [
+        "auditlogs collection count (recent key actions) => 9",
+        "/api/auditlogs status => 401"
+      ],
+      "details": ""
+    },
+    "secure_credential_storage": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        ".gitignore includes .env ignore rules => true"
+      ],
+      "details": ""
+    },
+    "tls_database_connections": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "Code evidence: backend/src/config/db.js enforces TLS when required and sets TLS options."
+      ],
+      "details": ""
+    },
+    "database_hardening": {
+      "status": "PASS",
+      "pass": true,
+      "evidence": [
+        "Code evidence: strictQuery + runValidators + connection pool/timeout/heartbeat options are set in db config."
+      ],
+      "details": ""
+    }
+  },
+  "setup": {
+    "rootPing": {
+      "status": 200,
+      "text": "BioTrack Backend Running"
+    },
+    "adminRegister": {
+      "status": 201,
+      "body": {
+        "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlblR5cGUiOiJhZG1pbiIsImFkbWluSWQiOiI2OTk3ZjhjZDUzYjdhMWU5YWM1MzA1NDEiLCJpYXQiOjE3NzE1NjczMDksImV4cCI6MTc3MTYxMDUwOSwiYXVkIjoiYmlvdHJhY2stYXBwIiwiaXNzIjoiYmlvdHJhY2staGVhbHRoY2FyZSJ9.vXK_pxASHG8C9Nt1SbSZUtTCgkQFF8OCKk6VZuHeSlQ",
+        "admin": {
+          "id": "6997f8cd53b7a1e9ac530541",
+          "email": "sec.admin.1771567308813@example.test"
+        }
+      }
+    },
+    "createHealthCenter": {
+      "status": 201,
+      "body": {
+        "healthCenter": {
+          "id": "6997f8ce53b7a1e9ac53054b",
+          "email": "sec.hc.1771567308813@example.test",
+          "name": "Security Barangay - Security Health Center",
+          "barangayName": "Security Barangay",
+          "cityMunicipality": "Security City",
+          "healthCenterName": "Security Health Center",
+          "officialContactInfo": "09171234567",
+          "geoLocation": {
+            "latitude": 14.59,
+            "longitude": 120.98
+          },
+          "assignedHealthcareProviders": [],
+          "status": "active",
+          "holderName": "Security Barangay",
+          "blockchainIdentity": {
+            "identityId": "did:biotrack:healthcenter:fe515fc84c133f5ed7522ad6",
+            "verificationStatus": "local_only",
+            "txId": ""
+          }
+        },
+        "notification": {
+          "attempted": true,
+          "delivered": true,
+          "channel": "smtp",
+          "recipientMasked": "se******************@example.test",
+          "message": "Notification email delivered."
+        }
+      }
+    },
+    "healthCenterLogin": {
+      "status": 200
+    },
+    "sessionStart": {
+      "status": 201,
+      "body": {
+        "sessionToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlblR5cGUiOiJzZXNzaW9uIiwic2Vzc2lvbklkIjoiNjk5N2Y4ZDM1M2I3YTFlOWFjNTMwNTVjIiwiaGVhbHRoQ2VudGVySWQiOiI2OTk3ZjhjZTUzYjdhMWU5YWM1MzA1NGIiLCJzdGFmZklkIjpudWxsLCJkZXZpY2VJZCI6bnVsbCwiaWF0IjoxNzcxNTY3MzE1LCJleHAiOjE3NzE2MTA1MTUsImF1ZCI6ImJpb3RyYWNrLWFwcCIsImlzcyI6ImJpb3RyYWNrLWhlYWx0aGNhcmUifQ.-OPSpaR7Aa3L1pPnneD6niswAOFvFrmIRCfaVNnIqTA",
+        "session": {
+          "id": "6997f8d353b7a1e9ac53055c",
+          "expiresAt": "2026-02-20T18:01:55.672Z"
+        }
+      }
+    },
+    "patientRegister": {
+      "status": 201,
+      "body": {
+        "message": "Registration successful. Verify your account to continue.",
+        "verificationRequired": true,
+        "patient": {
+          "id": "6997f8d453b7a1e9ac530563",
+          "email": "sec.patient.1771567308813@example.test",
+          "contactNumber": "09171231234",
+          "verification": {
+            "status": "pending",
+            "emailMasked": "se***********************@example.test",
+            "contactNumberMasked": "*******1234"
+          },
+          "blockchainIdentity": {
+            "identityId": "did:biotrack:patient:c538c86f86153fa8554485c3",
+            "verificationStatus": "local_only",
+            "txId": ""
+          }
+        }
+      }
+    },
+    "patientSendCode": {
+      "status": 200,
+      "hasDevCode": true
+    },
+    "patientVerifyCode": {
+      "status": 200,
+      "body": {
+        "message": "Account verified successfully",
+        "verificationStatus": "verified",
+        "patient": {
+          "id": "6997f8d453b7a1e9ac530563",
+          "email": "sec.patient.1771567308813@example.test"
+        }
+      }
+    },
+    "patientMfaVerify": {
+      "status": 200,
+      "body": {
+        "mfaVerified": true,
+        "hasToken": true
+      }
+    }
+  },
+  "errors": [],
+  "summary": {
+    "category1": {
+      "pass": 8,
+      "fail": 0,
+      "na": 0,
+      "total": 8
+    },
+    "category2": {
+      "pass": 4,
+      "fail": 2,
+      "na": 1,
+      "total": 7
+    },
+    "category3": {
+      "pass": 5,
+      "fail": 2,
+      "na": 0,
+      "total": 7
+    }
+  }
+}

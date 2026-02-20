@@ -27,6 +27,8 @@ Relevant endpoints:
 - Rotate JWT secrets and encryption keys in a controlled window.
 - Review and prune inactive users/providers per policy.
 - Validate TLS posture for MongoDB and runtime configs.
+- Verify upload policy settings (`UPLOAD_MAX_BYTES`, `UPLOAD_ALLOWED_MIME_TYPES`) remain aligned with policy.
+- Confirm XSS input guard remains enabled (`XSS_INPUT_PROTECTION_ENABLED=true`).
 - Run full regression checks from:
   - `README-AUTH.md`
   - `README-TESTING-WEB.md`
@@ -69,4 +71,3 @@ Relevant endpoints:
 - Keep docs in `docs/` synchronized with code changes.
 - Update API docs whenever routes or auth requirements change.
 - Update deployment/troubleshooting notes after each major release.
-

@@ -14,6 +14,9 @@ const HealthRecordSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Encrypted telemetry payload at rest.
+    telemetry: { type: mongoose.Schema.Types.Mixed, default: null },
+    // Legacy plaintext fallback fields kept for backward-compatible reads.
     heartRate: Number,
     activityLevel: String, // LOW | MODERATE | HIGH
     riskLevel: String,     // LOW | MODERATE | HIGH | CRITICAL

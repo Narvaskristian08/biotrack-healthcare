@@ -50,6 +50,8 @@ const assignedProviderSchema = z.object({
   contactNumber: z.string().trim().max(40).optional(),
 });
 
+export const emptyBodySchema = z.object({}).strict();
+
 export const aiAnalyzeSchema = z.object({
   patientId: optionalObjectIdSchema,
   heartRate: z.coerce.number().positive('heartRate must be a positive number'),

@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react'
+import { apiGet } from '@/lib/api'
 import {
   getSession,
   clearSession,
@@ -32,6 +33,16 @@ interface DashboardRoleContextType {
 }
 
 const DashboardRoleContext = createContext<DashboardRoleContextType | undefined>(undefined)
+const SESSION_HEARTBEAT_INTERVAL_MS = 10_000
+const SESSION_HEARTBEAT_ACTIVITY_DEBOUNCE_MS = 400
+const SESSION_HEARTBEAT_EVENTS: Array<keyof WindowEventMap> = [
+  'mousemove',
+  'mousedown',
+  'keydown',
+  'touchstart',
+  'scroll',
+  'wheel',
+]
 
 function mapAuthRoleToUserRole(authRole?: AuthRole | string): UserRole {
   if (authRole === 'patient') return 'patient'
@@ -88,6 +99,54 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('storage', onStorage)
     }
   }, [syncFromSession])
+
+  useEffect(() => {
+    if (!isReady || !isAuthenticated) return
+
+    const currentSession = getSession()
+    if (!currentSession?.accessToken) return
+    if (currentSession.role !== 'patient' && currentSession.role !== 'provider') return
+
+    let disposed = false
+    let lastPingAt = 0
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+    const sendHeartbeat = async () => {
+      if (disposed) return
+      const latestSession = getSession()
+      if (!latestSession?.accessToken) return
+      if (latestSession.role !== 'patient' && latestSession.role !== 'provider') return
+
+      const now = Date.now()
+      if (now - lastPingAt < SESSION_HEARTBEAT_INTERVAL_MS) return
+      lastPingAt = now
+      await apiGet<{ ok: boolean; serverTime: string }>('/auth/ping', {
+        headers: {
+          'x-biotrack-user-activity': '1',
+        },
+      })
+    }
+
+    const onActivity = () => {
+      if (debounceTimer) return
+      debounceTimer = window.setTimeout(() => {
+        debounceTimer = null
+        void sendHeartbeat()
+      }, SESSION_HEARTBEAT_ACTIVITY_DEBOUNCE_MS)
+    }
+
+    SESSION_HEARTBEAT_EVENTS.forEach((eventName) => {
+      window.addEventListener(eventName, onActivity, { passive: true })
+    })
+
+    return () => {
+      disposed = true
+      if (debounceTimer) window.clearTimeout(debounceTimer)
+      SESSION_HEARTBEAT_EVENTS.forEach((eventName) => {
+        window.removeEventListener(eventName, onActivity)
+      })
+    }
+  }, [isAuthenticated, isReady])
 
   const setRole = (r: UserRole) => {
     setRoleState(r)

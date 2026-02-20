@@ -83,6 +83,11 @@ Protected:
 - `GET /:id/login-history`
 - `GET /:patientId/records`
 - `POST /:patientId/records`
+- `POST /:patientId/records/upload/validate`
+  - Raw upload validation endpoint (type + size enforcement, no persistence).
+  - Required headers:
+    - `Content-Type`: one of allowed MIME types
+    - `x-file-name`: optional safe filename
 - `GET /:patientId/records/:recordId/verify`
 
 Notes:

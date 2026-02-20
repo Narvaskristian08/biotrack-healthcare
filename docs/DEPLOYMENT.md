@@ -36,9 +36,12 @@ Recommended production security settings:
 - `MONGODB_TLS_ENABLED=true`
 - `ENFORCE_STRONG_SECRETS=true`
 - `CSRF_COOKIE_SECURE=true`
+- `XSS_INPUT_PROTECTION_ENABLED=true`
 - `DATA_ENCRYPTION_ENABLED=true`
 - `DATA_ENCRYPTION_KEY=<32-byte key>`
 - `BACKUP_ENCRYPTION_KEY=<32-byte key>`
+- `UPLOAD_MAX_BYTES=5242880`
+- `UPLOAD_ALLOWED_MIME_TYPES=application/pdf,image/jpeg,image/png`
 
 ## 4. Web Production Configuration
 
@@ -49,6 +52,7 @@ Required:
 Optional:
 
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=<key>` (if using map picker features)
+- `NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID=<client-id>` (if using Google sign-in on `/login`)
 
 ## 5. Build and Start
 
@@ -96,4 +100,3 @@ Ensure:
   - Use external scheduler (cron, CI job, task scheduler) to call backup endpoint.
 - Keep `.env` out of version control and rotate secrets regularly.
 - For blockchain mode, deploy contracts first and set contract addresses before enabling writes.
-

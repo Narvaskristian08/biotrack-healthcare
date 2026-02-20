@@ -91,6 +91,7 @@ async function recordPatientLoginHistory({ req, patient, token }) {
     ip,
     userAgent,
     loginAt: new Date(),
+    lastActivityAt: new Date(),
     expiresAt,
   });
 }

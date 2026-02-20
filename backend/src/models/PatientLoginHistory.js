@@ -8,6 +8,7 @@ const PatientLoginHistorySchema = new mongoose.Schema(
     ip: { type: String, default: '', trim: true },
     userAgent: { type: String, default: '', trim: true },
     loginAt: { type: Date, default: Date.now, index: true },
+    lastActivityAt: { type: Date, default: Date.now, index: true },
     expiresAt: { type: Date, default: null },
   },
   { timestamps: true }
@@ -15,5 +16,6 @@ const PatientLoginHistorySchema = new mongoose.Schema(
 
 PatientLoginHistorySchema.index({ patientId: 1, loginAt: -1 });
 PatientLoginHistorySchema.index({ healthCenterId: 1, patientId: 1, loginAt: -1 });
+PatientLoginHistorySchema.index({ patientId: 1, tokenHash: 1 });
 
 export const PatientLoginHistory = mongoose.model('PatientLoginHistory', PatientLoginHistorySchema);

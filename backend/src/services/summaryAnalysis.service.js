@@ -1,4 +1,5 @@
 import HealthRecord from '../models/HealthRecord.js';
+import { resolveHealthTelemetry } from './healthTelemetryEncryption.service.js';
 import { computeTrend } from './trendAnalysis.service.js';
 
 export async function buildHealthSummary(userId, days = 7, healthCenterId = null) {
@@ -27,17 +28,21 @@ export async function buildHealthSummary(userId, days = 7, healthCenterId = null
   let fallEvents = 0;
   const heartRates = [];
 
-  records.forEach(r => {
-    const risk = String(r.riskLevel ?? '').toUpperCase();
+  records.forEach((record) => {
+    const telemetry = resolveHealthTelemetry(record, {
+      healthCenterId,
+      userId,
+    });
+    const risk = String(record.riskLevel ?? '').toUpperCase();
     if (['LOW', 'MODERATE', 'HIGH', 'CRITICAL'].includes(risk)) {
       riskCounts[risk] = (riskCounts[risk] || 0) + 1;
     }
 
-    if (r.fallDetected) {
+    if (telemetry.fallDetected) {
       fallEvents++;
     }
 
-    const hr = Number(r.heartRate);
+    const hr = Number(telemetry.heartRate);
     if (Number.isFinite(hr)) heartRates.push(hr);
   });
 

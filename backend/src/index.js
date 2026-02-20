@@ -12,6 +12,7 @@ import { attachContext } from './middleware/context.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { csrfProtection } from './middleware/csrf.js';
 import { noSqlSanitize } from './middleware/noSqlSanitize.js';
+import { xssInputGuard } from './middleware/xssInputGuard.js';
 
 import { adminRoutes } from './routes/adminRoutes.js';
 import { healthCenterRoutes } from './routes/healthCenterRoutes.js';
@@ -87,6 +88,7 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 app.use(noSqlSanitize);
+app.use(xssInputGuard);
 app.use(hpp());
 app.use(attachContext);
 app.use(csrfProtection);

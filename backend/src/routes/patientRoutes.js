@@ -2,7 +2,12 @@ import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { requirePatientSelf, requireRoles, requireSessionAuth } from '../middleware/auth.js';
 import { createPatient, getPatient, listPatientLoginHistory, listPatients, updatePatient } from '../controllers/patientController.js';
-import { addPatientRecord, listPatientRecords, verifyPatientRecordIntegrity } from '../controllers/patientRecordController.js';
+import {
+  addPatientRecord,
+  listPatientRecords,
+  validatePatientRecordUpload,
+  verifyPatientRecordIntegrity,
+} from '../controllers/patientRecordController.js';
 import {
   loginPatient,
   verifyPatientLoginMfa,
@@ -29,6 +34,7 @@ import {
   patientRecordVerifyParamsSchema,
   patientUpdateSchema,
 } from '../validation/apiSchemas.js';
+import { rawUploadParser, validateRawUpload } from '../middleware/fileUpload.js';
 
 export const patientRoutes = Router();
 
@@ -82,6 +88,15 @@ patientRoutes.post(
   validateParams(patientRecordParamsSchema),
   validateBody(patientRecordCreateSchema),
   asyncHandler(addPatientRecord)
+);
+patientRoutes.post(
+  '/:patientId/records/upload/validate',
+  requireSessionAuth,
+  requireRoles('healthcenter'),
+  validateParams(patientRecordParamsSchema),
+  rawUploadParser,
+  validateRawUpload,
+  asyncHandler(validatePatientRecordUpload)
 );
 patientRoutes.get(
   '/:patientId/records/:recordId/verify',

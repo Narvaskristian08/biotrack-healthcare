@@ -13,13 +13,11 @@ import { deliverProviderOnboardingNotification } from '../services/verificationD
 import { invalidateAdminRbacCache } from '../middleware/rbac.js';
 import { createEncryptedDatabaseBackup } from '../services/databaseBackup.service.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
-import { parseDurationMs } from '../utils/time.js';
+import { resolveSessionIdleTimeoutMs } from '../utils/sessionIdleTimeout.js';
 
 const GENERIC_LOGIN_ERROR = 'Invalid credentials';
 
 const BARANGAY_STATUSES = ['pending', 'verified', 'active'];
-const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-const MIN_SESSION_IDLE_TIMEOUT_MS = 60 * 1000;
 
 function buildSafeRegex(value) {
   const escaped = String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -38,14 +36,8 @@ function parseCoordinate(value) {
   return parsed;
 }
 
-function resolveSessionIdleTimeoutMs() {
-  const parsed = parseDurationMs(env.SESSION_IDLE_TIMEOUT);
-  if (parsed <= 0) return DEFAULT_SESSION_IDLE_TIMEOUT_MS;
-  return Math.max(parsed, MIN_SESSION_IDLE_TIMEOUT_MS);
-}
-
 function buildActiveSessionQuery(now = new Date()) {
-  const idleCutoff = new Date(now.getTime() - resolveSessionIdleTimeoutMs());
+  const idleCutoff = new Date(now.getTime() - resolveSessionIdleTimeoutMs('provider'));
   return {
     revokedAt: null,
     expiresAt: { $gt: now },

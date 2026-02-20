@@ -160,7 +160,8 @@ Expected:
 - `200` when session valid and provider active
 
 Idle timeout note:
-- If the session is inactive beyond `SESSION_IDLE_TIMEOUT`, protected calls return `401` with `Session expired due to inactivity`.
+- Provider sessions use `PROVIDER_SESSION_IDLE_TIMEOUT` (fallback: `SESSION_IDLE_TIMEOUT`).
+- If inactivity exceeds that timeout, protected calls return `401` with `Session expired due to inactivity`.
 
 ### 5.3 Patient Flow
 
@@ -225,6 +226,10 @@ curl -X POST http://127.0.0.1:3000/api/patients/login/verify-mfa \
 Expected:
 - valid challenge + code returns patient `accessToken`
 
+Idle timeout note:
+- Patient access tokens use `PATIENT_SESSION_IDLE_TIMEOUT` (fallback: `SESSION_IDLE_TIMEOUT`).
+- If inactivity exceeds that timeout, protected patient calls return `401` with `Session expired due to inactivity`.
+
 ## 6. Public Endpoint Checks
 
 List active providers for patient registration dropdown:
@@ -249,6 +254,8 @@ Expected:
 - wrong role token on protected endpoint:
   - expected `403` or `401`
 - idle provider session on protected endpoint:
+  - expected `401` with `Session expired due to inactivity`
+- idle patient token on protected endpoint:
   - expected `401` with `Session expired due to inactivity`
 
 ## 8. Email Notification Behavior
