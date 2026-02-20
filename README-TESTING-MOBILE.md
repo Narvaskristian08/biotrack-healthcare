@@ -67,6 +67,7 @@ flutter run --dart-define=API_BASE_URL=http://192.168.1.12:3000
 - `/auth` -> Auth choice
 - `/login` -> Patient login
 - `/signup` -> Patient signup
+- `/account-verification` -> Patient OTP verification
 - `/health-details` -> Health details
 - `/home` -> Home tab
 - `/scan` -> Scan tab

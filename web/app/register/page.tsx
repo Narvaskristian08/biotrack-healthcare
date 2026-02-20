@@ -171,6 +171,10 @@ export default function RegisterPage() {
     () => (selectedHealthCenter ? buildHealthCenterSecondaryLabel(selectedHealthCenter) : ''),
     [selectedHealthCenter]
   )
+  const selectedHealthCenterName = useMemo(
+    () => (selectedHealthCenter ? buildHealthCenterPrimaryLabel(selectedHealthCenter) : ''),
+    [selectedHealthCenter]
+  )
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
@@ -273,6 +277,8 @@ export default function RegisterPage() {
       patientId,
       email: result.patient?.email ?? patientData.email,
       contactNumber: result.patient?.contactNumber ?? patientData.contactNumber,
+      ...(selectedHealthCenterName ? { healthCenterName: selectedHealthCenterName } : {}),
+      ...(selectedHealthCenterDetails ? { healthCenterLocation: selectedHealthCenterDetails } : {}),
     })
 
     router.push(`/account-verification?${verificationQuery.toString()}`)

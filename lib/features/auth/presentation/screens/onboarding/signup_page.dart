@@ -16,6 +16,14 @@ class SignupPage extends StatefulWidget {
 }
 
 class _SignupPageState extends State<SignupPage> {
+  static final RegExp _emailRegex = RegExp(
+    r'^[a-zA-Z0-9._%+-]+@(gmail|yahoo)\.com$',
+  );
+  static final RegExp _passwordRegex = RegExp(
+    r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()\-_=+\[\]{}|;:,.<>])[A-Za-z\d@$!%*?&#^()\-_=+\[\]{}|;:,.<>]{8,}$',
+  );
+  static final RegExp _nameRegex = RegExp(r"^[a-zA-Z\s\-']+$");
+
   final _formKey = GlobalKey<FormState>();
   final _api = AuthApiService();
 
@@ -23,26 +31,20 @@ class _SignupPageState extends State<SignupPage> {
   final _lastNameController = TextEditingController();
   final _middleInitialController = TextEditingController();
   final _nameExtensionController = TextEditingController();
-  final _mrnController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _addressController = TextEditingController();
   final _contactController = TextEditingController();
-  final _birthDateController = TextEditingController();
-  final _guardianController = TextEditingController();
-  final _emergencyNameController = TextEditingController();
-  final _emergencyPhoneController = TextEditingController();
 
   List<HealthCenterOption> _healthCenters = const [];
   HealthCenterOption? _selectedCenter;
-  DateTime? _selectedBirthDate;
-  String? _selectedSex;
 
   bool _loadingCenters = true;
   bool _submitting = false;
   bool _showPassword = false;
   bool _showConfirmPassword = false;
+  bool _termsAccepted = false;
   String _centerErrorMessage = '';
   String _errorMessage = '';
 
@@ -58,16 +60,11 @@ class _SignupPageState extends State<SignupPage> {
     _lastNameController.dispose();
     _middleInitialController.dispose();
     _nameExtensionController.dispose();
-    _mrnController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _addressController.dispose();
     _contactController.dispose();
-    _birthDateController.dispose();
-    _guardianController.dispose();
-    _emergencyNameController.dispose();
-    _emergencyPhoneController.dispose();
     super.dispose();
   }
 
@@ -76,12 +73,13 @@ class _SignupPageState extends State<SignupPage> {
       _loadingCenters = true;
       _centerErrorMessage = '';
     });
+
     try {
       final centers = await _api.listHealthCenters();
       if (!mounted) return;
       setState(() {
         _healthCenters = centers;
-        _selectedCenter = centers.isNotEmpty ? centers.first : null;
+        _selectedCenter = null;
         if (centers.isEmpty) {
           _centerErrorMessage =
               'No active health center is available yet. Please contact your health center administrator.';
@@ -100,21 +98,6 @@ class _SignupPageState extends State<SignupPage> {
     }
   }
 
-  Future<void> _pickBirthDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedBirthDate ?? DateTime(now.year - 18, now.month, now.day),
-      firstDate: DateTime(now.year - 120),
-      lastDate: now,
-    );
-    if (picked == null) return;
-    setState(() {
-      _selectedBirthDate = picked;
-      _birthDateController.text = _formatDate(picked);
-    });
-  }
-
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     final form = _formKey.currentState;
@@ -125,12 +108,10 @@ class _SignupPageState extends State<SignupPage> {
       setState(() => _errorMessage = 'Please choose a health center.');
       return;
     }
-    if (_selectedBirthDate == null) {
-      setState(() => _errorMessage = 'Birth date is required.');
-      return;
-    }
-    if (_selectedSex == null || _selectedSex!.isEmpty) {
-      setState(() => _errorMessage = 'Sex is required.');
+    if (!_termsAccepted) {
+      setState(
+        () => _errorMessage = 'You must accept the terms and conditions.',
+      );
       return;
     }
 
@@ -140,29 +121,45 @@ class _SignupPageState extends State<SignupPage> {
     });
 
     try {
-      await _api.registerPatient(
+      final registration = await _api.registerPatient(
         healthCenterId: _selectedCenter!.id,
         firstName: _firstNameController.text,
         lastName: _lastNameController.text,
         middleInitial: _middleInitialController.text,
         nameExtension: _nameExtensionController.text,
-        mrn: _mrnController.text,
         email: _emailController.text,
         password: _passwordController.text,
         address: _addressController.text,
         contactNumber: _contactController.text,
-        birthDate: _selectedBirthDate!.toIso8601String(),
-        sex: _selectedSex ?? '',
-        guardianName: _guardianController.text,
-        emergencyContactName: _emergencyNameController.text,
-        emergencyContactPhone: _emergencyPhoneController.text,
       );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registration successful. You can now log in.')),
+        const SnackBar(
+          content: Text(
+            'Registration successful. Please verify your account before logging in.',
+          ),
+        ),
       );
-      context.go('/login');
+      final selectedCenterName =
+          registration.assignedHealthCenter?.displayName ??
+          _selectedCenter!.primaryLabel;
+      final selectedCenterLocation =
+          registration.assignedHealthCenter?.locationLabel ??
+          _selectedCenter!.subtitle;
+      final verificationUri = Uri(
+        path: '/account-verification',
+        queryParameters: {
+          'patientId': registration.patientId,
+          'email': registration.email,
+          'contactNumber': registration.contactNumber,
+          if (selectedCenterName.trim().isNotEmpty)
+            'healthCenterName': selectedCenterName.trim(),
+          if (selectedCenterLocation.trim().isNotEmpty)
+            'healthCenterLocation': selectedCenterLocation.trim(),
+        },
+      );
+      context.go(verificationUri.toString());
     } on AuthApiException catch (error) {
       if (!mounted) return;
       setState(() => _errorMessage = error.message);
@@ -176,19 +173,16 @@ class _SignupPageState extends State<SignupPage> {
     }
   }
 
-  String _formatDate(DateTime date) {
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '${date.year}-$month-$day';
-  }
-
-  InputDecoration _dropdownDecoration(String label) {
+  InputDecoration _dropdownDecoration(String label, {IconData? icon}) {
     return InputDecoration(
       labelText: label,
       labelStyle: const TextStyle(
         color: AppColors.darkText,
         fontWeight: FontWeight.w600,
       ),
+      prefixIcon: icon == null
+          ? null
+          : Icon(icon, color: AppColors.secondaryText, size: 20),
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(
@@ -197,17 +191,11 @@ class _SignupPageState extends State<SignupPage> {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: AppColors.mutedBorder,
-          width: 1,
-        ),
+        borderSide: const BorderSide(color: Color(0xFFBFDACA), width: 1.5),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: AppColors.primaryGreen,
-          width: 1.4,
-        ),
+        borderSide: const BorderSide(color: Color(0xFF12935F), width: 1.8),
       ),
     );
   }
@@ -219,393 +207,705 @@ class _SignupPageState extends State<SignupPage> {
     return null;
   }
 
+  String? _nameValidator(String? value, String label) {
+    final input = (value ?? '').trim();
+    if (input.isEmpty) {
+      return '$label is required';
+    }
+    if (!_nameRegex.hasMatch(input)) {
+      return '$label can only contain letters, spaces, hyphens, and apostrophes';
+    }
+    return null;
+  }
+
+  Widget _sectionHeading(String title, String subtitle) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3FBF6),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFCDE6D8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.darkText,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: AppColors.bodyText,
+              fontSize: 12.5,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.softBackground,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.darkText),
-          onPressed: () => context.pop(),
-        ),
-      ),
       body: SafeArea(
-        child: AutofillGroup(
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFE5F3D6), Color(0xFFC7E2AD)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Create Patient Account',
-                        style: TextStyle(
-                          fontSize: 25,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.darkText,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Fill in all required patient details to complete registration.',
-                        style: TextStyle(color: AppColors.bodyText, height: 1.4),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
-                if (_loadingCenters)
-                  const LinearProgressIndicator(minHeight: 3)
-                else if (_healthCenters.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF4E5),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFF3CF8A)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
+          children: [
+            const _AuthBackdrop(),
+            AutofillGroup(
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
+                  children: [
+                    Row(
                       children: [
-                        const Text(
-                          'Health Center',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.darkText,
+                        InkWell(
+                          borderRadius: BorderRadius.circular(99),
+                          onTap: () => context.pop(),
+                          child: Container(
+                            height: 38,
+                            width: 38,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.86),
+                              border: Border.all(color: const Color(0xFFC8E2D4)),
+                            ),
+                            child: const Icon(
+                              Icons.arrow_back_rounded,
+                              color: AppColors.darkText,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _centerErrorMessage.isNotEmpty
-                              ? _centerErrorMessage
-                              : 'No health center information is available right now.',
-                          style: const TextStyle(color: AppColors.bodyText),
-                        ),
-                        const SizedBox(height: 8),
-                        TextButton.icon(
-                          onPressed: _loadingCenters ? null : _loadHealthCenters,
-                          icon: const Icon(Icons.refresh, size: 18),
-                          label: const Text('Retry'),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(99),
+                            color: Colors.white.withValues(alpha: 0.84),
+                            border: Border.all(color: const Color(0xFFC8E2D4)),
+                          ),
+                          child: const Text(
+                            'Patient Registration',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F7A4E),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                  )
-                else
-                  DropdownButtonFormField<HealthCenterOption>(
-                    initialValue: _selectedCenter,
-                    isExpanded: true,
-                    decoration: _dropdownDecoration('Health Center'),
-                    items: _healthCenters
-                        .map(
-                          (center) => DropdownMenuItem<HealthCenterOption>(
-                            value: center,
-                            child: Text(
-                              center.primaryLabel,
-                              overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1CAA6D), Color(0xFF0E7A4E)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF0F6F48).withValues(alpha: 0.24),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Create patient account',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              height: 1.1,
                             ),
                           ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (value) => setState(() => _selectedCenter = value),
-                    validator: (value) => value == null ? 'Health center is required' : null,
-                  ),
-                if (_centerErrorMessage.isNotEmpty && _healthCenters.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text(
-                      _centerErrorMessage,
-                      style: const TextStyle(
-                        color: AppColors.danger,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                if (_selectedCenter != null && _selectedCenter!.subtitle.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8, left: 2),
-                    child: Text(
-                      _selectedCenter!.subtitle,
-                      style: const TextStyle(color: AppColors.secondaryText, fontSize: 12),
-                    ),
-                  ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Personal Information',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.darkText,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: AuthTextField(
-                        controller: _firstNameController,
-                        label: 'First Name',
-                        hintText: 'Juan',
-                        textCapitalization: TextCapitalization.words,
-                        autofillHints: const [AutofillHints.givenName],
-                        validator: (value) => _requiredField(value, 'First name'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: AuthTextField(
-                        controller: _lastNameController,
-                        label: 'Last Name',
-                        hintText: 'Dela Cruz',
-                        textCapitalization: TextCapitalization.words,
-                        autofillHints: const [AutofillHints.familyName],
-                        validator: (value) => _requiredField(value, 'Last name'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: AuthTextField(
-                        controller: _middleInitialController,
-                        label: 'Middle Initial',
-                        hintText: 'D',
-                        maxLength: 1,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp('[a-zA-Z]')),
+                          SizedBox(height: 8),
+                          Text(
+                            'Register with your selected health center using your verified patient details.',
+                            style: TextStyle(
+                              color: Color(0xFFD4F7E7),
+                              fontSize: 13.5,
+                              height: 1.4,
+                            ),
+                          ),
                         ],
-                        textCapitalization: TextCapitalization.characters,
-                        validator: (value) => _requiredField(value, 'Middle initial'),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: AuthTextField(
-                        controller: _nameExtensionController,
-                        label: 'Name Extension',
-                        hintText: 'Jr. (optional)',
-                        textCapitalization: TextCapitalization.words,
+                    const SizedBox(height: 14),
+                    const Row(
+                      children: [
+                        _SignupStepChip(number: '1', label: 'Identity'),
+                        SizedBox(width: 8),
+                        _SignupStepChip(number: '2', label: 'Contact'),
+                        SizedBox(width: 8),
+                        _SignupStepChip(number: '3', label: 'Security'),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.97),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: const Color(0xFFCDE5D8)),
+                      ),
+                      child: Column(
+                        children: [
+                          if (_loadingCenters)
+                            const LinearProgressIndicator(minHeight: 3)
+                          else if (_healthCenters.isEmpty)
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF4E5),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFF3CF8A)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'No active health center yet.',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.darkText,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    _centerErrorMessage.isNotEmpty
+                                        ? _centerErrorMessage
+                                        : 'Please contact your health center administrator.',
+                                    style: const TextStyle(color: AppColors.bodyText),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextButton.icon(
+                                    onPressed: _loadingCenters
+                                        ? null
+                                        : _loadHealthCenters,
+                                    icon: const Icon(Icons.refresh, size: 18),
+                                    label: const Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            DropdownButtonFormField<HealthCenterOption>(
+                              initialValue: _selectedCenter,
+                              isExpanded: true,
+                              decoration: _dropdownDecoration(
+                                'Health Center',
+                                icon: Icons.apartment_rounded,
+                              ),
+                              items: _healthCenters
+                                  .map(
+                                    (center) => DropdownMenuItem<HealthCenterOption>(
+                                      value: center,
+                                      child: Text(
+                                        center.primaryLabel,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(growable: false),
+                              onChanged: (value) =>
+                                  setState(() => _selectedCenter = value),
+                              validator: (value) =>
+                                  value == null ? 'Health center is required' : null,
+                            ),
+                          if (_centerErrorMessage.isNotEmpty &&
+                              _healthCenters.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: Text(
+                                _centerErrorMessage,
+                                style: const TextStyle(
+                                  color: AppColors.danger,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          if (_selectedCenter != null &&
+                              _selectedCenter!.subtitle.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFECFAF2),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFBDE7D2)),
+                              ),
+                              child: Text(
+                                _selectedCenter!.subtitle,
+                                style: const TextStyle(
+                                  color: Color(0xFF1F5C43),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 14),
+                          _sectionHeading(
+                            'Identity Information',
+                            'Enter your legal patient name details.',
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: AuthTextField(
+                                  controller: _firstNameController,
+                                  label: 'First Name',
+                                  hintText: 'Juan',
+                                  textCapitalization: TextCapitalization.words,
+                                  prefixIcon: const Icon(
+                                    Icons.person_outline_rounded,
+                                    color: AppColors.secondaryText,
+                                  ),
+                                  autofillHints: const [AutofillHints.givenName],
+                                  validator: (value) =>
+                                      _nameValidator(value, 'First name'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: AuthTextField(
+                                  controller: _lastNameController,
+                                  label: 'Last Name',
+                                  hintText: 'Dela Cruz',
+                                  textCapitalization: TextCapitalization.words,
+                                  prefixIcon: const Icon(
+                                    Icons.person_outline_rounded,
+                                    color: AppColors.secondaryText,
+                                  ),
+                                  autofillHints: const [AutofillHints.familyName],
+                                  validator: (value) =>
+                                      _nameValidator(value, 'Last name'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: AuthTextField(
+                                  controller: _middleInitialController,
+                                  label: 'Middle Initial',
+                                  hintText: 'D',
+                                  maxLength: 1,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(
+                                      RegExp('[a-zA-Z]'),
+                                    ),
+                                  ],
+                                  textCapitalization: TextCapitalization.characters,
+                                  prefixIcon: const Icon(
+                                    Icons.badge_outlined,
+                                    color: AppColors.secondaryText,
+                                  ),
+                                  validator: (value) {
+                                    final input = (value ?? '').trim();
+                                    if (input.isEmpty) {
+                                      return 'Middle initial is required';
+                                    }
+                                    if (input.length != 1) {
+                                      return 'Middle initial must be 1 character';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: AuthTextField(
+                                  controller: _nameExtensionController,
+                                  label: 'Name Extension',
+                                  hintText: 'Jr. (optional)',
+                                  textCapitalization: TextCapitalization.words,
+                                  prefixIcon: const Icon(
+                                    Icons.person_add_alt_rounded,
+                                    color: AppColors.secondaryText,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          _sectionHeading(
+                            'Contact Details',
+                            'We use these details for verification and care updates.',
+                          ),
+                          const SizedBox(height: 12),
+                          AuthTextField(
+                            controller: _emailController,
+                            label: 'Email',
+                            hintText: 'your@gmail.com or your@yahoo.com',
+                            keyboardType: TextInputType.emailAddress,
+                            prefixIcon: const Icon(
+                              Icons.mail_outline_rounded,
+                              color: AppColors.secondaryText,
+                            ),
+                            autofillHints: const [AutofillHints.email],
+                            validator: (value) {
+                              final input = (value ?? '').trim();
+                              if (input.isEmpty) return 'Email is required';
+                              if (!_emailRegex.hasMatch(input)) {
+                                return 'Please use a valid @gmail.com or @yahoo.com email';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          AuthTextField(
+                            controller: _addressController,
+                            label: 'Address',
+                            hintText: '123 Main Street',
+                            textCapitalization: TextCapitalization.words,
+                            prefixIcon: const Icon(
+                              Icons.location_on_outlined,
+                              color: AppColors.secondaryText,
+                            ),
+                            autofillHints: const [AutofillHints.streetAddressLine1],
+                            validator: (value) => _requiredField(value, 'Address'),
+                          ),
+                          const SizedBox(height: 12),
+                          AuthTextField(
+                            controller: _contactController,
+                            label: 'Contact Number',
+                            hintText: '09123456789',
+                            keyboardType: TextInputType.phone,
+                            prefixIcon: const Icon(
+                              Icons.phone_outlined,
+                              color: AppColors.secondaryText,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(RegExp('[0-9+]')),
+                            ],
+                            autofillHints: const [AutofillHints.telephoneNumber],
+                            validator: (value) => _requiredField(value, 'Contact number'),
+                          ),
+                          const SizedBox(height: 14),
+                          _sectionHeading(
+                            'Security',
+                            'Choose a strong password for your patient account.',
+                          ),
+                          const SizedBox(height: 12),
+                          AuthTextField(
+                            controller: _passwordController,
+                            label: 'Password',
+                            hintText: 'At least 8 characters',
+                            obscureText: !_showPassword,
+                            prefixIcon: const Icon(
+                              Icons.lock_outline_rounded,
+                              color: AppColors.secondaryText,
+                            ),
+                            autofillHints: const [AutofillHints.newPassword],
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _showPassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                              ),
+                              onPressed: () =>
+                                  setState(() => _showPassword = !_showPassword),
+                            ),
+                            validator: (value) {
+                              final input = (value ?? '').trim();
+                              if (input.isEmpty) return 'Password is required';
+                              if (!_passwordRegex.hasMatch(input)) {
+                                return 'Password must be at least 8 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special character';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          AuthTextField(
+                            controller: _confirmPasswordController,
+                            label: 'Confirm Password',
+                            hintText: 'Re-enter password',
+                            obscureText: !_showConfirmPassword,
+                            prefixIcon: const Icon(
+                              Icons.lock_reset_rounded,
+                              color: AppColors.secondaryText,
+                            ),
+                            autofillHints: const [AutofillHints.newPassword],
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _showConfirmPassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                              ),
+                              onPressed: () => setState(
+                                () => _showConfirmPassword = !_showConfirmPassword,
+                              ),
+                            ),
+                            validator: (value) {
+                              if ((value ?? '').isEmpty) {
+                                return 'Please confirm your password';
+                              }
+                              if (value != _passwordController.text) {
+                                return 'Passwords do not match';
+                              }
+                              return null;
+                            },
+                          ),
+                          if (_selectedCenter != null) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFECFAF2),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFBDE7D2)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _selectedCenter!.primaryLabel,
+                                    style: const TextStyle(
+                                      color: Color(0xFF1F5C43),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.8,
+                                    ),
+                                  ),
+                                  if (_selectedCenter!.subtitle.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _selectedCenter!.subtitle,
+                                      style: const TextStyle(
+                                        color: AppColors.bodyText,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF7FCF9),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.mutedBorder),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Checkbox(
+                                  value: _termsAccepted,
+                                  onChanged: (checked) {
+                                    setState(() {
+                                      _termsAccepted = checked == true;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    'I accept the terms and conditions and consent to health data processing for monitoring and care.',
+                                    style: TextStyle(
+                                      color: AppColors.darkText,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_errorMessage.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFEAEA),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFF3C6C6)),
+                        ),
+                        child: Text(
+                          _errorMessage,
+                          style: const TextStyle(
+                            color: AppColors.danger,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    PrimaryButton(
+                      text: _submitting ? 'Creating account...' : 'Create Account',
+                      onTap: _submitting ? () {} : _submit,
+                    ),
+                    const SizedBox(height: 6),
+                    TextButton(
+                      onPressed: _submitting ? null : () => context.go('/login'),
+                      child: const Text(
+                        'Already have an account? Log in',
+                        style: TextStyle(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                AuthTextField(
-                  controller: _birthDateController,
-                  label: 'Birth Date',
-                  hintText: 'YYYY-MM-DD',
-                  readOnly: true,
-                  onTap: _pickBirthDate,
-                  prefixIcon: const Icon(Icons.calendar_today_outlined),
-                  validator: (value) => _requiredField(value, 'Birth date'),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedSex,
-                  decoration: _dropdownDecoration('Sex'),
-                  items: const [
-                    DropdownMenuItem(value: 'male', child: Text('Male')),
-                    DropdownMenuItem(value: 'female', child: Text('Female')),
-                    DropdownMenuItem(value: 'other', child: Text('Other')),
-                  ],
-                  onChanged: (value) => setState(() => _selectedSex = value),
-                  validator: (value) => value == null || value.isEmpty ? 'Sex is required' : null,
-                ),
-                const SizedBox(height: 12),
-                AuthTextField(
-                  controller: _mrnController,
-                  label: 'MRN',
-                  hintText: 'Medical record number (optional)',
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Account Credentials',
-                  style: TextStyle(
-                    fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SignupStepChip extends StatelessWidget {
+  const _SignupStepChip({required this.number, required this.label});
+
+  final String number;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFCCE5D8)),
+          color: const Color(0xFFF3FBF6),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              height: 18,
+              width: 18,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFF12935F),
+              ),
+              child: Center(
+                child: Text(
+                  number,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.darkText,
                   ),
                 ),
-                const SizedBox(height: 12),
-                AuthTextField(
-                  controller: _emailController,
-                  label: 'Email',
-                  hintText: 'name@example.com',
-                  keyboardType: TextInputType.emailAddress,
-                  autofillHints: const [AutofillHints.email],
-                  validator: (value) {
-                    final input = (value ?? '').trim();
-                    if (input.isEmpty) return 'Email is required';
-                    final valid = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(input);
-                    if (!valid) return 'Enter a valid email';
-                    return null;
-                  },
+              ),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF0F6F48),
+                  fontSize: 11.2,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(height: 12),
-                AuthTextField(
-                  controller: _passwordController,
-                  label: 'Password',
-                  hintText: 'At least 8 characters',
-                  obscureText: !_showPassword,
-                  autofillHints: const [AutofillHints.newPassword],
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    ),
-                    onPressed: () => setState(() => _showPassword = !_showPassword),
-                  ),
-                  validator: (value) {
-                    final input = value ?? '';
-                    if (input.length < 8) {
-                      return 'Use at least 8 characters';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                AuthTextField(
-                  controller: _confirmPasswordController,
-                  label: 'Confirm Password',
-                  hintText: 'Re-enter password',
-                  obscureText: !_showConfirmPassword,
-                  autofillHints: const [AutofillHints.newPassword],
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _showConfirmPassword
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                    ),
-                    onPressed: () => setState(
-                      () => _showConfirmPassword = !_showConfirmPassword,
-                    ),
-                  ),
-                  validator: (value) {
-                    if ((value ?? '').isEmpty) return 'Please confirm your password';
-                    if (value != _passwordController.text) {
-                      return 'Passwords do not match';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Contact Details',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.darkText,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                AuthTextField(
-                  controller: _addressController,
-                  label: 'Address',
-                  hintText: 'Barangay / street address',
-                  textCapitalization: TextCapitalization.words,
-                  autofillHints: const [AutofillHints.streetAddressLine1],
-                  validator: (value) => _requiredField(value, 'Address'),
-                ),
-                const SizedBox(height: 12),
-                AuthTextField(
-                  controller: _contactController,
-                  label: 'Contact Number',
-                  hintText: '09XXXXXXXXX',
-                  keyboardType: TextInputType.phone,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp('[0-9+]')),
-                  ],
-                  autofillHints: const [AutofillHints.telephoneNumber],
-                  validator: (value) {
-                    final input = (value ?? '').trim();
-                    if (input.isEmpty) return 'Contact number is required';
-                    if (input.length < 10) return 'Enter a valid contact number';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                AuthTextField(
-                  controller: _guardianController,
-                  label: 'Guardian Name',
-                  hintText: 'Optional',
-                  textCapitalization: TextCapitalization.words,
-                ),
-                const SizedBox(height: 12),
-                AuthTextField(
-                  controller: _emergencyNameController,
-                  label: 'Emergency Contact Name',
-                  hintText: 'Required for emergencies',
-                  textCapitalization: TextCapitalization.words,
-                  validator: (value) => _requiredField(value, 'Emergency contact name'),
-                ),
-                const SizedBox(height: 12),
-                AuthTextField(
-                  controller: _emergencyPhoneController,
-                  label: 'Emergency Contact Number',
-                  hintText: '09XXXXXXXXX',
-                  keyboardType: TextInputType.phone,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp('[0-9+]')),
-                  ],
-                  validator: (value) {
-                    final input = (value ?? '').trim();
-                    if (input.isEmpty) return 'Emergency contact number is required';
-                    if (input.length < 10) return 'Enter a valid contact number';
-                    return null;
-                  },
-                ),
-                if (_errorMessage.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFEAEA),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      _errorMessage,
-                      style: const TextStyle(
-                        color: AppColors.danger,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 18),
-                PrimaryButton(
-                  text: _submitting ? 'Creating account...' : 'Create Account',
-                  onTap: _submitting ? () {} : _submit,
-                ),
-                const SizedBox(height: 6),
-                TextButton(
-                  onPressed: _submitting ? null : () => context.go('/login'),
-                  child: const Text(
-                    'Already have an account? Log in',
-                    style: TextStyle(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthBackdrop extends StatelessWidget {
+  const _AuthBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFEFF8F2), Color(0xFFDCEFE1)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
             ),
           ),
         ),
-      ),
+        Positioned(
+          top: -150,
+          right: -80,
+          child: Container(
+            height: 320,
+            width: 320,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF20AA6D).withValues(alpha: 0.14),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 210,
+          left: -95,
+          child: Container(
+            height: 240,
+            width: 240,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFFB5E1C9).withValues(alpha: 0.62),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: -105,
+          right: -45,
+          child: Container(
+            height: 250,
+            width: 250,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.primaryBlue.withValues(alpha: 0.13),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

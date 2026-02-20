@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../../../core/config/app_config.dart';
 import '../models/auth_login_result.dart';
 import '../models/health_center_option.dart';
+import 'auth_session_store.dart';
 
 class AuthApiException implements Exception {
   const AuthApiException(this.message);
@@ -32,6 +33,95 @@ class AuthMfaRequiredException extends AuthApiException {
   final String devPreviewCode;
 }
 
+class PatientRegistrationResult {
+  const PatientRegistrationResult({
+    required this.patientId,
+    required this.email,
+    required this.contactNumber,
+    this.assignedHealthCenter,
+  });
+
+  final String patientId;
+  final String email;
+  final String contactNumber;
+  final AssignedHealthCenterResult? assignedHealthCenter;
+}
+
+class PatientVerificationCodeSendResult {
+  const PatientVerificationCodeSendResult({
+    required this.message,
+    required this.method,
+    this.recipientMasked = '',
+    this.devPreviewCode = '',
+  });
+
+  final String message;
+  final String method;
+  final String recipientMasked;
+  final String devPreviewCode;
+}
+
+class AssignedHealthCenterResult {
+  const AssignedHealthCenterResult({
+    required this.id,
+    required this.name,
+    required this.barangayName,
+    required this.cityMunicipality,
+    required this.healthCenterName,
+    required this.address,
+    required this.contactNumber,
+    required this.officialContactInfo,
+  });
+
+  final String id;
+  final String name;
+  final String barangayName;
+  final String cityMunicipality;
+  final String healthCenterName;
+  final String address;
+  final String contactNumber;
+  final String officialContactInfo;
+
+  String get displayName {
+    if (healthCenterName.trim().isNotEmpty) return healthCenterName.trim();
+    if (name.trim().isNotEmpty) return name.trim();
+    return 'Healthcare Provider';
+  }
+
+  String get locationLabel {
+    final values = <String>[
+      barangayName.trim(),
+      cityMunicipality.trim(),
+    ].where((item) => item.isNotEmpty).toList(growable: false);
+    return values.join(', ');
+  }
+}
+
+class PatientProfileResult {
+  const PatientProfileResult({
+    required this.id,
+    required this.firstName,
+    required this.lastName,
+    required this.email,
+    required this.contactNumber,
+    required this.healthCenterId,
+    required this.assignedHealthCenter,
+  });
+
+  final String id;
+  final String firstName;
+  final String lastName;
+  final String email;
+  final String contactNumber;
+  final String healthCenterId;
+  final AssignedHealthCenterResult? assignedHealthCenter;
+
+  String get fullName {
+    final full = '$firstName $lastName'.trim();
+    return full.isEmpty ? 'Patient' : full;
+  }
+}
+
 class AuthApiService {
   AuthApiService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -43,8 +133,8 @@ class AuthApiService {
 
     // Prevent accidental double "/api" when API_BASE_URL already ends with /api.
     final hasApiSuffix = base.toLowerCase().endsWith('/api');
-    final resolvedPath = hasApiSuffix &&
-            normalizedPath.toLowerCase().startsWith('/api/')
+    final resolvedPath =
+        hasApiSuffix && normalizedPath.toLowerCase().startsWith('/api/')
         ? normalizedPath.substring(4)
         : normalizedPath;
 
@@ -75,7 +165,7 @@ class AuthApiService {
     return items;
   }
 
-  Future<void> registerPatient({
+  Future<PatientRegistrationResult> registerPatient({
     required String healthCenterId,
     required String firstName,
     required String lastName,
@@ -130,6 +220,179 @@ class AuthApiService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AuthApiException(_extractErrorMessage(body, response));
     }
+
+    final patient = (body['patient'] as Map<String, dynamic>? ?? const {});
+    final patientId = (patient['id'] ?? '').toString().trim();
+    if (patientId.isEmpty) {
+      throw const AuthApiException(
+        'Registration completed but verification session is missing. Please try again.',
+      );
+    }
+
+    AssignedHealthCenterResult? assignedHealthCenter;
+    final rawCenter =
+        patient['assignedHealthCenter'] as Map<String, dynamic>? ?? const {};
+    if (rawCenter.isNotEmpty) {
+      assignedHealthCenter = AssignedHealthCenterResult(
+        id: (rawCenter['id'] ?? '').toString(),
+        name: (rawCenter['name'] ?? '').toString(),
+        barangayName: (rawCenter['barangayName'] ?? '').toString(),
+        cityMunicipality: (rawCenter['cityMunicipality'] ?? '').toString(),
+        healthCenterName: (rawCenter['healthCenterName'] ?? '').toString(),
+        address: (rawCenter['address'] ?? '').toString(),
+        contactNumber: (rawCenter['contactNumber'] ?? '').toString(),
+        officialContactInfo: (rawCenter['officialContactInfo'] ?? '')
+            .toString(),
+      );
+    }
+
+    return PatientRegistrationResult(
+      patientId: patientId,
+      email: (patient['email'] ?? email).toString(),
+      contactNumber: (patient['contactNumber'] ?? contactNumber).toString(),
+      assignedHealthCenter: assignedHealthCenter,
+    );
+  }
+
+  Future<PatientVerificationCodeSendResult> sendPatientVerificationCode({
+    required String patientId,
+    required String method,
+  }) async {
+    final normalizedMethod = method.trim().toLowerCase() == 'sms'
+        ? 'sms'
+        : 'email';
+
+    late final http.Response response;
+    try {
+      response = await _client.post(
+        _buildUri('/api/patients/verification/send-code'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'patientId': patientId.trim(),
+          'method': normalizedMethod,
+        }),
+      );
+    } on SocketException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    }
+    final body = _safeDecodeJson(response.body);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(_extractErrorMessage(body, response));
+    }
+
+    return PatientVerificationCodeSendResult(
+      message: (body['message'] ?? 'Verification code sent').toString(),
+      method: (body['method'] ?? normalizedMethod).toString(),
+      recipientMasked: (body['recipientMasked'] ?? '').toString(),
+      devPreviewCode: (body['devPreviewCode'] ?? '').toString(),
+    );
+  }
+
+  Future<String> verifyPatientRegistrationCode({
+    required String patientId,
+    required String method,
+    required String code,
+  }) async {
+    final normalizedMethod = method.trim().toLowerCase() == 'sms'
+        ? 'sms'
+        : 'email';
+
+    late final http.Response response;
+    try {
+      response = await _client.post(
+        _buildUri('/api/patients/verification/verify-code'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'patientId': patientId.trim(),
+          'method': normalizedMethod,
+          'code': code.trim(),
+        }),
+      );
+    } on SocketException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    }
+    final body = _safeDecodeJson(response.body);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(_extractErrorMessage(body, response));
+    }
+
+    return (body['message'] ?? 'Account verified successfully').toString();
+  }
+
+  Future<PatientProfileResult> fetchMyPatientProfile() async {
+    final token = await AuthSessionStore.accessToken();
+    final patientId = await AuthSessionStore.patientId();
+    if (token == null ||
+        token.trim().isEmpty ||
+        patientId == null ||
+        patientId.trim().isEmpty) {
+      throw const AuthApiException(
+        'Patient session is missing. Please log in again.',
+      );
+    }
+
+    late final http.Response response;
+    try {
+      response = await _client.get(
+        _buildUri('/api/patients/${patientId.trim()}'),
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${token.trim()}',
+        },
+      );
+    } on SocketException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    }
+    final body = _safeDecodeJson(response.body);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(_extractErrorMessage(body, response));
+    }
+
+    final patient = (body['patient'] as Map<String, dynamic>? ?? const {});
+    final resolvedId = (patient['_id'] ?? patient['id'] ?? '')
+        .toString()
+        .trim();
+    if (resolvedId.isEmpty) {
+      throw const AuthApiException(
+        'Profile response is missing patient information.',
+      );
+    }
+
+    AssignedHealthCenterResult? assignedHealthCenter;
+    final rawCenter =
+        patient['assignedHealthCenter'] as Map<String, dynamic>? ?? const {};
+    if (rawCenter.isNotEmpty) {
+      assignedHealthCenter = AssignedHealthCenterResult(
+        id: (rawCenter['id'] ?? '').toString(),
+        name: (rawCenter['name'] ?? '').toString(),
+        barangayName: (rawCenter['barangayName'] ?? '').toString(),
+        cityMunicipality: (rawCenter['cityMunicipality'] ?? '').toString(),
+        healthCenterName: (rawCenter['healthCenterName'] ?? '').toString(),
+        address: (rawCenter['address'] ?? '').toString(),
+        contactNumber: (rawCenter['contactNumber'] ?? '').toString(),
+        officialContactInfo: (rawCenter['officialContactInfo'] ?? '')
+            .toString(),
+      );
+    }
+
+    return PatientProfileResult(
+      id: resolvedId,
+      firstName: (patient['firstName'] ?? '').toString(),
+      lastName: (patient['lastName'] ?? '').toString(),
+      email: (patient['email'] ?? '').toString(),
+      contactNumber: (patient['contactNumber'] ?? '').toString(),
+      healthCenterId: (patient['healthCenterId'] ?? '').toString(),
+      assignedHealthCenter: assignedHealthCenter,
+    );
   }
 
   Future<AuthLoginResult> loginPatient({

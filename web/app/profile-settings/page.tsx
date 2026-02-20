@@ -122,6 +122,35 @@ export default function ProfileSettingsPage() {
           </Card>
         ) : null}
 
+        {profile?.assignedHealthCenter ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Assigned Healthcare Location</CardTitle>
+              <CardDescription>This is the healthcare provider you selected during signup</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p className="font-semibold text-foreground">
+                {profile.assignedHealthCenter.healthCenterName ||
+                  profile.assignedHealthCenter.name ||
+                  'Healthcare Provider'}
+              </p>
+              <p className="text-muted-foreground">
+                {[profile.assignedHealthCenter.barangayName, profile.assignedHealthCenter.cityMunicipality]
+                  .filter(Boolean)
+                  .join(', ') || 'Location not available'}
+              </p>
+              {profile.assignedHealthCenter.address ? (
+                <p className="text-muted-foreground">Address: {profile.assignedHealthCenter.address}</p>
+              ) : null}
+              {profile.assignedHealthCenter.contactNumber || profile.assignedHealthCenter.officialContactInfo ? (
+                <p className="text-muted-foreground">
+                  Contact: {profile.assignedHealthCenter.contactNumber || profile.assignedHealthCenter.officialContactInfo}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-3">

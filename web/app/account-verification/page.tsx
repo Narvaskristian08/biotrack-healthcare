@@ -97,6 +97,8 @@ export default function AccountVerificationPage() {
   const patientId = searchParams.get('patientId') ?? ''
   const email = searchParams.get('email') ?? ''
   const contactNumber = searchParams.get('contactNumber') ?? ''
+  const healthCenterName = searchParams.get('healthCenterName') ?? ''
+  const healthCenterLocation = searchParams.get('healthCenterLocation') ?? ''
 
   const [method, setMethod] = useState<VerificationMethod>('email')
   const [step, setStep] = useState<'method' | 'verify' | 'complete'>('method')
@@ -212,6 +214,14 @@ export default function AccountVerificationPage() {
                 )
               })}
             </div>
+
+            {healthCenterName || healthCenterLocation ? (
+              <div className="mt-4 rounded-xl border border-[#d4e8dd] bg-white px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#5b786d]">Selected healthcare location</p>
+                <p className="mt-1 text-sm font-semibold text-[#163428]">{healthCenterName || 'Healthcare Provider'}</p>
+                {healthCenterLocation ? <p className="mt-1 text-xs text-[#5d7b70]">{healthCenterLocation}</p> : null}
+              </div>
+            ) : null}
 
             {error ? (
               <div className="mt-5 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">

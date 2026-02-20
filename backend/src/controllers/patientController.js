@@ -1,4 +1,5 @@
 import { Patient } from '../models/Patient.js';
+import { HealthCenter } from '../models/HealthCenter.js';
 import { PatientLoginHistory } from '../models/PatientLoginHistory.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { hashPassword } from '../services/authService.js';
@@ -8,6 +9,20 @@ import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
 function buildSafeRegex(value) {
   const escaped = String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(escaped, 'i');
+}
+
+function buildHealthCenterSummary(center) {
+  if (!center) return null;
+  return {
+    id: center._id,
+    name: String(center.name ?? '').trim(),
+    barangayName: String(center.barangayName ?? '').trim(),
+    cityMunicipality: String(center.cityMunicipality ?? '').trim(),
+    healthCenterName: String(center.healthCenterName ?? '').trim(),
+    address: String(center.address ?? '').trim(),
+    contactNumber: String(center.contactNumber ?? center.officialContactInfo ?? '').trim(),
+    officialContactInfo: String(center.officialContactInfo ?? '').trim(),
+  };
 }
 
 export async function createPatient(req, res) {
@@ -136,7 +151,15 @@ export async function getPatient(req, res) {
   const { healthCenterId } = req.context;
   const patient = await Patient.findOne({ _id: req.params.id, healthCenterId }).select('-passwordHash').lean();
   if (!patient) return res.status(404).json({ error: { message: 'Patient not found' } });
-  return res.json({ patient });
+  const healthCenter = await HealthCenter.findById(patient.healthCenterId)
+    .select('name barangayName cityMunicipality healthCenterName address contactNumber officialContactInfo')
+    .lean();
+  return res.json({
+    patient: {
+      ...patient,
+      assignedHealthCenter: buildHealthCenterSummary(healthCenter),
+    },
+  });
 }
 
 export async function updatePatient(req, res) {

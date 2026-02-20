@@ -4,6 +4,7 @@ import '../../features/auth/presentation/screens/onboarding/onboarding_page.dart
 import '../../features/auth/presentation/screens/onboarding/auth_choice_page.dart';
 import '../../features/auth/presentation/screens/onboarding/login_page.dart';
 import '../../features/auth/presentation/screens/onboarding/signup_page.dart';
+import '../../features/auth/presentation/screens/onboarding/account_verification_page.dart';
 import '../../features/auth/presentation/screens/onboarding/health_details_page.dart';
 
 import '../../features/home/presentation/shells/main_shell.dart';
@@ -43,6 +44,18 @@ class AppRouter {
         path: '/signup',
         name: 'signup',
         builder: (context, state) => const SignupPage(),
+      ),
+      GoRoute(
+        path: '/account-verification',
+        name: 'accountVerification',
+        builder: (context, state) => AccountVerificationPage(
+          patientId: state.uri.queryParameters['patientId'] ?? '',
+          email: state.uri.queryParameters['email'] ?? '',
+          contactNumber: state.uri.queryParameters['contactNumber'] ?? '',
+          healthCenterName: state.uri.queryParameters['healthCenterName'] ?? '',
+          healthCenterLocation:
+              state.uri.queryParameters['healthCenterLocation'] ?? '',
+        ),
       ),
       GoRoute(
         path: '/health-details',

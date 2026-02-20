@@ -1,3 +1,22 @@
+function mapDuplicateKeyError(err) {
+  if (Number(err?.code) !== 11000) return null;
+  const keyValue = err?.keyValue ?? {};
+  const duplicateFields = Object.keys(keyValue);
+  const firstField = duplicateFields[0] ?? '';
+
+  if (firstField === 'email') {
+    return { message: 'Email already taken', code: 'DUPLICATE_EMAIL', field: firstField };
+  }
+  if (firstField === 'contactNumber') {
+    return { message: 'Contact number already taken', code: 'DUPLICATE_CONTACT_NUMBER', field: firstField };
+  }
+  if (firstField === 'blockchainIdentity.walletAddress') {
+    return { message: 'Wallet address already linked to another account', code: 'DUPLICATE_WALLET_ADDRESS', field: firstField };
+  }
+
+  return { message: 'Duplicate value already exists', code: 'DUPLICATE_KEY', field: firstField };
+}
+
 export function errorHandler(err, req, res, next) {
   // eslint-disable-next-line no-console
   console.error(err);
@@ -9,6 +28,18 @@ export function errorHandler(err, req, res, next) {
       },
     });
   }
+
+  const duplicateError = mapDuplicateKeyError(err);
+  if (duplicateError) {
+    return res.status(409).json({
+      error: {
+        message: duplicateError.message,
+        code: duplicateError.code,
+        field: duplicateError.field,
+      },
+    });
+  }
+
   const status = err.statusCode ?? 500;
   return res.status(status).json({
     error: {

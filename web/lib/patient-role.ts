@@ -20,6 +20,16 @@ export interface PatientProfile {
     identityId?: string;
     verificationStatus?: string;
   };
+  assignedHealthCenter?: {
+    id?: string;
+    name?: string;
+    barangayName?: string;
+    cityMunicipality?: string;
+    healthCenterName?: string;
+    address?: string;
+    contactNumber?: string;
+    officialContactInfo?: string;
+  };
   createdAt?: string;
   updatedAt?: string;
 }
