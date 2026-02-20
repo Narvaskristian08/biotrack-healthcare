@@ -66,9 +66,13 @@ export const env = {
   PATIENT_LOGIN_MFA_REQUIRED: toBool(process.env.PATIENT_LOGIN_MFA_REQUIRED, true),
   MFA_LOGIN_MAX_ATTEMPTS: toNumber(process.env.MFA_LOGIN_MAX_ATTEMPTS, 5),
   PASSWORD_MIN_LENGTH: toNumber(process.env.PASSWORD_MIN_LENGTH, 12),
+  DEFAULT_ADMIN_BOOTSTRAP_ENABLED: toBool(process.env.DEFAULT_ADMIN_BOOTSTRAP_ENABLED, false),
+  DEFAULT_ADMIN_EMAIL: process.env.DEFAULT_ADMIN_EMAIL ?? '',
+  DEFAULT_ADMIN_PASSWORD: process.env.DEFAULT_ADMIN_PASSWORD ?? '',
 
-  LOGIN_RATE_LIMIT_WINDOW_MS: toNumber(process.env.LOGIN_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
-  LOGIN_RATE_LIMIT_MAX: toNumber(process.env.LOGIN_RATE_LIMIT_MAX, 10),
+  LOGIN_RATE_LIMIT_WINDOW_MS: toNumber(process.env.LOGIN_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000), // 15 minutes
+  LOGIN_RATE_LIMIT_MAX: toNumber(process.env.LOGIN_RATE_LIMIT_MAX, 10) // max 10 attempts per window
+  ,
   MFA_VERIFY_RATE_LIMIT_WINDOW_MS: toNumber(process.env.MFA_VERIFY_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
   MFA_VERIFY_RATE_LIMIT_MAX: toNumber(process.env.MFA_VERIFY_RATE_LIMIT_MAX, 10),
 
@@ -135,6 +139,11 @@ export function assertRequiredEnv() {
 
   if (env.NODE_ENV === 'production' && env.BACKUP_ENCRYPTION_REQUIRED && !env.BACKUP_ENCRYPTION_KEY) {
     missing.push('BACKUP_ENCRYPTION_KEY');
+  }
+
+  if (env.DEFAULT_ADMIN_BOOTSTRAP_ENABLED) {
+    if (!String(env.DEFAULT_ADMIN_EMAIL).trim()) missing.push('DEFAULT_ADMIN_EMAIL');
+    if (!String(env.DEFAULT_ADMIN_PASSWORD).trim()) missing.push('DEFAULT_ADMIN_PASSWORD');
   }
 
   if (env.ENFORCE_STRONG_SECRETS) {

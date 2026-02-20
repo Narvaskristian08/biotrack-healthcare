@@ -19,7 +19,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { loginWithDetectedRole, type PatientLoginMfaChallenge, verifyPatientLoginMfa } from '@/lib/auth'
 
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()\-_=+[\]{}|;:,.<>])[A-Za-z\d@$!%*?&#^()\-_=+[\]{}|;:,.<>]{8,}$/
 const OTP_REGEX = /^\d{6}$/
 
 function LoginHeroPanel() {
@@ -129,11 +128,6 @@ export default function LoginPage() {
 
     if (!formData.password) {
       setError('Please enter your password')
-      return
-    }
-
-    if (!PASSWORD_REGEX.test(formData.password)) {
-      setError('Password must be at least 8 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special character')
       return
     }
 

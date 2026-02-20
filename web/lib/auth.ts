@@ -105,8 +105,11 @@ export interface LoginOutcome {
 
 const CREDENTIAL_ERROR_MESSAGES = new Set([
     'Invalid credentials',
+    'Invalid email or password',
     'email and password are required',
     'Email and password required',
+    'password is required',
+    'email must be a valid email address',
 ]);
 
 function isCredentialError(message?: string): boolean {
@@ -377,7 +380,7 @@ export async function loginWithDetectedRole(data: LoginData): Promise<LoginOutco
     if (nonCredentialErrors.length > 0) {
         return { error: nonCredentialErrors[0] };
     }
-    return { error: 'Invalid credentials' };
+    return { error: 'Invalid email or password' };
 }
 
 // ============== Health Center Auth ==============

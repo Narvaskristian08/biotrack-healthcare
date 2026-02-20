@@ -6,6 +6,7 @@ import hpp from 'hpp';
 
 import { assertRequiredEnv, env } from './config/env.js';
 import { connectDb } from './config/db.js';
+import { bootstrapDefaultAdmin } from './services/bootstrap.service.js';
 
 import { attachContext } from './middleware/context.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -112,6 +113,7 @@ app.use(errorHandler);
 async function start() {
   assertRequiredEnv();
   await connectDb(env.MONGODB_URI);
+  await bootstrapDefaultAdmin();
 
   app.listen(env.PORT, () => {
     console.log(`Server running at http://localhost:${env.PORT}`);
