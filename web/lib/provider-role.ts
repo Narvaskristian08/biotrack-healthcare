@@ -1,4 +1,4 @@
-import { apiGet } from './api';
+import { apiGet, apiPatch } from './api';
 import { getSession } from './auth';
 import { downloadTextFile } from './patient-role';
 
@@ -73,6 +73,21 @@ export interface ProviderRecordVerification {
   verifiedAt?: string;
 }
 
+export interface ProviderProfile {
+  id: string;
+  email: string;
+  name: string;
+  holderName?: string;
+  status?: string;
+  barangayName?: string;
+  cityMunicipality?: string;
+  healthCenterName?: string;
+  officialContactInfo?: string;
+  address?: string;
+  contactNumber?: string;
+  updatedAt?: string | null;
+}
+
 function assertProviderSession() {
   const session = getSession();
   if (!session || session.role !== 'provider' || !session.accessToken) {
@@ -125,6 +140,30 @@ export async function fetchAssignedPatients(): Promise<{ patients?: ProviderPati
     return { patients: result.data?.patients ?? [] };
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to fetch patients' };
+  }
+}
+
+export async function fetchMyProviderProfile(): Promise<{ healthCenter?: ProviderProfile; error?: string }> {
+  try {
+    assertProviderSession();
+    const result = await apiGet<{ healthCenter: ProviderProfile }>('/healthcenters/me');
+    if (result.error) return { error: result.error.message };
+    return { healthCenter: result.data?.healthCenter };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to fetch provider profile' };
+  }
+}
+
+export async function updateMyProviderProfile(
+  patch: Partial<Pick<ProviderProfile, 'name' | 'holderName' | 'healthCenterName' | 'officialContactInfo' | 'address' | 'contactNumber'>>
+): Promise<{ healthCenter?: ProviderProfile; error?: string }> {
+  try {
+    assertProviderSession();
+    const result = await apiPatch<{ healthCenter: ProviderProfile }>('/healthcenters/me', patch);
+    if (result.error) return { error: result.error.message };
+    return { healthCenter: result.data?.healthCenter };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update provider profile' };
   }
 }
 

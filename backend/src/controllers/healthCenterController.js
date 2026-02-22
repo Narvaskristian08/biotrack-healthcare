@@ -5,6 +5,37 @@ import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '.
 import { blockchainEnabled } from '../services/blockchain/client.js';
 
 const GENERIC_LOGIN_ERROR = 'Invalid credentials';
+const PROVIDER_PROFILE_SELECT = [
+  'email',
+  'name',
+  'holderName',
+  'status',
+  'barangayName',
+  'cityMunicipality',
+  'healthCenterName',
+  'officialContactInfo',
+  'address',
+  'contactNumber',
+  'updatedAt',
+].join(' ');
+
+function buildProviderProfilePayload(doc) {
+  if (!doc) return null;
+  return {
+    id: doc._id,
+    email: String(doc.email ?? '').trim(),
+    name: String(doc.name ?? '').trim(),
+    holderName: String(doc.holderName ?? '').trim(),
+    status: String(doc.status ?? '').trim(),
+    barangayName: String(doc.barangayName ?? '').trim(),
+    cityMunicipality: String(doc.cityMunicipality ?? '').trim(),
+    healthCenterName: String(doc.healthCenterName ?? '').trim(),
+    officialContactInfo: String(doc.officialContactInfo ?? '').trim(),
+    address: String(doc.address ?? '').trim(),
+    contactNumber: String(doc.contactNumber ?? '').trim(),
+    updatedAt: doc.updatedAt ?? null,
+  };
+}
 
 export async function registerHealthCenter(req, res) {
   await writeAuditLog({
@@ -114,6 +145,66 @@ export async function loginHealthCenter(req, res) {
         onChain: identityVerification.onChain,
       },
     },
+  });
+}
+
+export async function getMyHealthCenterProfile(req, res) {
+  const healthCenterId = String(req.context?.healthCenterId ?? '').trim();
+  if (!healthCenterId) {
+    return res.status(401).json({ error: { message: 'Provider session is required' } });
+  }
+
+  const doc = await HealthCenter.findById(healthCenterId).select(PROVIDER_PROFILE_SELECT).lean();
+  if (!doc) {
+    return res.status(404).json({ error: { message: 'Provider not found' } });
+  }
+
+  return res.json({
+    healthCenter: buildProviderProfilePayload(doc),
+  });
+}
+
+export async function updateMyHealthCenterProfile(req, res) {
+  const healthCenterId = String(req.context?.healthCenterId ?? '').trim();
+  if (!healthCenterId) {
+    return res.status(401).json({ error: { message: 'Provider session is required' } });
+  }
+
+  const patch = req.body ?? {};
+  const allowed = ['name', 'holderName', 'healthCenterName', 'officialContactInfo', 'address', 'contactNumber'];
+  const update = {};
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(patch, key)) {
+      update[key] = String(patch[key] ?? '').trim();
+    }
+  }
+
+  if (Object.keys(update).length === 0) {
+    return res.status(400).json({ error: { message: 'At least one profile field is required' } });
+  }
+
+  const doc = await HealthCenter.findByIdAndUpdate(
+    healthCenterId,
+    { $set: update },
+    { new: true, runValidators: true }
+  )
+    .select(PROVIDER_PROFILE_SELECT)
+    .lean();
+
+  if (!doc) {
+    return res.status(404).json({ error: { message: 'Provider not found' } });
+  }
+
+  await writeAuditLog({
+    req,
+    action: 'HEALTHCENTER.SELF.UPDATE_PROFILE',
+    entityType: 'HealthCenter',
+    entityId: doc._id,
+    after: update,
+  });
+
+  return res.json({
+    healthCenter: buildProviderProfilePayload(doc),
   });
 }
 

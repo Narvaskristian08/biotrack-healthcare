@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useDashboardRole, type UserRole } from '@/hooks/use-dashboard-role'
-import { getSession, clearSession, logoutServerSession } from '@/lib/auth'
+import { getSession, clearSession } from '@/lib/auth'
 import { apiGet, SESSION_TIMEOUT_EVENT, type SessionTimeoutEventDetail } from '@/lib/api'
 
 const PUBLIC_PATHS = new Set([
@@ -125,12 +125,26 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
       finalizeTimeoutInFlightRef.current = true
       void (async () => {
         try {
-          await logoutServerSession()
-        } finally {
+          const hasSession = Boolean(getSession()?.accessToken)
+          if (hasSession) {
+            const resume = await apiGet<{ ok: boolean; serverTime: string }>('/auth/ping', {
+              headers: {
+                'x-biotrack-user-activity': '1',
+              },
+            })
+            if (!resume.error) {
+              dismissTimeoutCountdown()
+              return
+            }
+            if (resume.error.message) {
+              setTimeoutMessage(resume.error.message)
+            }
+          }
           clearSession()
           dismissTimeoutCountdown()
-          finalizeTimeoutInFlightRef.current = false
           router.replace('/login?reason=session-timeout')
+        } finally {
+          finalizeTimeoutInFlightRef.current = false
         }
       })()
       return
@@ -147,11 +161,11 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (countdownSeconds === null) return
 
-    const attemptResumeFromActivity = async () => {
+    const attemptResumeFromActivity = async (force = false) => {
       if (resumeCheckInFlightRef.current) return
       if (!getSession()?.accessToken) return
       const now = Date.now()
-      if (now - lastResumeAttemptAtRef.current < 800) return
+      if (!force && now - lastResumeAttemptAtRef.current < 800) return
       lastResumeAttemptAtRef.current = now
       resumeCheckInFlightRef.current = true
 
@@ -180,8 +194,17 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
     }
 
     const handleActivity = () => {
-      dismissTimeoutCountdown()
       void attemptResumeFromActivity()
+    }
+
+    const handleVisibilityOrFocus = () => {
+      void attemptResumeFromActivity(true)
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleVisibilityOrFocus()
+      }
     }
 
     const activityEvents: Array<keyof WindowEventMap> = [
@@ -196,11 +219,17 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
     activityEvents.forEach((eventName) => {
       window.addEventListener(eventName, handleActivity, { passive: true })
     })
+    window.addEventListener('focus', handleVisibilityOrFocus)
+    window.addEventListener('pageshow', handleVisibilityOrFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       activityEvents.forEach((eventName) => {
         window.removeEventListener(eventName, handleActivity)
       })
+      window.removeEventListener('focus', handleVisibilityOrFocus)
+      window.removeEventListener('pageshow', handleVisibilityOrFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [countdownSeconds, dismissTimeoutCountdown])
 
@@ -229,7 +258,12 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
     }
   }, [isReady, isAuthenticated, pathname, role, router])
 
-  if (!isReady) {
+  const shouldBlockProtectedRender =
+    !isPublicPath(pathname) && (!isAuthenticated || !isRoleAllowed(pathname, role))
+  const shouldBlockAuthPageRender =
+    isPublicPath(pathname) && isAuthenticated && AUTH_PAGES.has(pathname)
+
+  if (!isReady || shouldBlockProtectedRender || shouldBlockAuthPageRender) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-pulse flex flex-col items-center gap-4">

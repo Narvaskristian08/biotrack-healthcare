@@ -161,6 +161,19 @@ export const patientUpdateSchema = z
     message: 'At least one updatable field is required',
   });
 
+export const healthCenterSelfUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(140).optional(),
+    holderName: z.string().trim().min(1).max(140).optional(),
+    healthCenterName: z.string().trim().min(1).max(140).optional(),
+    officialContactInfo: z.string().trim().min(1).max(180).optional(),
+    address: z.string().trim().min(1).max(220).optional(),
+    contactNumber: z.string().trim().min(1).max(40).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one field is required for update',
+  });
+
 export const patientRecordParamsSchema = z.object({
   patientId: objectIdSchema,
 });

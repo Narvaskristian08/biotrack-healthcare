@@ -119,7 +119,7 @@ export interface SummaryInsightResponse {
 
 function getPatientIdFromSession(): string {
   const session = getSession();
-  if (!session || session.role !== 'patient' || !session.id) {
+  if (!session || session.role !== 'patient' || !session.id || !session.accessToken) {
     throw new Error('Patient session is required');
   }
   return session.id;
@@ -172,21 +172,37 @@ export async function verifyMyPatientRecord(recordId: string): Promise<{ data?: 
 }
 
 export async function fetchMyTrendInsight(requestOptions: RequestInit = {}): Promise<{ data?: TrendInsightResponse; error?: string }> {
-  const result = await apiGet<TrendInsightResponse>('/ai/trend-insight', requestOptions);
-  if (result.error) return { error: result.error.message };
-  return { data: result.data };
+  try {
+    // Ensure bearer token is present before calling protected endpoints.
+    getPatientIdFromSession();
+    const result = await apiGet<TrendInsightResponse>('/ai/trend-insight', requestOptions);
+    if (result.error) return { error: result.error.message };
+    return { data: result.data };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to fetch trend insight' };
+  }
 }
 
 export async function fetchMyHealthSummary(days = 7, requestOptions: RequestInit = {}): Promise<{ data?: SummaryInsightResponse; error?: string }> {
-  const result = await apiGet<SummaryInsightResponse>(`/ai/summary?days=${days}`, requestOptions);
-  if (result.error) return { error: result.error.message };
-  return { data: result.data };
+  try {
+    getPatientIdFromSession();
+    const result = await apiGet<SummaryInsightResponse>(`/ai/summary?days=${days}`, requestOptions);
+    if (result.error) return { error: result.error.message };
+    return { data: result.data };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to fetch health summary' };
+  }
 }
 
 export async function fetchMyAlerts(limit = 20, requestOptions: RequestInit = {}): Promise<{ alerts?: AlertEntry[]; error?: string }> {
-  const result = await apiGet<{ success: boolean; alerts: AlertEntry[] }>(`/ai/alerts?limit=${limit}`, requestOptions);
-  if (result.error) return { error: result.error.message };
-  return { alerts: result.data?.alerts ?? [] };
+  try {
+    getPatientIdFromSession();
+    const result = await apiGet<{ success: boolean; alerts: AlertEntry[] }>(`/ai/alerts?limit=${limit}`, requestOptions);
+    if (result.error) return { error: result.error.message };
+    return { alerts: result.data?.alerts ?? [] };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to fetch alerts' };
+  }
 }
 
 export async function fetchMyLoginHistory(limit = 20): Promise<{ history?: LoginHistoryEntry[]; error?: string }> {

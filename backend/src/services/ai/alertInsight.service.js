@@ -10,7 +10,7 @@ ROLE:
 
 OUTPUT FORMAT:
 
-🔔 Health Alert
+Health Alert
 
 Alert Type:
 <type>
@@ -24,21 +24,54 @@ Explanation:
 Recommended Action:
 <what the user should do>
 
-⚠️ This alert is informational and not a medical diagnosis.
+This alert is informational and not a medical diagnosis.
 `;
 
-export async function generateAlertInsight(alert) {
-  const response = await aiClient.chat.completions.create({
-    model: 'meta-llama/llama-3-8b-instruct',
-    temperature: 0.2,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      {
-        role: 'user',
-        content: JSON.stringify(alert, null, 2),
-      },
-    ],
-  });
+function buildAlertFallback(alert = {}) {
+  const type = String(alert?.type ?? 'unknown').toUpperCase();
+  const severity = String(alert?.severity ?? 'unknown').toUpperCase();
+  const message = String(alert?.message ?? '').trim();
 
-  return response.choices[0].message.content;
+  return [
+    'Health Alert',
+    '',
+    `Alert Type: ${type}`,
+    `Severity: ${severity}`,
+    '',
+    'Explanation:',
+    message || 'An alert was recorded based on recent monitoring data.',
+    '',
+    'Recommended Action:',
+    '- Review recent vitals and symptoms',
+    '- Continue monitoring',
+    '- Contact a healthcare professional if the issue persists',
+    '',
+    'AI explanation is temporarily unavailable. This alert remains informational and not diagnostic.',
+  ].join('\n');
+}
+
+export async function generateAlertInsight(alert = {}) {
+  try {
+    const response = await aiClient.chat.completions.create({
+      model: 'meta-llama/llama-3-8b-instruct',
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: JSON.stringify(alert, null, 2),
+        },
+      ],
+    });
+
+    const content = response?.choices?.[0]?.message?.content;
+    if (typeof content === 'string' && content.trim().length > 0) {
+      return content;
+    }
+  } catch (err) {
+    // Keep endpoint available even when AI provider credentials are missing or invalid.
+    console.error('ALERT INSIGHT AI ERROR:', err?.message || err);
+  }
+
+  return buildAlertFallback(alert);
 }

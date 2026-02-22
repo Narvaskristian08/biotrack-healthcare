@@ -33,7 +33,7 @@ interface DashboardRoleContextType {
 }
 
 const DashboardRoleContext = createContext<DashboardRoleContextType | undefined>(undefined)
-const SESSION_HEARTBEAT_INTERVAL_MS = 10_000
+const SESSION_HEARTBEAT_INTERVAL_MS = 4_000
 const SESSION_HEARTBEAT_ACTIVITY_DEBOUNCE_MS = 400
 const SESSION_HEARTBEAT_EVENTS: Array<keyof WindowEventMap> = [
   'mousemove',
@@ -109,16 +109,17 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
 
     let disposed = false
     let lastPingAt = 0
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+    let debounceTimer: number | null = null
+    let intervalId: number | null = null
 
-    const sendHeartbeat = async () => {
+    const sendHeartbeat = async (force = false) => {
       if (disposed) return
       const latestSession = getSession()
       if (!latestSession?.accessToken) return
       if (latestSession.role !== 'patient' && latestSession.role !== 'provider') return
 
       const now = Date.now()
-      if (now - lastPingAt < SESSION_HEARTBEAT_INTERVAL_MS) return
+      if (!force && now - lastPingAt < SESSION_HEARTBEAT_INTERVAL_MS) return
       lastPingAt = now
       await apiGet<{ ok: boolean; serverTime: string }>('/auth/ping', {
         headers: {
@@ -131,20 +132,45 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
       if (debounceTimer) return
       debounceTimer = window.setTimeout(() => {
         debounceTimer = null
-        void sendHeartbeat()
+        void sendHeartbeat(true)
       }, SESSION_HEARTBEAT_ACTIVITY_DEBOUNCE_MS)
+    }
+
+    const onVisibilityOrFocus = () => {
+      if (document.visibilityState !== 'visible') return
+      void sendHeartbeat(true)
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        onVisibilityOrFocus()
+      }
     }
 
     SESSION_HEARTBEAT_EVENTS.forEach((eventName) => {
       window.addEventListener(eventName, onActivity, { passive: true })
     })
+    window.addEventListener('focus', onVisibilityOrFocus)
+    window.addEventListener('pageshow', onVisibilityOrFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    intervalId = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      void sendHeartbeat(false)
+    }, SESSION_HEARTBEAT_INTERVAL_MS)
+
+    void sendHeartbeat(true)
 
     return () => {
       disposed = true
       if (debounceTimer) window.clearTimeout(debounceTimer)
+      if (intervalId) window.clearInterval(intervalId)
       SESSION_HEARTBEAT_EVENTS.forEach((eventName) => {
         window.removeEventListener(eventName, onActivity)
       })
+      window.removeEventListener('focus', onVisibilityOrFocus)
+      window.removeEventListener('pageshow', onVisibilityOrFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [isAuthenticated, isReady])
 

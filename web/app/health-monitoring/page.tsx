@@ -16,8 +16,10 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { fetchMyAlerts, fetchMyTrendInsight } from '@/lib/patient-role';
+import { useDashboardRole } from '@/hooks/use-dashboard-role';
 
 export default function HealthMonitoringPage() {
+  const { isReady, isAuthenticated, role } = useDashboardRole();
   const [heartRates, setHeartRates] = useState<number[]>([]);
   const [trend, setTrend] = useState('INSUFFICIENT_DATA');
   const [alerts, setAlerts] = useState<{ id: string; message: string; severity: string }[]>([]);
@@ -25,6 +27,8 @@ export default function HealthMonitoringPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!isReady || !isAuthenticated || role !== 'patient') return;
+
     let active = true;
     (async () => {
       setLoading(true);
@@ -52,7 +56,7 @@ export default function HealthMonitoringPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [isAuthenticated, isReady, role]);
 
   const chartData = useMemo(
     () => heartRates.map((value, idx) => ({ time: `#${idx + 1}`, heartRate: value })),

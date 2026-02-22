@@ -164,7 +164,18 @@ export function assertRequiredEnv() {
   if (!env.ADMIN_JWT_SECRET) missing.push('ADMIN_JWT_SECRET');
   if (!env.HEALTHCENTER_JWT_SECRET) missing.push('HEALTHCENTER_JWT_SECRET');
   if (!env.SESSION_JWT_SECRET) missing.push('SESSION_JWT_SECRET');
-  if (!env.OPENROUTER_API_KEY) missing.push('OPENROUTER_API_KEY');
+
+  const openRouterApiKey = String(env.OPENROUTER_API_KEY ?? '').trim();
+  if (!openRouterApiKey) {
+    missing.push('OPENROUTER_API_KEY');
+  } else if (looksLikePlaceholderSecret(openRouterApiKey)) {
+    if (env.NODE_ENV === 'production') {
+      missing.push('OPENROUTER_API_KEY');
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn('OPENROUTER_API_KEY appears to be a placeholder; AI responses will use fallback insights.');
+    }
+  }
 
   if (env.BLOCKCHAIN_ENABLED) {
     if (!env.BLOCKCHAIN_RPC_URL) missing.push('BLOCKCHAIN_RPC_URL');
