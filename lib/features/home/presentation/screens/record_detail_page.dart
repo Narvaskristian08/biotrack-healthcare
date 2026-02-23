@@ -5,10 +5,7 @@ import '../../data/models/scan_record.dart';
 import '../../data/services/scan_record_store.dart';
 
 class RecordDetailPage extends StatefulWidget {
-  const RecordDetailPage({
-    super.key,
-    required this.recordId,
-  });
+  const RecordDetailPage({super.key, required this.recordId});
 
   final String recordId;
 
@@ -22,17 +19,7 @@ class _RecordDetailPageState extends State<RecordDetailPage> {
   @override
   void initState() {
     super.initState();
-    _recordFuture = _loadRecord();
-  }
-
-  Future<ScanRecord?> _loadRecord() async {
-    final records = await ScanRecordStore.list();
-    for (final record in records) {
-      if (record.id == widget.recordId) {
-        return record;
-      }
-    }
-    return null;
+    _recordFuture = ScanRecordStore.getById(widget.recordId);
   }
 
   @override
@@ -44,10 +31,7 @@ class _RecordDetailPageState extends State<RecordDetailPage> {
         elevation: 0,
         title: const Text(
           'Heart Rate Scan',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
         ),
       ),
       body: SafeArea(
@@ -58,15 +42,31 @@ class _RecordDetailPageState extends State<RecordDetailPage> {
               return const Center(child: CircularProgressIndicator());
             }
 
+            if (snapshot.hasError) {
+              final errorMessage = snapshot.error is ScanRecordStoreException
+                  ? (snapshot.error as ScanRecordStoreException).message
+                  : 'Unable to load this record right now.';
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    errorMessage,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.bodyText,
+                    ),
+                  ),
+                ),
+              );
+            }
+
             final record = snapshot.data;
             if (record == null) {
               return const Center(
                 child: Text(
                   'Record not found.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.bodyText,
-                  ),
+                  style: TextStyle(fontSize: 14, color: AppColors.bodyText),
                 ),
               );
             }
@@ -92,7 +92,7 @@ class _RecordDetailPageState extends State<RecordDetailPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Captured on ${_formatDate(record.scannedAt)} • ${_formatTime(record.scannedAt)}',
+                        'Captured on ${_formatDate(record.scannedAt)} | ${_formatTime(record.scannedAt)}',
                         style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.bodyText,
@@ -107,7 +107,9 @@ class _RecordDetailPageState extends State<RecordDetailPage> {
                     Expanded(
                       child: _metricCard(
                         title: 'Heart Rate',
-                        value: record.bpm == null ? '-- bpm' : '${record.bpm} bpm',
+                        value: record.bpm == null
+                            ? '-- bpm'
+                            : '${record.bpm} bpm',
                         valueColor: AppColors.primaryGreenDark,
                       ),
                     ),
@@ -115,7 +117,8 @@ class _RecordDetailPageState extends State<RecordDetailPage> {
                     Expanded(
                       child: _metricCard(
                         title: 'Activity',
-                        value: '${record.activityLabel} (${record.movementIntensity.toStringAsFixed(2)})',
+                        value:
+                            '${record.activityLabel} (${record.movementIntensity.toStringAsFixed(2)})',
                       ),
                     ),
                   ],
@@ -127,14 +130,17 @@ class _RecordDetailPageState extends State<RecordDetailPage> {
                       child: _metricCard(
                         title: 'Fall Status',
                         value: record.fallDetected ? 'Detected' : 'No fall',
-                        valueColor: record.fallDetected ? Colors.red : Colors.green,
+                        valueColor: record.fallDetected
+                            ? Colors.red
+                            : Colors.green,
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: _metricCard(
                         title: 'Finger Confidence',
-                        value: '${(record.fingerConfidence * 100).toStringAsFixed(0)}%',
+                        value:
+                            '${(record.fingerConfidence * 100).toStringAsFixed(0)}%',
                       ),
                     ),
                   ],

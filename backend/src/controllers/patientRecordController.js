@@ -73,9 +73,9 @@ function toRecordResponse(record, context = {}) {
 }
 
 export async function addPatientRecord(req, res) {
-  const { healthCenterId, adminId, sessionId } = req.context;
-  const actorType = adminId ? 'admin' : 'healthcenter';
-  const actorId = adminId ?? healthCenterId;
+  const { healthCenterId, adminId, sessionId, patientId: requesterPatientId, role } = req.context;
+  const actorType = adminId ? 'admin' : role === 'patient' ? 'patient' : 'healthcenter';
+  const actorId = adminId ?? (role === 'patient' ? requesterPatientId : healthCenterId);
   const { type = 'note', data, capturedAt: capturedAtInput } = req.body ?? {};
   const patientId = req.params.patientId;
 
@@ -199,6 +199,51 @@ export async function listPatientRecords(req, res) {
   const records = await PatientRecord.find({ healthCenterId, patientId }).sort({ createdAt: -1 }).limit(200).lean();
   return res.json({
     records: records.map((record) => toRecordResponse(record, { healthCenterId, patientId })),
+  });
+}
+
+export async function getPatientRecord(req, res) {
+  const { healthCenterId } = req.context;
+  const { patientId, recordId } = req.params;
+
+  const record = await PatientRecord.findOne({ _id: recordId, patientId, healthCenterId }).lean();
+  if (!record) {
+    return res.status(404).json({ error: { message: 'Record not found' } });
+  }
+
+  return res.json({
+    record: toRecordResponse(record, { healthCenterId, patientId }),
+  });
+}
+
+export async function deletePatientRecord(req, res) {
+  const { healthCenterId } = req.context;
+  const { patientId, recordId } = req.params;
+
+  const deleted = await PatientRecord.findOneAndDelete({
+    _id: recordId,
+    patientId,
+    healthCenterId,
+  });
+  if (!deleted) {
+    return res.status(404).json({ error: { message: 'Record not found' } });
+  }
+
+  await writeAuditLog({
+    req,
+    action: 'RECORD.DELETE',
+    entityType: 'PatientRecord',
+    entityId: deleted._id,
+    before: {
+      patientId: deleted.patientId,
+      type: deleted.type,
+      recordHash: deleted.recordHash,
+    },
+  });
+
+  return res.json({
+    success: true,
+    recordId: deleted._id,
   });
 }
 

@@ -31,8 +31,14 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  void _refreshDashboard() {
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
+    final recordsFuture = ScanRecordStore.list();
+
     return Scaffold(
       backgroundColor: AppColors.softBackground,
       body: SafeArea(
@@ -65,14 +71,18 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 ),
-                Container(
+                SizedBox(
                   width: 44,
                   height: 44,
-                  decoration: BoxDecoration(
+                  child: Material(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: _refreshDashboard,
+                      child: const Icon(Icons.refresh),
+                    ),
                   ),
-                  child: const Icon(Icons.notifications_none_outlined),
                 ),
               ],
             ),
@@ -124,7 +134,11 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(height: 4),
                         const Text(
                           'Measure your heart rate using the camera in under one minute.',
-                          style: TextStyle(fontSize: 13, color: AppColors.bodyText, height: 1.35),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.bodyText,
+                            height: 1.35,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         SizedBox(
@@ -155,35 +169,71 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 18),
-            Row(
-              children: const [
-                Expanded(
-                  child: _KpiCard(
-                    icon: Icons.favorite_outline,
-                    label: 'Heart Rate',
-                    value: '72 bpm',
-                    sublabel: 'Normal',
-                  ),
-                ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: _KpiCard(
-                    icon: Icons.directions_walk_outlined,
-                    label: 'Activity',
-                    value: '3,143',
-                    sublabel: 'Steps',
-                  ),
-                ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: _KpiCard(
-                    icon: Icons.verified_user_outlined,
-                    label: 'Status',
-                    value: 'Safe',
-                    sublabel: 'No alerts',
-                  ),
-                ),
-              ],
+            FutureBuilder<List<ScanRecord>>(
+              future: recordsFuture,
+              builder: (context, snapshot) {
+                final records = snapshot.data ?? const <ScanRecord>[];
+                final bpmValues = records
+                    .map((item) => item.bpm)
+                    .whereType<int>()
+                    .toList();
+                final latestRecord = records.isNotEmpty ? records.first : null;
+                final averageBpm = bpmValues.isEmpty
+                    ? null
+                    : (bpmValues.reduce((a, b) => a + b) / bpmValues.length)
+                          .round();
+                final hasRecentFall = records
+                    .take(5)
+                    .any((item) => item.fallDetected);
+
+                final heartRateValue = averageBpm == null
+                    ? '-- bpm'
+                    : '$averageBpm bpm';
+                final heartRateSubLabel = bpmValues.isEmpty
+                    ? 'Awaiting stable pulse'
+                    : 'Avg ${bpmValues.length} scans';
+
+                final activityValue = latestRecord?.activityLabel ?? 'No data';
+                final activitySubLabel = latestRecord == null
+                    ? 'Complete a new scan'
+                    : latestRecord.movementIntensity.toStringAsFixed(2);
+
+                final statusValue = hasRecentFall ? 'Alert' : 'Safe';
+                final statusSubLabel = latestRecord == null
+                    ? 'No alerts'
+                    : _formatDay(latestRecord.scannedAt);
+
+                return Row(
+                  children: [
+                    Expanded(
+                      child: _KpiCard(
+                        icon: Icons.favorite_outline,
+                        label: 'Heart Rate',
+                        value: heartRateValue,
+                        sublabel: heartRateSubLabel,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _KpiCard(
+                        icon: Icons.directions_walk_outlined,
+                        label: 'Activity',
+                        value: activityValue,
+                        sublabel: activitySubLabel,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _KpiCard(
+                        icon: Icons.verified_user_outlined,
+                        label: 'Status',
+                        value: statusValue,
+                        sublabel: statusSubLabel,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 22),
             const Text(
@@ -255,7 +305,11 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 10),
                   const Text(
                     'No incident detected. Recent trends are within healthy thresholds. Maintain hydration and light movement today.',
-                    style: TextStyle(fontSize: 14, color: AppColors.bodyText, height: 1.35),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.bodyText,
+                      height: 1.35,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   InkWell(
@@ -278,8 +332,40 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 10),
             FutureBuilder<List<ScanRecord>>(
-              future: ScanRecordStore.list(),
+              future: recordsFuture,
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  final errorMessage =
+                      snapshot.error is ScanRecordStoreException
+                      ? (snapshot.error as ScanRecordStoreException).message
+                      : 'Unable to load records right now.';
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          errorMessage,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.bodyText,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _refreshDashboard,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                 final records = snapshot.data ?? const <ScanRecord>[];
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Padding(
@@ -298,10 +384,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     child: const Text(
                       'No recent scan records yet.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.bodyText,
-                      ),
+                      style: TextStyle(fontSize: 13, color: AppColors.bodyText),
                     ),
                   );
                 }
@@ -375,7 +458,10 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.secondaryText,
+              ),
             ),
           ],
         ),
@@ -421,7 +507,10 @@ class _KpiCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.secondaryText,
+            ),
           ),
           const SizedBox(height: 2),
           Text(

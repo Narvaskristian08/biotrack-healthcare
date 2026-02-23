@@ -40,6 +40,11 @@ class _RecordsPageState extends State<RecordsPage> {
     setState(() {
       _recordsFuture = ScanRecordStore.list();
     });
+    try {
+      await _recordsFuture;
+    } catch (_) {
+      // Surface errors through FutureBuilder UI.
+    }
   }
 
   Future<void> _deleteRecord(ScanRecord record) async {
@@ -78,17 +83,30 @@ class _RecordsPageState extends State<RecordsPage> {
       _deletingRecordIds.add(record.id);
     });
 
-    await ScanRecordStore.deleteById(record.id);
-    await _reload();
-
-    if (!mounted) return;
-    setState(() {
-      _deletingRecordIds.remove(record.id);
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Record deleted')),
-    );
+    try {
+      await ScanRecordStore.deleteById(record.id);
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Record deleted')));
+    } on ScanRecordStoreException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to delete record right now.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deletingRecordIds.remove(record.id);
+        });
+      }
+    }
   }
 
   void _startGyroscopeTracking() {
@@ -138,8 +156,10 @@ class _RecordsPageState extends State<RecordsPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
@@ -200,8 +220,9 @@ class _RecordsPageState extends State<RecordsPage> {
                                 ? 'Gyroscope unavailable'
                                 : 'Monitoring',
                             style: TextStyle(
-                              color:
-                                  _gyroStreamError ? Colors.red : Colors.grey,
+                              color: _gyroStreamError
+                                  ? Colors.red
+                                  : Colors.grey,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -230,6 +251,36 @@ class _RecordsPageState extends State<RecordsPage> {
                     return const Padding(
                       padding: EdgeInsets.all(12),
                       child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (snapshot.hasError) {
+                    final errorMessage =
+                        snapshot.error is ScanRecordStoreException
+                        ? (snapshot.error as ScanRecordStoreException).message
+                        : 'Unable to load records right now.';
+                    return Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            errorMessage,
+                            style: const TextStyle(
+                              color: AppColors.bodyText,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: _reload,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
                     );
                   }
 
@@ -358,8 +409,9 @@ class _RecordsPageState extends State<RecordsPage> {
   }
 
   String _recordSubtitle(ScanRecord record) {
-    final bpmPart =
-        record.bpm == null ? 'No stable pulse' : '${record.bpm} bpm captured';
+    final bpmPart = record.bpm == null
+        ? 'No stable pulse'
+        : '${record.bpm} bpm captured';
     final fallPart = record.fallDetected ? 'Fall signal detected' : 'Normal';
     return '$bpmPart | $fallPart';
   }

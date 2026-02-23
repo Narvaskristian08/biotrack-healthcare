@@ -232,7 +232,8 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
       _signalStrength = _heartRateEstimator.signalStrength;
       _hrConfidence = _heartRateEstimator.confidence;
       final liveCandidate = bpm ?? _heartRateEstimator.latestCandidateBpm;
-      final canUseLiveCandidate = _fingerDetected &&
+      final canUseLiveCandidate =
+          _fingerDetected &&
           _fingerConfidence >= 0.66 &&
           _hrConfidence >= 0.08 &&
           _movementIntensity < 2.6 &&
@@ -435,29 +436,50 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
       _estimatedBpm = resolvedBpm;
     }
 
+    ScanRecord? recordToSave;
+    var savedToServer = false;
+    String? saveErrorMessage;
+
     if (successfulScan) {
-      await ScanRecordStore.add(
-        ScanRecord(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          scannedAt: DateTime.now(),
-          bpm: resolvedBpm,
-          fallDetected: _fallDetected,
-          signalQuality: _signalQualityScore,
-          fingerDetected: _fingerDetected,
-          fingerConfidence: _fingerConfidence,
-          movementIntensity: _movementIntensity,
-          gyroMagnitude: _gyroMagnitude,
-        ),
+      recordToSave = ScanRecord(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        scannedAt: DateTime.now(),
+        bpm: resolvedBpm,
+        fallDetected: _fallDetected,
+        signalQuality: _signalQualityScore,
+        fingerDetected: _fingerDetected,
+        fingerConfidence: _fingerConfidence,
+        movementIntensity: _movementIntensity,
+        gyroMagnitude: _gyroMagnitude,
       );
+
+      try {
+        await ScanRecordStore.add(recordToSave);
+        savedToServer = true;
+      } on ScanRecordStoreException catch (error) {
+        saveErrorMessage = error.message;
+      } catch (_) {
+        saveErrorMessage = 'Scan completed but could not sync to the server.';
+      }
     }
 
     if (mounted) {
       setState(() {});
-      await _showScanCompletedPopup(successfulScan: successfulScan);
+      await _showScanCompletedPopup(
+        successfulScan: successfulScan,
+        savedToServer: savedToServer,
+        saveErrorMessage: saveErrorMessage,
+        recordToSave: recordToSave,
+      );
     }
   }
 
-  Future<void> _showScanCompletedPopup({required bool successfulScan}) async {
+  Future<void> _showScanCompletedPopup({
+    required bool successfulScan,
+    required bool savedToServer,
+    required String? saveErrorMessage,
+    required ScanRecord? recordToSave,
+  }) async {
     if (_showingCompletionDialog || !mounted) {
       return;
     }
@@ -467,27 +489,43 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
+        final title = !successfulScan
+            ? 'Scanning Unsuccessful'
+            : savedToServer
+            ? 'Scan Successful'
+            : 'Scan Completed';
+
+        final content = !successfulScan
+            ? 'No finger was detected at the end of scanning. Please place your fingertip over the camera and flash, then try again.'
+            : savedToServer
+            ? (_estimatedBpm == null
+                  ? 'Scan completed and synced to your records.'
+                  : 'Scan completed and synced to your records.\nHeart rate: $_estimatedBpm bpm')
+            : '${saveErrorMessage ?? 'Scan completed but could not sync right now.'}\nPlease retry saving so your dashboard stays up to date.';
+
         return AlertDialog(
-          title: Text(
-            successfulScan ? 'Scan Successful' : 'Scanning Unsuccessful',
-          ),
-          content: Text(successfulScan
-              ? (_estimatedBpm == null
-                  ? 'Scan completed and saved to records.'
-                  : 'Scan completed and saved to records.\nHeart rate: $_estimatedBpm bpm')
-              : 'No finger was detected at the end of scanning. Please place your fingertip over the camera and flash, then try again.'),
+          title: Text(title),
+          content: Text(content),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Close'),
             ),
-            if (successfulScan)
+            if (successfulScan && savedToServer)
               ElevatedButton(
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
                   context.go('/records');
                 },
                 child: const Text('View Records'),
+              )
+            else if (successfulScan && recordToSave != null)
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(_retrySaveRecord(recordToSave));
+                },
+                child: const Text('Retry Save'),
               )
             else
               ElevatedButton(
@@ -503,6 +541,31 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
     );
 
     _showingCompletionDialog = false;
+  }
+
+  Future<void> _retrySaveRecord(ScanRecord record) async {
+    try {
+      await ScanRecordStore.add(record);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Scan synced. You can now view it on your dashboard.'),
+        ),
+      );
+      context.go('/records');
+    } on ScanRecordStoreException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to sync scan right now. Please try again.'),
+        ),
+      );
+    }
   }
 
   Future<void> _shutdownCamera() async {

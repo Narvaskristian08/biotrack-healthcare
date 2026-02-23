@@ -37,7 +37,7 @@ const PatientRecordSchema = new mongoose.Schema(
       errorMessage: { type: String, default: '' },
     },
 
-    createdByActorType: { type: String, enum: ['admin', 'healthcenter', 'unknown'], default: 'unknown', index: true },
+    createdByActorType: { type: String, enum: ['admin', 'healthcenter', 'patient', 'unknown'], default: 'unknown', index: true },
     createdByActorId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     sessionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', default: null },
   },

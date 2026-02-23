@@ -4,6 +4,8 @@ import { requirePatientSelf, requireRoles, requireSessionAuth } from '../middlew
 import { createPatient, getPatient, listPatientLoginHistory, listPatients, updatePatient } from '../controllers/patientController.js';
 import {
   addPatientRecord,
+  deletePatientRecord,
+  getPatientRecord,
   listPatientRecords,
   validatePatientRecordUpload,
   verifyPatientRecordIntegrity,
@@ -84,10 +86,19 @@ patientRoutes.get(
 patientRoutes.post(
   '/:patientId/records',
   requireSessionAuth,
-  requireRoles('healthcenter'),
+  requireRoles('healthcenter', 'patient'),
   validateParams(patientRecordParamsSchema),
+  requirePatientSelf('patientId'),
   validateBody(patientRecordCreateSchema),
   asyncHandler(addPatientRecord)
+);
+patientRoutes.get(
+  '/:patientId/records/:recordId',
+  requireSessionAuth,
+  requireRoles('healthcenter', 'patient'),
+  validateParams(patientRecordVerifyParamsSchema),
+  requirePatientSelf('patientId'),
+  asyncHandler(getPatientRecord)
 );
 patientRoutes.post(
   '/:patientId/records/upload/validate',
@@ -105,4 +116,12 @@ patientRoutes.get(
   validateParams(patientRecordVerifyParamsSchema),
   requirePatientSelf('patientId'),
   asyncHandler(verifyPatientRecordIntegrity)
+);
+patientRoutes.delete(
+  '/:patientId/records/:recordId',
+  requireSessionAuth,
+  requireRoles('healthcenter', 'patient'),
+  validateParams(patientRecordVerifyParamsSchema),
+  requirePatientSelf('patientId'),
+  asyncHandler(deletePatientRecord)
 );
