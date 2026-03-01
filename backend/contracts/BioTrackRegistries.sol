@@ -190,7 +190,7 @@ contract RecordProofRegistry is BioTrackAccessControlled {
 
     function isRecordHashAnchored(bytes32 recordHash) external view returns (bool) {
         return anchoredRecordHashes[recordHash];
-    }g
+    }
 
     function verifyRecord(
         string calldata recordId,

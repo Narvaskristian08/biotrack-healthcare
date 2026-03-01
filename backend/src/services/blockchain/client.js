@@ -4,8 +4,15 @@ import { IDENTITY_REGISTRY_ABI, RECORD_PROOF_REGISTRY_ABI } from './abi.js';
 
 let providerCache = null;
 let signerCache = null;
+let signerMetadataCache = null;
 let identityContractCache = null;
 let recordContractCache = null;
+let testOverrides = {
+  createProvider: null,
+  createWallet: null,
+  createIdentityContract: null,
+  createRecordContract: null,
+};
 
 function trim(value) {
   return String(value ?? '').trim();
@@ -24,6 +31,113 @@ function normalizeAddress(addressValue, fieldName) {
     throw new Error(`${fieldName} must be a valid EVM address`);
   }
   return getAddress(raw);
+}
+
+function parsePrivateKeyRing(value) {
+  const raw = trim(value);
+  if (!raw) return [];
+
+  return raw
+    .split(',')
+    .map((entry) => normalizePrivateKey(entry))
+    .filter(Boolean);
+}
+
+function resolveSignerKeyConfig() {
+  const ringKeys = parsePrivateKeyRing(env.BLOCKCHAIN_PRIVATE_KEYS);
+  const fallbackKey = normalizePrivateKey(env.BLOCKCHAIN_PRIVATE_KEY);
+  const keys = ringKeys.length > 0 ? ringKeys : (fallbackKey ? [fallbackKey] : []);
+
+  if (keys.length === 0) {
+    throw new Error('Missing blockchain signing key: set BLOCKCHAIN_PRIVATE_KEY or BLOCKCHAIN_PRIVATE_KEYS');
+  }
+
+  const keyIndex = Number(env.BLOCKCHAIN_ACTIVE_KEY_INDEX ?? 0);
+  if (!Number.isInteger(keyIndex) || keyIndex < 0 || keyIndex >= keys.length) {
+    throw new Error(`BLOCKCHAIN_ACTIVE_KEY_INDEX out of range: got ${keyIndex}, available keys=${keys.length}`);
+  }
+
+  return {
+    privateKey: keys[keyIndex],
+    keyIndex,
+    totalKeys: keys.length,
+  };
+}
+
+const MAINNET_CHAIN_IDS = new Set([
+  '1', // Ethereum
+  '10', // Optimism
+  '56', // BSC
+  '137', // Polygon
+  '250', // Fantom
+  '42161', // Arbitrum One
+  '43114', // Avalanche C-Chain
+  '8453', // Base
+]);
+
+const TEST_NETWORK_HINT = /(sepolia|goerli|holesky|mumbai|amoy|testnet|test|devnet|dev|localhost|local|anvil|hardhat|ganache)/i;
+const MAINNET_HINT = /(mainnet|homestead)/i;
+
+function hintLooksLikeMainnet(networkHint) {
+  const hint = trim(networkHint).toLowerCase();
+  if (!hint) return false;
+  if (TEST_NETWORK_HINT.test(hint)) return false;
+  return MAINNET_HINT.test(hint);
+}
+
+async function assertAllowedNetwork(provider) {
+  if (!blockchainEnabled()) return;
+  if (Boolean(env.BLOCKCHAIN_ALLOW_MAINNET)) return;
+
+  const configuredNetwork = trim(env.BLOCKCHAIN_NETWORK);
+  if (configuredNetwork) {
+    if (hintLooksLikeMainnet(configuredNetwork)) {
+      throw new Error('Mainnet network is blocked while BLOCKCHAIN_ALLOW_MAINNET=false');
+    }
+    if (TEST_NETWORK_HINT.test(configuredNetwork)) {
+      return;
+    }
+  }
+
+  if (!provider || typeof provider.getNetwork !== 'function') {
+    throw new Error(
+      'Unable to validate blockchain network safety; set BLOCKCHAIN_NETWORK explicitly or use a provider that supports getNetwork()'
+    );
+  }
+
+  const network = await provider.getNetwork();
+  const chainId = String(network?.chainId ?? '');
+  const networkName = String(network?.name ?? '');
+
+  if (MAINNET_CHAIN_IDS.has(chainId) || hintLooksLikeMainnet(networkName)) {
+    throw new Error('Mainnet network is blocked while BLOCKCHAIN_ALLOW_MAINNET=false');
+  }
+}
+
+function resetCaches() {
+  providerCache = null;
+  signerCache = null;
+  signerMetadataCache = null;
+  identityContractCache = null;
+  recordContractCache = null;
+}
+
+export function __setBlockchainClientTestOverrides(overrides = {}) {
+  testOverrides = {
+    ...testOverrides,
+    ...overrides,
+  };
+  resetCaches();
+}
+
+export function __resetBlockchainClientTestOverrides() {
+  testOverrides = {
+    createProvider: null,
+    createWallet: null,
+    createIdentityContract: null,
+    createRecordContract: null,
+  };
+  resetCaches();
 }
 
 export function blockchainEnabled() {
@@ -51,7 +165,9 @@ function ensureConfigForEnabledMode() {
 
   const missing = [];
   if (!trim(env.BLOCKCHAIN_RPC_URL)) missing.push('BLOCKCHAIN_RPC_URL');
-  if (!trim(env.BLOCKCHAIN_PRIVATE_KEY)) missing.push('BLOCKCHAIN_PRIVATE_KEY');
+  if (!trim(env.BLOCKCHAIN_PRIVATE_KEY) && !trim(env.BLOCKCHAIN_PRIVATE_KEYS)) {
+    missing.push('BLOCKCHAIN_PRIVATE_KEY or BLOCKCHAIN_PRIVATE_KEYS');
+  }
   if (missing.length) {
     throw new Error(`Missing blockchain config: ${missing.join(', ')}`);
   }
@@ -60,15 +176,22 @@ function ensureConfigForEnabledMode() {
 async function getProvider() {
   if (!providerCache) {
     ensureConfigForEnabledMode();
-    providerCache = new JsonRpcProvider(env.BLOCKCHAIN_RPC_URL);
+    const createdProvider = testOverrides.createProvider
+      ? testOverrides.createProvider(env.BLOCKCHAIN_RPC_URL)
+      : new JsonRpcProvider(env.BLOCKCHAIN_RPC_URL);
+    await assertAllowedNetwork(createdProvider);
+    providerCache = createdProvider;
   }
   return providerCache;
 }
 
 async function getSigner() {
   if (!signerCache) {
+    const signerConfig = resolveSignerKeyConfig();
     const provider = await getProvider();
-    signerCache = new Wallet(normalizePrivateKey(env.BLOCKCHAIN_PRIVATE_KEY), provider);
+    signerCache = testOverrides.createWallet
+      ? testOverrides.createWallet(signerConfig.privateKey, provider)
+      : new Wallet(signerConfig.privateKey, provider);
     const configuredAddress = getAddress(signerCache.address);
     const expectedAddress = normalizeAddress(env.BLOCKCHAIN_EXPECTED_SIGNER, 'BLOCKCHAIN_EXPECTED_SIGNER');
     if (expectedAddress && configuredAddress !== expectedAddress) {
@@ -76,6 +199,11 @@ async function getSigner() {
         `BLOCKCHAIN_PRIVATE_KEY address mismatch: expected ${expectedAddress}, got ${configuredAddress}`
       );
     }
+    signerMetadataCache = {
+      address: configuredAddress,
+      keyIndex: signerConfig.keyIndex,
+      totalKeys: signerConfig.totalKeys,
+    };
   }
   return signerCache;
 }
@@ -84,6 +212,23 @@ export async function getSignerAddress() {
   if (!blockchainEnabled()) return '';
   const signer = await getSigner();
   return getAddress(signer.address);
+}
+
+export async function getSignerMetadata() {
+  if (!blockchainEnabled()) {
+    return {
+      address: '',
+      keyIndex: null,
+      totalKeys: 0,
+    };
+  }
+
+  await getSigner();
+  return {
+    address: String(signerMetadataCache?.address ?? ''),
+    keyIndex: Number.isInteger(signerMetadataCache?.keyIndex) ? signerMetadataCache.keyIndex : null,
+    totalKeys: Number.isInteger(signerMetadataCache?.totalKeys) ? signerMetadataCache.totalKeys : 0,
+  };
 }
 
 export async function getBlockchainNetwork() {
@@ -101,11 +246,17 @@ export async function getIdentityRegistryContract() {
 
   if (!identityContractCache) {
     const signer = await getSigner();
-    identityContractCache = new Contract(
-      env.BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS,
-      IDENTITY_REGISTRY_ABI,
-      signer
-    );
+    identityContractCache = testOverrides.createIdentityContract
+      ? testOverrides.createIdentityContract({
+        address: env.BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS,
+        abi: IDENTITY_REGISTRY_ABI,
+        signer,
+      })
+      : new Contract(
+        env.BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS,
+        IDENTITY_REGISTRY_ABI,
+        signer
+      );
   }
 
   return identityContractCache;
@@ -117,11 +268,17 @@ export async function getRecordProofContract() {
 
   if (!recordContractCache) {
     const signer = await getSigner();
-    recordContractCache = new Contract(
-      env.BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS,
-      RECORD_PROOF_REGISTRY_ABI,
-      signer
-    );
+    recordContractCache = testOverrides.createRecordContract
+      ? testOverrides.createRecordContract({
+        address: env.BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS,
+        abi: RECORD_PROOF_REGISTRY_ABI,
+        signer,
+      })
+      : new Contract(
+        env.BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS,
+        RECORD_PROOF_REGISTRY_ABI,
+        signer
+      );
   }
 
   return recordContractCache;

@@ -8,6 +8,7 @@ import {
   getBlockchainNetwork,
   getRecordContractAddress,
   getRecordProofContract,
+  getSignerMetadata,
   toBytes32Hex,
 } from './client.js';
 
@@ -70,7 +71,11 @@ export async function anchorRecordProof({
       hash: recordHash,
       reason: 'BLOCKCHAIN_WRITES_DISABLED',
     });
-    return base;
+    return {
+      ...base,
+      verificationStatus: 'unanchored',
+      errorMessage: 'BLOCKCHAIN_WRITES_DISABLED',
+    };
   }
 
   try {
@@ -87,7 +92,11 @@ export async function anchorRecordProof({
         hash: recordHash,
         reason: 'RECORD_CONTRACT_UNAVAILABLE',
       });
-      return base;
+      return {
+        ...base,
+        verificationStatus: 'unanchored',
+        errorMessage: 'RECORD_CONTRACT_UNAVAILABLE',
+      };
     }
     await assertContractWriteAccess(contract);
 
@@ -134,6 +143,7 @@ export async function anchorRecordProof({
     const network = await getBlockchainNetwork();
     const anchoredAt = new Date();
     const proofId = sha256Hex(`${tx.hash}:${String(recordId)}:${recordHash}`);
+    const signer = await getSignerMetadata();
 
     const anchored = {
       ...base,
@@ -160,10 +170,18 @@ export async function anchorRecordProof({
       blockNumber: anchored.blockNumber,
       proofId,
       anchoredAt,
+      details: {
+        signerAddress: signer.address,
+        signerKeyIndex: signer.keyIndex,
+      },
     });
 
     return anchored;
   } catch (err) {
+    if (err?.code === 'BLOCKCHAIN_RECORD_DUPLICATE_HASH') {
+      throw err;
+    }
+
     const message = safeErrorMessage(err);
 
     await writeProofLog({

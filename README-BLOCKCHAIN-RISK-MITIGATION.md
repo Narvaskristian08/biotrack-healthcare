@@ -117,7 +117,12 @@ Mitigations in backend runtime:
   - `BLOCKCHAIN_WRITE_DISABLED`
 - expected signer check:
   - `BLOCKCHAIN_EXPECTED_SIGNER`
-  - runtime compare against derived wallet from `BLOCKCHAIN_PRIVATE_KEY`
+  - runtime compare against derived wallet from active signing key
+- key rotation support:
+  - `BLOCKCHAIN_PRIVATE_KEYS` (comma-separated key ring)
+  - `BLOCKCHAIN_ACTIVE_KEY_INDEX` (active key selector)
+- testnet-first safety gate:
+  - `BLOCKCHAIN_ALLOW_MAINNET=false` blocks accidental mainnet usage until explicitly enabled
 - contract write access assertion:
   - fails if contract is paused
   - fails if signer is neither owner nor writer
@@ -172,7 +177,7 @@ Required deployment controls:
 - keep `BLOCKCHAIN_WRITE_DISABLED=true` during incident triage.
 
 Recommended secret handling:
-- move `BLOCKCHAIN_PRIVATE_KEY` to a secret vault (not plain `.env` in production).
+- move blockchain private keys to a secret vault (not plain `.env` in production).
 - never expose key in logs, screenshots, demos, or docs.
 
 ## 5. Environment Configuration
@@ -183,7 +188,10 @@ Key blockchain variables:
 - `BLOCKCHAIN_WRITE_DISABLED`
 - `BLOCKCHAIN_RPC_URL`
 - `BLOCKCHAIN_PRIVATE_KEY`
+- `BLOCKCHAIN_PRIVATE_KEYS`
+- `BLOCKCHAIN_ACTIVE_KEY_INDEX`
 - `BLOCKCHAIN_EXPECTED_SIGNER`
+- `BLOCKCHAIN_ALLOW_MAINNET`
 - `BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS`
 - `BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS`
 
@@ -201,6 +209,10 @@ Deploy:
 Record addresses in:
 - `BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS`
 - `BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS`
+
+Before go-live:
+- keep `BLOCKCHAIN_ALLOW_MAINNET=false` during testnet validation.
+- only set `BLOCKCHAIN_ALLOW_MAINNET=true` after testnet checks and signer authorization are complete.
 
 ## 6.2 Authorize Backend Wallet
 
@@ -296,4 +308,3 @@ BioTrack now has layered mitigation for the major blockchain risks:
 - safer contract state transitions with emergency pause
 
 Final security depends on correct operations: secure key custody, role governance, testnet validation, and continuous monitoring.
-

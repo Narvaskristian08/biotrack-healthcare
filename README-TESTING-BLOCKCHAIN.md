@@ -86,7 +86,8 @@ Copy-Item backend/env.example backend/.env
 4. On-chain fields (required only when `BLOCKCHAIN_ENABLED=true`):
 
 - `BLOCKCHAIN_RPC_URL`
-- `BLOCKCHAIN_PRIVATE_KEY`
+- `BLOCKCHAIN_PRIVATE_KEY` (single-key mode) or `BLOCKCHAIN_PRIVATE_KEYS` + `BLOCKCHAIN_ACTIVE_KEY_INDEX` (rotation mode)
+- `BLOCKCHAIN_ALLOW_MAINNET=false` during testnet validation
 - `BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS`
 - `BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS`
 
@@ -309,7 +310,27 @@ Test cases:
 - Register second account using same wallet
 - Expect `409` with `WALLET_ADDRESS_ALREADY_USED`
 
-## 13. Database Verification Checklist
+## 13. Key Rotation and Mainnet Safety Tests
+
+1. Key rotation:
+- Set `BLOCKCHAIN_PRIVATE_KEYS=0xold,0xnew`
+- Set `BLOCKCHAIN_ACTIVE_KEY_INDEX=1`
+- Set `BLOCKCHAIN_EXPECTED_SIGNER` to `0xnew` wallet address
+- Restart backend and create a new anchored record
+- Expect anchoring to succeed using the selected key
+
+2. Mainnet safety gate:
+- Set `BLOCKCHAIN_ALLOW_MAINNET=false`
+- Point `BLOCKCHAIN_RPC_URL` to a mainnet endpoint
+- Restart backend and call blockchain-dependent flow
+- Expect failure with `Mainnet network is blocked while BLOCKCHAIN_ALLOW_MAINNET=false`
+
+3. Controlled mainnet release:
+- Set `BLOCKCHAIN_ALLOW_MAINNET=true`
+- Repeat the same flow
+- Expect backend to proceed (assuming signer and writer authorization are correct)
+
+## 14. Database Verification Checklist
 
 Check these collections in MongoDB:
 
@@ -333,7 +354,7 @@ Check these collections in MongoDB:
   - `status` (`success`, `failed`, `skipped`)
   - `txId`, `proofId`, `reason`
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 1. Server exits on startup:
 - Check required envs in `backend/src/config/env.js`
@@ -355,7 +376,7 @@ Check these collections in MongoDB:
 5. CORS/browser issues:
 - Check CORS behavior in `backend/src/index.js` and `backend/.env` (`CORS_ORIGIN`)
 
-## 15. Quick Pass/Fail Matrix
+## 16. Quick Pass/Fail Matrix
 
 - Identity ref generated at registration: `PASS/FAIL`
 - Identity on-chain verification at login: `PASS/FAIL`
@@ -365,7 +386,7 @@ Check these collections in MongoDB:
 - Verify endpoint detects tampered data: `PASS/FAIL`
 - Strict mode fails on blockchain error: `PASS/FAIL`
 
-## 16. Suggested Demo Script (Capstone)
+## 17. Suggested Demo Script (Capstone)
 
 1. Admin create health center (active), then login health center
 2. Create patient (show blockchain identity in response)
@@ -374,4 +395,3 @@ Check these collections in MongoDB:
 5. Tamper record in MongoDB
 6. Re-run verify endpoint (`status: tampered`)
 7. Show `blockchainprooflogs` entries as audit proof
-

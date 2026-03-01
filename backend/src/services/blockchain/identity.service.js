@@ -12,6 +12,7 @@ import {
   getBlockchainNetwork,
   getIdentityContractAddress,
   getIdentityRegistryContract,
+  getSignerMetadata,
   toBytes32Hex,
 } from './client.js';
 
@@ -188,6 +189,7 @@ export async function provisionBlockchainIdentity({
     const anchoredAt = nowDate();
     const network = await getBlockchainNetwork();
     const proofId = sha256Hex(`${tx.hash}:${identityId}:${identityHash}`);
+    const signer = await getSignerMetadata();
 
     const anchored = {
       ...base,
@@ -213,6 +215,10 @@ export async function provisionBlockchainIdentity({
       blockNumber: anchored.blockNumber,
       proofId,
       anchoredAt,
+      details: {
+        signerAddress: signer.address,
+        signerKeyIndex: signer.keyIndex,
+      },
     });
 
     return anchored;

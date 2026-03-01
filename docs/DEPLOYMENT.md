@@ -100,3 +100,5 @@ Ensure:
   - Use external scheduler (cron, CI job, task scheduler) to call backup endpoint.
 - Keep `.env` out of version control and rotate secrets regularly.
 - For blockchain mode, deploy contracts first and set contract addresses before enabling writes.
+- Keep `BLOCKCHAIN_ALLOW_MAINNET=false` until testnet validation is complete.
+- For key rotation, prefer `BLOCKCHAIN_PRIVATE_KEYS` + `BLOCKCHAIN_ACTIVE_KEY_INDEX` over replacing a single key in-place.
