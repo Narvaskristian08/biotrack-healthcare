@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
+  fetchGoogleOAuthConfig,
   loginPatientWithGoogleIdToken,
   loginWithDetectedRole,
   type PatientLoginMfaChallenge,
@@ -137,8 +138,28 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [googleReady, setGoogleReady] = useState(false)
+  const [googleClientId, setGoogleClientId] = useState(GOOGLE_OAUTH_CLIENT_ID.trim())
   const googleButtonRef = useRef<HTMLDivElement | null>(null)
-  const googleOauthEnabled = GOOGLE_OAUTH_CLIENT_ID.trim().length > 0
+  const googleOauthEnabled = googleClientId.length > 0
+
+  useEffect(() => {
+    if (googleClientId) return
+
+    let cancelled = false
+    const loadGoogleConfig = async () => {
+      const result = await fetchGoogleOAuthConfig()
+      if (cancelled) return
+      const clientId = String(result.config?.clientId ?? '').trim()
+      if (clientId) {
+        setGoogleClientId(clientId)
+      }
+    }
+
+    void loadGoogleConfig()
+    return () => {
+      cancelled = true
+    }
+  }, [googleClientId])
 
   useEffect(() => {
     if (!googleOauthEnabled || mfaChallenge) {
@@ -157,7 +178,7 @@ export default function LoginPage() {
         }
 
         googleIdentity.initialize({
-          client_id: GOOGLE_OAUTH_CLIENT_ID,
+          client_id: googleClientId,
           auto_select: false,
           callback: async (response: GoogleCredentialResponse) => {
             const idToken = String(response?.credential ?? '').trim()
@@ -202,7 +223,7 @@ export default function LoginPage() {
     return () => {
       cancelled = true
     }
-  }, [googleOauthEnabled, mfaChallenge, router])
+  }, [googleClientId, googleOauthEnabled, mfaChallenge, router])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target

@@ -103,6 +103,11 @@ export interface LoginOutcome {
     mfaChallenge?: PatientLoginMfaChallenge;
 }
 
+export interface GoogleOAuthConfig {
+    enabled: boolean;
+    clientId: string;
+}
+
 const CREDENTIAL_ERROR_MESSAGES = new Set([
     'Invalid credentials',
     'Invalid email or password',
@@ -198,6 +203,19 @@ export async function fetchHealthCenters(): Promise<{ healthCenters: HealthCente
         return { error: result.error.message };
     }
     return { healthCenters: result.data?.healthCenters || [] };
+}
+
+export async function fetchGoogleOAuthConfig(): Promise<{ config?: GoogleOAuthConfig; error?: string }> {
+    const result = await apiGet<{ enabled: boolean; clientId?: string }>('/auth/oauth/google/config');
+    if (result.error) {
+        return { error: result.error.message };
+    }
+    return {
+        config: {
+            enabled: Boolean(result.data?.enabled),
+            clientId: String(result.data?.clientId ?? '').trim(),
+        },
+    };
 }
 
 // ============== Patient Auth ==============

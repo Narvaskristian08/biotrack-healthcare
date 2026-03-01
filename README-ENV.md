@@ -99,6 +99,7 @@ NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID=
 
 Use this key only if testing the Admin map picker in `/admin/users`.
 Set `NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID` to enable Google OAuth sign-in on `/login`.
+If this web variable is empty, the login page now attempts to read the client id from backend `GET /api/auth/oauth/google/config`, so setting `GOOGLE_OAUTH_CLIENT_ID` in `backend/.env` is sufficient for local development.
 
 ## 4) Mobile Runtime Config (Flutter)
 

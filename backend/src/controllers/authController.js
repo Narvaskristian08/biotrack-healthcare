@@ -28,6 +28,14 @@ export async function getCsrfToken(req, res) {
   });
 }
 
+export async function getGoogleOAuthConfig(req, res) {
+  const clientId = String(env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim();
+  return res.json({
+    enabled: clientId.length > 0,
+    clientId,
+  });
+}
+
 export async function pingAuthenticatedSession(req, res) {
   return res.json({
     ok: true,

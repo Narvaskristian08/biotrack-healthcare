@@ -2,7 +2,30 @@
  * API utilities for making requests to the backend
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+function resolveApiBaseUrl(): string {
+    const configured = String(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api').trim();
+    if (typeof window === 'undefined') return configured;
+
+    try {
+        const configuredUrl = new URL(configured);
+        const pageHost = String(window.location.hostname || '').trim().toLowerCase();
+        const apiHost = String(configuredUrl.hostname || '').trim().toLowerCase();
+        const localhostLike = new Set(['localhost', '127.0.0.1']);
+
+        // Keep API and web host aligned in local dev so CSRF cookies are same-site.
+        // This also supports LAN testing (e.g., 192.168.x.x) when API URL is configured as localhost.
+        if (localhostLike.has(apiHost) && pageHost && pageHost !== apiHost) {
+            configuredUrl.hostname = pageHost;
+            return configuredUrl.toString().replace(/\/+$/, '');
+        }
+
+        return configuredUrl.toString().replace(/\/+$/, '');
+    } catch {
+        return configured;
+    }
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 const CSRF_ENDPOINT = '/auth/csrf-token';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const SESSION_TIMEOUT_FALLBACK_SECONDS = 10;
@@ -110,14 +133,34 @@ export async function apiFetch<T>(
         }
     }
 
-    try {
+    const sendRequest = async () => {
         const response = await fetch(url, {
             ...options,
             headers,
             credentials: 'include',
         });
-
         const json = await response.json().catch(() => ({}));
+        return { response, json };
+    };
+
+    try {
+        let { response, json } = await sendRequest();
+
+        // If CSRF token has gone stale, refresh it once and retry transparently.
+        if (
+            !response.ok &&
+            response.status === 403 &&
+            String(json?.error?.code ?? '').trim() === 'CSRF_INVALID' &&
+            !SAFE_METHODS.has(method) &&
+            endpoint !== CSRF_ENDPOINT
+        ) {
+            csrfTokenCache = '';
+            const refreshedToken = await ensureCsrfToken();
+            if (refreshedToken) {
+                headers.set('x-csrf-token', refreshedToken);
+                ({ response, json } = await sendRequest());
+            }
+        }
 
         if (!response.ok) {
             const message = String(json?.error?.message ?? 'An error occurred');
