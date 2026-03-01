@@ -1,0 +1,40 @@
+{
+  "name": "BioTrack One-Click",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/biotrack-healthcare",
+  "remoteUser": "node",
+  "remoteEnv": {
+    "PATH": "/usr/local/flutter/bin:/usr/local/flutter/bin/cache/dart-sdk/bin:${containerEnv:PATH}"
+  },
+  "postCreateCommand": "bash .devcontainer/scripts/post-create.sh",
+  "postStartCommand": "bash .devcontainer/scripts/post-start.sh",
+  "forwardPorts": [3000, 3001, 27017],
+  "portsAttributes": {
+    "3000": {
+      "label": "BioTrack Backend API",
+      "onAutoForward": "notify"
+    },
+    "3001": {
+      "label": "BioTrack Web",
+      "onAutoForward": "openPreview"
+    },
+    "27017": {
+      "label": "MongoDB",
+      "onAutoForward": "silent"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Dart-Code.flutter",
+        "Dart-Code.dart-code",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}

@@ -70,6 +70,11 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
 
 Use your LAN IP instead of `10.0.2.2` when testing on a physical Android device.
 
+## Dev Container Full Startup Guide
+
+For detailed one-click Docker/Dev Container startup of MongoDB + backend + web + mobile behavior:
+- `README-DEVCONTAINER-STARTUP.md`
+
 ## Core Auth and Onboarding Rules
 
 - Patient can self-register from `/register`.
