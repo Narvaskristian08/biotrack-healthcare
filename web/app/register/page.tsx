@@ -125,6 +125,7 @@ export default function RegisterPage() {
   const [error, setError] = useState('')
   const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([])
   const [loadingHealthCenters, setLoadingHealthCenters] = useState(false)
+  const [healthCentersLoadError, setHealthCentersLoadError] = useState('')
 
   const [patientData, setPatientData] = useState({
     healthCenterId: '',
@@ -149,7 +150,20 @@ export default function RegisterPage() {
         if (!mounted) return
         if ('healthCenters' in result) {
           setHealthCenters(result.healthCenters)
+          if ((result.healthCenters ?? []).length === 0) {
+            setHealthCentersLoadError(
+              'No active barangay clinics are available yet. Ask your administrator to set a clinic status to active.'
+            )
+          } else {
+            setHealthCentersLoadError('')
+          }
+          return
         }
+        setHealthCentersLoadError(result.error || 'Unable to load health centers right now.')
+      })
+      .catch(() => {
+        if (!mounted) return
+        setHealthCentersLoadError('Unable to load health centers right now.')
       })
       .finally(() => {
         if (mounted) {
@@ -357,6 +371,9 @@ export default function RegisterPage() {
                           <p className="text-xs text-[#5b786d] mt-1 px-1 truncate">
                             {selectedHealthCenterDetails}
                           </p>
+                        ) : null}
+                        {!loadingHealthCenters && healthCentersLoadError ? (
+                          <p className="text-xs text-amber-700 mt-1 px-1">{healthCentersLoadError}</p>
                         ) : null}
                       </div>
 

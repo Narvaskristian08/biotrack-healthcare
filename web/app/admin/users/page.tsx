@@ -290,6 +290,7 @@ export default function AdminUsersPage() {
 
   const submitCreate = async () => {
     const submittingRole = form.role;
+    const submittedStatus = form.status;
     setSaving(true);
     setError('');
     setMessage('');
@@ -325,16 +326,21 @@ export default function AdminUsersPage() {
       return;
     }
 
+    const providerVisibilityNote =
+      submittingRole === 'provider' && submittedStatus !== 'active'
+        ? ` Provider status is '${submittedStatus}'. It appears on patient registration only when status is 'active'.`
+        : '';
+
     if (submittingRole === 'provider' && res.notification?.attempted) {
       if (res.notification.delivered) {
         const recipient = res.notification.recipientMasked ? ` to ${res.notification.recipientMasked}` : '';
-        setMessage(`User created successfully. Provider onboarding email sent${recipient}.`);
+        setMessage(`User created successfully. Provider onboarding email sent${recipient}.${providerVisibilityNote}`);
       } else {
         const detail = res.notification.message ? ` ${res.notification.message}` : '';
-        setMessage(`User created successfully, but provider email notification was not delivered.${detail}`);
+        setMessage(`User created successfully, but provider email notification was not delivered.${detail}${providerVisibilityNote}`);
       }
     } else {
-      setMessage('User created successfully.');
+      setMessage(`User created successfully.${providerVisibilityNote}`);
     }
 
     setForm(emptyForm);

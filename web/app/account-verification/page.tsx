@@ -252,6 +252,7 @@ export default function AccountVerificationPage() {
             {!missingSession && step === 'method' ? (
               <div className="mt-6 space-y-3">
                 <button
+                  type="button"
                   onClick={() => requestCode('email')}
                   disabled={isLoading}
                   className="w-full rounded-xl border border-[#cbeedd] bg-white p-4 text-left transition-colors hover:bg-[#f6fff9] disabled:opacity-60"
@@ -263,11 +264,15 @@ export default function AccountVerificationPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-[#163428]">Email Verification</p>
                       <p className="mt-1 truncate text-xs text-[#4e6b5d]">Send code to {emailRecipient || email || 'your email address'}</p>
+                      {isLoading && method === 'email' ? (
+                        <p className="mt-1 text-xs font-medium text-[#0f8f60]">Sending code...</p>
+                      ) : null}
                     </div>
                   </div>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => requestCode('sms')}
                   disabled={isLoading}
                   className="w-full rounded-xl border border-[#cbeedd] bg-white p-4 text-left transition-colors hover:bg-[#f6fff9] disabled:opacity-60"
@@ -279,6 +284,9 @@ export default function AccountVerificationPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-[#163428]">SMS Verification</p>
                       <p className="mt-1 truncate text-xs text-[#4e6b5d]">Send code to {smsRecipient || maskContactNumber(contactNumber) || 'your mobile number'}</p>
+                      {isLoading && method === 'sms' ? (
+                        <p className="mt-1 text-xs font-medium text-[#0f8f60]">Sending code...</p>
+                      ) : null}
                     </div>
                   </div>
                 </button>
@@ -391,5 +399,4 @@ export default function AccountVerificationPage() {
     </div>
   )
 }
-
 
