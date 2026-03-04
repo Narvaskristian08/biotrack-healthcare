@@ -1,22 +1,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Lock, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Lock, RefreshCw, Wallet } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import DashboardLayout from '@/components/dashboard-layout';
 import { PatientPageContentSkeleton } from '@/components/patient-page-skeleton';
 import { useDashboardRole } from '@/hooks/use-dashboard-role';
-import { fetchMyPatientRecords, verifyMyPatientRecord, type PatientRecord } from '@/lib/patient-role';
+import { fetchMyPatientRecords, requestMyRecordExtractionOnChain, verifyMyPatientRecord, type PatientRecord } from '@/lib/patient-role';
 
 export default function BlockchainPage() {
   const { role } = useDashboardRole();
   const [records, setRecords] = useState<PatientRecord[]>([]);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState<string>('');
+  const [extracting, setExtracting] = useState<string>('');
   const [status, setStatus] = useState<Record<string, string>>({});
+  const [exportTx, setExportTx] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let active = true;
@@ -32,6 +35,7 @@ export default function BlockchainPage() {
         setError(result.error);
         return;
       }
+      setError('');
       const data = result.records ?? [];
       setRecords(data);
       const initialStatus: Record<string, string> = {};
@@ -53,7 +57,27 @@ export default function BlockchainPage() {
       setError(result.error ?? 'Verification failed');
       return;
     }
+    setError('');
     setStatus((prev) => ({ ...prev, [id]: result.data?.status ?? 'pending' }));
+  };
+
+  const requestExtraction = async (record: PatientRecord) => {
+    setExtracting(record._id);
+    const result = await requestMyRecordExtractionOnChain(record);
+    setExtracting('');
+    if (result.error) {
+      setNotice('');
+      setError(result.error);
+      return;
+    }
+
+    setError('');
+    if (result.txHash) {
+      setExportTx((prev) => ({ ...prev, [record._id]: result.txHash ?? '' }));
+      setNotice(`Extraction request sent. You paid the network fee. Tx: ${result.txHash}`);
+      return;
+    }
+    setNotice('Extraction request submitted.');
   };
 
   if (role !== 'patient') {
@@ -91,6 +115,11 @@ export default function BlockchainPage() {
             <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
           </Card>
         ) : null}
+        {notice ? (
+          <Card className="border-emerald-300 bg-emerald-50">
+            <CardContent className="pt-6 text-sm text-emerald-700">{notice}</CardContent>
+          </Card>
+        ) : null}
 
         <div className="space-y-4">
           {records.map((record) => (
@@ -123,6 +152,18 @@ export default function BlockchainPage() {
                   {verifying === record._id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                   Verify Authenticity
                 </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => requestExtraction(record)}
+                  disabled={extracting === record._id}
+                >
+                  {extracting === record._id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+                  Extract On-Chain (You Pay Fee)
+                </Button>
+                {exportTx[record._id] ? (
+                  <p className="text-xs text-muted-foreground break-all">Export Tx: {exportTx[record._id]}</p>
+                ) : null}
               </CardContent>
             </Card>
           ))}

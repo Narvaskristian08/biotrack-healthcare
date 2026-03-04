@@ -17,6 +17,7 @@ export const RECORD_PROOF_REGISTRY_ABI = [
   'function setWriter(address account, bool allowed)',
   'function transferOwnership(address newOwner)',
   'function anchorRecord(string recordId, string patientId, bytes32 recordHash, string identityId) returns (bytes32 proofId)',
+  'function requestRecordExport(string recordId, bytes32 recordHash, string identityId) returns (bytes32 exportId)',
   'function verifyRecord(string recordId, bytes32 recordHash) view returns (bool verified, uint256 anchoredAt, string identityId)',
   'function isRecordHashAnchored(bytes32 recordHash) view returns (bool)',
 ];

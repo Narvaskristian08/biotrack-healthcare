@@ -146,6 +146,14 @@ contract RecordProofRegistry is BioTrackAccessControlled {
         address indexed submittedBy
     );
 
+    event RecordExportRequested(
+        string indexed recordId,
+        bytes32 indexed recordHash,
+        string identityId,
+        bytes32 exportId,
+        address indexed requestedBy
+    );
+
     function anchorRecord(
         string calldata recordId,
         string calldata patientId,
@@ -186,6 +194,47 @@ contract RecordProofRegistry is BioTrackAccessControlled {
         );
 
         emit RecordAnchored(recordId, patientId, recordHash, identityId, proofId, msg.sender);
+    }
+
+    /**
+     * Patient-initiated export receipt.
+     * This is intentionally open to any wallet so the caller pays their own network fee.
+     * The call only succeeds for an already-anchored record/hash pair.
+     */
+    function requestRecordExport(
+        string calldata recordId,
+        bytes32 recordHash,
+        string calldata identityId
+    ) external returns (bytes32 exportId) {
+        require(bytes(recordId).length > 0, "recordId required");
+        require(recordHash != bytes32(0), "recordHash required");
+
+        bytes32 recordKey = keccak256(bytes(recordId));
+        RecordEntry storage entry = recordById[recordKey];
+        require(entry.exists, "Record not anchored");
+        require(entry.recordHash == recordHash, "Record hash mismatch");
+
+        if (bytes(identityId).length > 0) {
+            require(
+                keccak256(bytes(entry.identityId)) == keccak256(bytes(identityId)),
+                "Identity mismatch"
+            );
+        }
+
+        exportId = keccak256(
+            abi.encodePacked(
+                "EXPORT",
+                recordId,
+                recordHash,
+                entry.identityId,
+                msg.sender,
+                block.chainid,
+                block.number,
+                block.timestamp
+            )
+        );
+
+        emit RecordExportRequested(recordId, recordHash, entry.identityId, exportId, msg.sender);
     }
 
     function isRecordHashAnchored(bytes32 recordHash) external view returns (bool) {

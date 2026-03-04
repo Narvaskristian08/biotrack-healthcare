@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Download, Eye, EyeOff, Lock, Shield, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, Download, Eye, EyeOff, Lock, RefreshCw, Shield, ShieldAlert, Wallet } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { PatientPageContentSkeleton } from '@/components/patient-page-skeleton';
 import {
   downloadTextFile,
   fetchMyPatientRecords,
+  requestMyRecordExtractionOnChain,
   type PatientRecord,
   verifyMyPatientRecord,
   type RecordVerificationResult,
@@ -30,6 +31,9 @@ export default function MedicalRecordsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [extracting, setExtracting] = useState<string>('');
+  const [exportTxByRecord, setExportTxByRecord] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let active = true;
@@ -62,7 +66,28 @@ export default function MedicalRecordsPage() {
       setError(result.error ?? 'Failed to verify record');
       return;
     }
+    setError('');
     setVerification((prev) => ({ ...prev, [recordId]: result.data }));
+  };
+
+  const requestExtraction = async (record: PatientRecord) => {
+    setExtracting(record._id);
+    const result = await requestMyRecordExtractionOnChain(record);
+    setExtracting('');
+    if (result.error) {
+      setNotice('');
+      setError(result.error);
+      return;
+    }
+
+    setError('');
+    if (result.txHash) {
+      setExportTxByRecord((prev) => ({ ...prev, [record._id]: result.txHash ?? '' }));
+      setNotice(`Extraction request submitted on-chain. Network fee was charged to your wallet. Tx: ${result.txHash}`);
+      return;
+    }
+
+    setNotice('Extraction request submitted on-chain.');
   };
 
   const downloadRecord = (record: PatientRecord) => {
@@ -102,6 +127,11 @@ export default function MedicalRecordsPage() {
         {error ? (
           <Card className="border-destructive/30 bg-destructive/5">
             <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
+          </Card>
+        ) : null}
+        {notice ? (
+          <Card className="border-emerald-300 bg-emerald-50">
+            <CardContent className="pt-6 text-sm text-emerald-700">{notice}</CardContent>
           </Card>
         ) : null}
 
@@ -201,7 +231,19 @@ export default function MedicalRecordsPage() {
                       <Download className="h-4 w-4" />
                       Download Record
                     </Button>
+                    <Button
+                      variant="outline"
+                      className="gap-2 sm:col-span-2"
+                      onClick={() => requestExtraction(record)}
+                      disabled={extracting === record._id}
+                    >
+                      {extracting === record._id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+                      Extract On-Chain (You Pay Fee)
+                    </Button>
                   </div>
+                  {exportTxByRecord[record._id] ? (
+                    <p className="text-xs text-muted-foreground break-all">Export Tx: {exportTxByRecord[record._id]}</p>
+                  ) : null}
                 </CardContent>
               </Card>
             );

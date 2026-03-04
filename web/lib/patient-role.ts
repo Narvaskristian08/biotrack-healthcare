@@ -1,6 +1,10 @@
 import { apiGet, apiPatch } from './api';
 import { getSession } from './auth';
 
+const RECORD_EXPORT_REQUEST_ABI = [
+  'function requestRecordExport(string recordId, bytes32 recordHash, string identityId) returns (bytes32 exportId)',
+];
+
 export interface PatientProfile {
   _id: string;
   healthCenterId: string;
@@ -168,6 +172,63 @@ export async function verifyMyPatientRecord(recordId: string): Promise<{ data?: 
     return { data: result.data };
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to verify record' };
+  }
+}
+
+function toBytes32Hex(hashValue: string): string {
+  const normalized = String(hashValue ?? '').trim().replace(/^0x/i, '').toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(normalized)) {
+    throw new Error('Record hash must be a 32-byte hex string before requesting on-chain export');
+  }
+  return `0x${normalized}`;
+}
+
+export async function requestMyRecordExtractionOnChain(
+  record: Pick<PatientRecord, '_id' | 'recordHash' | 'blockchain'>,
+  identityId = ''
+): Promise<{ txHash?: string; blockNumber?: number; error?: string }> {
+  try {
+    const status = String(record.blockchain?.verificationStatus ?? '').trim().toLowerCase();
+    if (status !== 'anchored' && status !== 'verified') {
+      return { error: 'Record is not anchored yet. Please verify first.' };
+    }
+
+    if (typeof window === 'undefined') {
+      return { error: 'Wallet-based extraction is only available in browser mode' };
+    }
+
+    const ethereum = (window as Window & { ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } }).ethereum;
+    if (!ethereum) {
+      return { error: 'No EVM wallet found. Install MetaMask or another wallet extension.' };
+    }
+
+    const contractAddress = String(
+      record.blockchain?.contractAddress ?? process.env.NEXT_PUBLIC_BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS ?? ''
+    ).trim();
+    if (!contractAddress) {
+      return { error: 'Blockchain records contract address is unavailable for this record.' };
+    }
+
+    await ethereum.request({ method: 'eth_requestAccounts' });
+
+    const { BrowserProvider, Contract } = await import('ethers');
+    const provider = new BrowserProvider(ethereum);
+    const signer = await provider.getSigner();
+    const contract = new Contract(contractAddress, RECORD_EXPORT_REQUEST_ABI, signer);
+
+    const tx = await contract.requestRecordExport(
+      String(record._id),
+      toBytes32Hex(record.recordHash),
+      String(identityId ?? '')
+    );
+    const receipt = await tx.wait();
+
+    return {
+      txHash: String(tx.hash ?? '').trim(),
+      blockNumber: receipt?.blockNumber ? Number(receipt.blockNumber) : undefined,
+    };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to submit extraction request on-chain' };
   }
 }
 
