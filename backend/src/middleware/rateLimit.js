@@ -1,10 +1,43 @@
 import rateLimit from 'express-rate-limit';
+import { createHash } from 'node:crypto';
 import { env } from '../config/env.js';
 
+function normalizeBucketPart(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim().toLowerCase();
+}
+
+function hashBucketPart(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
 function authBucketKey(req) {
-  const ip = String(req.ip ?? req.socket?.remoteAddress ?? 'unknown');
   const route = `${String(req.baseUrl ?? '')}${String(req.path ?? '')}`;
-  return `${ip}:${route}`;
+
+  const email = normalizeBucketPart(req?.body?.email);
+  if (email) {
+    return `email:${email}:${route}`;
+  }
+
+  const patientId = normalizeBucketPart(req?.body?.patientId);
+  if (patientId) {
+    return `patient:${patientId}:${route}`;
+  }
+
+  const challengeId = normalizeBucketPart(req?.body?.challengeId);
+  if (challengeId) {
+    return `challenge:${challengeId}:${route}`;
+  }
+
+  const googleIdToken = normalizeBucketPart(req?.body?.idToken);
+  if (googleIdToken) {
+    return `google-id-token:${hashBucketPart(googleIdToken)}:${route}`;
+  }
+
+  return `anonymous:${route}`;
 }
 
 export const authLoginLimiter = rateLimit({
