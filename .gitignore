@@ -27,6 +27,12 @@ build/
 .next/
 out/
 coverage/
+dist-desktop/
+dist-installer/
+
+# Desktop build temp/generated assets
+desktop/assets/icon.iconset/
+desktop/assets/.iconset-tmp/
 
 # =========================
 # Next.js

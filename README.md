@@ -59,6 +59,59 @@ URLs:
 - Backend API: `http://127.0.0.1:3000/api`
 - Web app: `http://127.0.0.1:3001`
 
+## Run As Desktop App (Electron)
+
+From repo root:
+
+```bash
+npm run dev:desktop
+```
+
+This starts backend + web + Electron together and opens **BioTrack - Healthcare Platform** as a desktop window using the same web UI theme and branding assets.
+
+Build Windows files:
+
+```bash
+npm run desktop:icon
+npm run desktop:build:win
+```
+
+Outputs:
+- `.ico`: `desktop/assets/icon.ico`
+- `.exe`: `dist-desktop/BioTrack-win32-x64/BioTrack.exe`
+
+Notes:
+- This build is a portable Windows app folder (not an installer).
+- The desktop app still expects the web app at `http://127.0.0.1:3001` unless `ELECTRON_START_URL` is set.
+
+Build macOS files:
+
+```bash
+npm run desktop:icon:mac
+npm run desktop:build:mac
+```
+
+Outputs:
+- `.icns`: `desktop/assets/icon.icns`
+- `.app`: `dist-desktop/BioTrack-darwin-<arch>/BioTrack.app`
+
+Build installer (auto-detect host platform):
+
+```bash
+npm run desktop:installer
+```
+
+Explicit installer target:
+
+```bash
+npm run desktop:installer:mac
+npm run desktop:installer:win
+```
+
+Installer outputs:
+- macOS: `dist-installer/BioTrack-<version>-mac-<arch>.dmg`
+- Windows: `dist-installer/BioTrack-Setup-<version>-x64.exe`
+
 ## Mobile Run (Optional)
 
 From repo root:
