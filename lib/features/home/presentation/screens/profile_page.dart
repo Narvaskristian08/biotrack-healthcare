@@ -1,8 +1,9 @@
-import 'package:biotrack_healthcare/features/settings/presentation/screens/app_settings_page.dart';
 import 'package:biotrack_healthcare/features/home/presentation/screens/health_permission_page.dart';
-
+import 'package:biotrack_healthcare/features/settings/presentation/screens/app_settings_page.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../auth/data/services/auth_api_service.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -13,7 +14,8 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final _api = AuthApiService();
+  final AuthApiService _api = AuthApiService();
+
   bool _loading = true;
   String _errorMessage = '';
   PatientProfileResult? _profile;
@@ -54,6 +56,13 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _openProfileSettings() async {
+    await context.push('/profile-settings');
+    if (mounted) {
+      await _loadProfile();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final assignedCenter = _profile?.assignedHealthCenter;
@@ -63,13 +72,19 @@ class _ProfilePageState extends State<ProfilePage> {
         : (assignedCenter.contactNumber.trim().isNotEmpty
               ? assignedCenter.contactNumber
               : assignedCenter.officialContactInfo);
+    final emergencyContact = _profile == null
+        ? ''
+        : (_profile!.emergencyContactPhone.trim().isNotEmpty
+              ? _profile!.emergencyContactPhone
+              : _profile!.emergencyContactName.trim().isNotEmpty
+                    ? _profile!.emergencyContactName
+                    : '');
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F8EF),
-
+      backgroundColor: AppColors.softBackground,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        backgroundColor: const Color(0xFFF4F8EF),
+        backgroundColor: AppColors.softBackground,
         elevation: 0,
         centerTitle: true,
         title: const Text(
@@ -77,19 +92,20 @@ class _ProfilePageState extends State<ProfilePage> {
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
         ),
       ),
-
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
+        child: RefreshIndicator(
+          onRefresh: _loadProfile,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             children: [
-              // User Info Card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.mutedBorder),
                 ),
                 child: Column(
                   children: [
@@ -105,7 +121,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       _profile?.email.trim().isNotEmpty == true
                           ? _profile!.email
                           : 'No email available',
-                      style: const TextStyle(fontSize: 14, color: Colors.grey),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.bodyText,
+                      ),
                     ),
                     if (_profile?.contactNumber.trim().isNotEmpty == true) ...[
                       const SizedBox(height: 4),
@@ -113,27 +132,26 @@ class _ProfilePageState extends State<ProfilePage> {
                         _profile!.contactNumber,
                         style: const TextStyle(
                           fontSize: 13,
-                          color: Colors.grey,
+                          color: AppColors.bodyText,
                         ),
                       ),
                     ],
                   ],
                 ),
               ),
-
-              const SizedBox(height: 24),
-
+              const SizedBox(height: 16),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.mutedBorder),
                 ),
                 child: _loading
                     ? const Text(
                         'Loading healthcare location...',
-                        style: TextStyle(color: Colors.grey),
+                        style: TextStyle(color: AppColors.bodyText),
                       )
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,7 +179,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               centerLocation,
                               style: const TextStyle(
                                 fontSize: 13,
-                                color: Colors.grey,
+                                color: AppColors.bodyText,
                               ),
                             ),
                           ],
@@ -172,7 +190,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               'Address: ${assignedCenter!.address}',
                               style: const TextStyle(
                                 fontSize: 13,
-                                color: Colors.grey,
+                                color: AppColors.bodyText,
                               ),
                             ),
                           ],
@@ -182,14 +200,13 @@ class _ProfilePageState extends State<ProfilePage> {
                               'Contact: $centerContact',
                               style: const TextStyle(
                                 fontSize: 13,
-                                color: Colors.grey,
+                                color: AppColors.bodyText,
                               ),
                             ),
                           ],
                         ],
                       ),
               ),
-
               if (_errorMessage.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Container(
@@ -205,7 +222,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       Text(
                         _errorMessage,
                         style: const TextStyle(
-                          color: Color(0xFFC82E2E),
+                          color: AppColors.danger,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -218,23 +235,27 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
               ],
-
               const SizedBox(height: 12),
-
-              // Menu Items
               _profileItem(
-                icon: Icons.edit,
-                title: 'Edit Profile',
-                onTap: () {},
+                icon: Icons.manage_accounts_outlined,
+                title: 'Edit Profile & Login History',
+                subtitle: 'Update your information and review sign-ins',
+                onTap: _openProfileSettings,
               ),
-
               _profileItem(
-                icon: Icons.phone,
+                icon: Icons.summarize_outlined,
+                title: 'Reports & Summary',
+                subtitle: 'Copy a mobile-friendly patient report',
+                onTap: () => context.push('/reports'),
+              ),
+              _profileItem(
+                icon: Icons.phone_outlined,
                 title: 'Emergency Contact',
-                subtitle: '+639123456789',
-                onTap: () {},
+                subtitle: emergencyContact.isNotEmpty
+                    ? emergencyContact
+                    : 'No emergency contact saved',
+                onTap: _openProfileSettings,
               ),
-
               _profileItem(
                 icon: Icons.check_box_outlined,
                 title: 'Health Permission',
@@ -247,9 +268,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   );
                 },
               ),
-
               _profileItem(
-                icon: Icons.settings,
+                icon: Icons.settings_outlined,
                 title: 'Privacy and App Settings',
                 onTap: () {
                   Navigator.push(
@@ -265,7 +285,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // Profile Row Item
   static Widget _profileItem({
     required IconData icon,
     required String title,
@@ -277,6 +296,7 @@ class _ProfilePageState extends State<ProfilePage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.mutedBorder),
       ),
       child: ListTile(
         leading: Icon(icon, color: Colors.black),

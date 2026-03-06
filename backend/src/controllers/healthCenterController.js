@@ -2,7 +2,7 @@ import { HealthCenter } from '../models/HealthCenter.js';
 import { signHealthCenterToken, verifyPassword } from '../services/authService.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
-import { blockchainEnabled } from '../services/blockchain/client.js';
+import { blockchainEnabled, blockchainStrictMode } from '../services/blockchain/client.js';
 
 const GENERIC_LOGIN_ERROR = 'Invalid credentials';
 const PROVIDER_PROFILE_SELECT = [
@@ -96,7 +96,7 @@ export async function loginHealthCenter(req, res) {
     subjectId: hc._id,
   });
 
-  if (blockchainEnabled() && identityVerification.onChain && !identityVerification.verified) {
+  if (blockchainEnabled() && blockchainStrictMode() && identityVerification.onChain && !identityVerification.verified) {
     await writeAuditLog({
       req,
       action: 'HEALTHCENTER.LOGIN',

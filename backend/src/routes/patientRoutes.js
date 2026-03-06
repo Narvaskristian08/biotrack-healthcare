@@ -12,6 +12,8 @@ import {
 } from '../controllers/patientRecordController.js';
 import {
   loginPatient,
+  requestPatientPasswordResetCode,
+  resetPatientPasswordWithCode,
   verifyPatientLoginMfa,
   registerPatientPublic,
   sendPatientVerificationCode,
@@ -21,8 +23,10 @@ import { authLoginLimiter, authMfaVerifyLimiter } from '../middleware/rateLimit.
 import { validateBody, validateParams, validateQuery } from '../middleware/validate.js';
 import {
   loginSchema,
+  patientForgotPasswordSchema,
   patientLoginMfaVerifySchema,
   patientPublicRegisterSchema,
+  patientResetPasswordSchema,
   verificationSendCodeSchema,
   verificationVerifyCodeSchema,
 } from '../validation/authSchemas.js';
@@ -45,6 +49,8 @@ patientRoutes.post('/verification/send-code', validateBody(verificationSendCodeS
 patientRoutes.post('/verification/verify-code', validateBody(verificationVerifyCodeSchema), asyncHandler(verifyPatientRegistrationCode));
 patientRoutes.post('/login', authLoginLimiter, validateBody(loginSchema), asyncHandler(loginPatient));
 patientRoutes.post('/login/verify-mfa', authMfaVerifyLimiter, validateBody(patientLoginMfaVerifySchema), asyncHandler(verifyPatientLoginMfa));
+patientRoutes.post('/password/forgot', authLoginLimiter, validateBody(patientForgotPasswordSchema), asyncHandler(requestPatientPasswordResetCode));
+patientRoutes.post('/password/reset', authMfaVerifyLimiter, validateBody(patientResetPasswordSchema), asyncHandler(resetPatientPasswordWithCode));
 
 patientRoutes.get('/', requireSessionAuth, requireRoles('healthcenter'), validateQuery(patientListQuerySchema), asyncHandler(listPatients));
 patientRoutes.post('/', requireSessionAuth, requireRoles('healthcenter'), validateBody(patientCreateSchema), asyncHandler(createPatient));

@@ -122,11 +122,11 @@ async function deliverEmailCode({ email, code }) {
   const recipientMasked = maskEmailAddress(email);
   const ttlMinutes = Math.max(1, Number(env.OTP_TTL_MINUTES ?? 10) || 10);
   const safeCode = String(code ?? '').trim();
-  const subject = 'BioTrack Verification Code';
+  const subject = 'BioTrack Security Code';
   const text = [
-    'BioTrack Verification Code',
+    'BioTrack Security Code',
     '',
-    `Your verification code is: ${safeCode}`,
+    `Your security code is: ${safeCode}`,
     `This code expires in ${ttlMinutes} minutes.`,
     '',
     'Security reminder:',
@@ -146,10 +146,10 @@ async function deliverEmailCode({ email, code }) {
           <div style="background:#ffffff;border:1px solid #bbf7d0;border-radius:16px;overflow:hidden;box-shadow:0 10px 24px rgba(21,128,61,0.12);">
             <div style="background:linear-gradient(90deg,#166534 0%,#16a34a 100%);padding:20px 24px;color:#ffffff;">
               <p style="margin:0 0 10px 0;">
-                <span style="display:inline-block;padding:4px 10px;border:1px solid rgba(255,255,255,0.45);border-radius:999px;font-size:11px;letter-spacing:.06em;font-weight:700;text-transform:uppercase;">Patient MFA</span>
+                <span style="display:inline-block;padding:4px 10px;border:1px solid rgba(255,255,255,0.45);border-radius:999px;font-size:11px;letter-spacing:.06em;font-weight:700;text-transform:uppercase;">Patient Security</span>
               </p>
-              <h1 style="margin:0;font-size:24px;line-height:1.2;font-weight:700;">BioTrack Verification Code</h1>
-              <p style="margin:8px 0 0 0;font-size:13px;line-height:1.4;opacity:0.95;">Use this one-time code to complete your patient registration.</p>
+              <h1 style="margin:0;font-size:24px;line-height:1.2;font-weight:700;">BioTrack Security Code</h1>
+              <p style="margin:8px 0 0 0;font-size:13px;line-height:1.4;opacity:0.95;">Use this one-time code to complete your request.</p>
             </div>
             <div style="padding:24px;">
               <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;color:#1f2937;">Enter this code in the app:</p>
@@ -168,7 +168,7 @@ async function deliverEmailCode({ email, code }) {
               <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin:0 0 14px 0;">
                 <p style="margin:0 0 8px 0;font-size:12px;font-weight:700;color:#166534;letter-spacing:.03em;text-transform:uppercase;">How to verify</p>
                 <p style="margin:0;font-size:13px;line-height:1.55;color:#334155;">
-                  1. Return to BioTrack registration.<br/>
+                  1. Return to BioTrack.<br/>
                   2. Enter the 6-digit code shown above.<br/>
                   3. Submit before expiration.
                 </p>
@@ -177,7 +177,7 @@ async function deliverEmailCode({ email, code }) {
                 <p style="margin:0 0 6px 0;font-size:12px;font-weight:700;color:#166534;letter-spacing:.02em;text-transform:uppercase;">Security reminder</p>
                 <p style="margin:0;font-size:13px;line-height:1.45;color:#166534;">Never share this code. BioTrack support will never ask for your verification code.</p>
               </div>
-              <p style="margin:14px 0 0 0;font-size:12px;color:#64748b;">If you did not request this verification, you can safely ignore this email.</p>
+              <p style="margin:14px 0 0 0;font-size:12px;color:#64748b;">If you did not request this code, you can safely ignore this email.</p>
             </div>
             <div style="padding:12px 24px;border-top:1px solid #dcfce7;background:#f8fafc;">
               <p style="margin:0;font-size:11px;color:#64748b;">Sent to ${escapeHtml(recipientMasked)} by BioTrack.</p>
@@ -213,7 +213,7 @@ async function deliverEmailCode({ email, code }) {
 async function deliverSmsCode({ contactNumber, code }) {
   const normalizedNumber = normalizePhoneNumber(contactNumber);
   const recipientMasked = maskContactNumber(normalizedNumber || contactNumber);
-  const message = `Your BioTrack verification code is ${code}. It expires in ${env.OTP_TTL_MINUTES} minutes.`;
+  const message = `Your BioTrack security code is ${code}. It expires in ${env.OTP_TTL_MINUTES} minutes.`;
 
   if (hasTwilioConfig()) {
     const client = await getTwilioClient();

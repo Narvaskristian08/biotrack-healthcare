@@ -433,6 +433,24 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _isLoading
+                                  ? null
+                                  : () => context.go(
+                                      '/forgot-password?email=${Uri.encodeComponent(_emailController.text.trim())}',
+                                    ),
+                              child: const Text(
+                                'Forgot password?',
+                                style: TextStyle(
+                                  color: AppColors.primaryBlue,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                         const SizedBox(height: 16),
                         PrimaryButton(

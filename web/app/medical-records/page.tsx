@@ -21,8 +21,89 @@ type VerificationMap = Record<string, RecordVerificationResult | undefined>;
 function getStatusBadge(status: string) {
   const normalized = status.toLowerCase();
   if (normalized === 'anchored' || normalized === 'verified') return { label: 'Verified', variant: 'default' as const };
-  if (normalized === 'tampered' || normalized === 'anchor_mismatch') return { label: 'Failed', variant: 'destructive' as const };
+  if (normalized === 'local_hash_only') return { label: 'Verified (Local)', variant: 'secondary' as const };
+  if (normalized === 'tampered' || normalized === 'anchor_mismatch' || normalized === 'failed') {
+    return { label: 'Needs Review', variant: 'destructive' as const };
+  }
   return { label: 'Pending', variant: 'secondary' as const };
+}
+
+function formatRecordType(type: string) {
+  const key = String(type ?? '').trim().toLowerCase();
+  const labels: Record<string, string> = {
+    consultation: 'Consultation',
+    vitals: 'Vitals',
+    immunization: 'Immunization',
+    prenatal: 'Prenatal',
+    lab: 'Laboratory',
+    medication: 'Medication',
+    referral: 'Referral',
+    note: 'Clinical Note',
+    other: 'Other',
+  };
+  return labels[key] ?? (key ? `${key.charAt(0).toUpperCase()}${key.slice(1)}` : 'Medical Record');
+}
+
+function toObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function toBoolean(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', 'yes', '1', 'detected'].includes(normalized)) return true;
+    if (['false', 'no', '0', 'none'].includes(normalized)) return false;
+  }
+  return null;
+}
+
+function toTitleWords(value: string) {
+  return value
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getPatientRecordSummary(record: PatientRecord) {
+  const data = toObject(record.data);
+  const metrics = toObject(data.metrics);
+  const heartRate = toNumber(data.heartRate) ?? toNumber(data.bpm) ?? toNumber(metrics.heartRate) ?? toNumber(metrics.bpm);
+  const fallDetected = toBoolean(data.fallDetected) ?? toBoolean(metrics.fallDetected);
+  const activityRaw = String(data.activityLevel ?? data.activity ?? '').trim();
+  const assessment = String(data.assessment ?? data.note ?? '').trim();
+
+  return {
+    heartRate: heartRate === null ? 'Not provided' : `${heartRate} bpm`,
+    fallDetected: fallDetected === null ? 'Not provided' : fallDetected ? 'Yes' : 'No',
+    activity: activityRaw ? toTitleWords(activityRaw) : 'Not provided',
+    assessment: assessment || 'No notes available',
+  };
+}
+
+function getStatusHelp(status: string) {
+  const normalized = String(status ?? '').trim().toLowerCase();
+  if (normalized === 'anchored' || normalized === 'verified') {
+    return 'Authenticity check passed and blockchain proof is available.';
+  }
+  if (normalized === 'local_hash_only') {
+    return 'Authenticity check passed locally. Blockchain network proof is currently disabled in this environment.';
+  }
+  if (normalized === 'tampered' || normalized === 'anchor_mismatch' || normalized === 'failed') {
+    return 'Verification found a mismatch. Contact your health center for review.';
+  }
+  return 'Record is saved. Tap "Check Authenticity" to verify integrity.';
 }
 
 export default function MedicalRecordsPage() {
@@ -56,7 +137,8 @@ export default function MedicalRecordsPage() {
   const verifiedCount = useMemo(() => {
     return records.filter((record) => {
       const status = verification[record._id]?.status ?? record.blockchain?.verificationStatus ?? 'pending';
-      return String(status).toLowerCase() === 'verified' || String(status).toLowerCase() === 'anchored';
+      const normalized = String(status).toLowerCase();
+      return normalized === 'verified' || normalized === 'anchored' || normalized === 'local_hash_only';
     }).length;
   }, [records, verification]);
 
@@ -120,7 +202,7 @@ export default function MedicalRecordsPage() {
         <header className="space-y-1">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Medical Records</h1>
           <p className="text-muted-foreground text-sm sm:text-base">
-            Historical records, blockchain verification status, and downloadable reports
+            Your health history with simple summaries and authenticity checks.
           </p>
         </header>
 
@@ -171,6 +253,7 @@ export default function MedicalRecordsPage() {
             const status = verifyData?.status ?? record.blockchain?.verificationStatus ?? 'pending';
             const badge = getStatusBadge(String(status));
             const isExpanded = expanded === record._id;
+            const summary = getPatientRecordSummary(record);
             const verifiedAt = verifyData?.verifiedAt ?? record.blockchain?.lastVerifiedAt ?? record.blockchain?.anchoredAt ?? null;
             return (
               <Card key={record._id} className="hover:shadow-md transition-shadow overflow-hidden">
@@ -178,45 +261,77 @@ export default function MedicalRecordsPage() {
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <CardTitle className="text-lg">{record.type}</CardTitle>
+                        <CardTitle className="text-lg">{formatRecordType(record.type)}</CardTitle>
                         <Badge variant={badge.variant}>{badge.label}</Badge>
                       </div>
-                      <CardDescription>Created {new Date(record.createdAt).toLocaleString()}</CardDescription>
+                      <CardDescription>Recorded {new Date(record.createdAt).toLocaleString()}</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <p className="text-sm font-semibold text-muted-foreground mb-2">Record Payload</p>
-                    <pre className="text-xs bg-muted p-3 rounded overflow-x-auto">{JSON.stringify(record.data ?? {}, null, 2)}</pre>
+                  <div className="p-3 rounded-lg border border-border bg-background/60">
+                    <p className="text-sm font-semibold">Record Summary</p>
+                    <p className="text-xs text-muted-foreground mt-1">Easy-to-read details for patients.</p>
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Heart Rate</p>
+                        <p className="font-medium">{summary.heartRate}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Fall Detected</p>
+                        <p className="font-medium">{summary.fallDetected}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Activity Level</p>
+                        <p className="font-medium">{summary.activity}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Record Type</p>
+                        <p className="font-medium">{formatRecordType(record.type)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <p className="text-xs text-muted-foreground">Notes</p>
+                      <p className="text-sm">{summary.assessment}</p>
+                    </div>
                   </div>
 
                   <div className="p-3 rounded-lg bg-muted border border-border">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        {badge.label === 'Failed' ? (
+                        {badge.variant === 'destructive' ? (
                           <ShieldAlert className="h-4 w-4 text-destructive" />
                         ) : (
                           <Shield className="h-4 w-4 text-green-600" />
                         )}
-                        <p className="text-sm font-semibold">Blockchain Verification</p>
+                        <p className="text-sm font-semibold">Record Authenticity</p>
                       </div>
                       {verifiedAt ? <span className="text-xs text-muted-foreground">{new Date(verifiedAt).toLocaleString()}</span> : null}
                     </div>
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs bg-background p-2 rounded flex-1 overflow-hidden text-ellipsis">
-                          {isExpanded ? record.recordHash : `${record.recordHash.slice(0, 24)}...`}
-                        </code>
-                        <Button size="sm" variant="ghost" onClick={() => setExpanded(isExpanded ? null : record._id)}>
+                      <p className="text-xs text-muted-foreground">{getStatusHelp(String(status))}</p>
+                      <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-background p-2">
+                        <p className="text-xs sm:text-sm">
+                          <span className="font-semibold">Current Status:</span> {toTitleWords(String(status))}
+                        </p>
+                        <Button size="sm" variant="ghost" onClick={() => setExpanded(isExpanded ? null : record._id)} className="gap-1">
                           {isExpanded ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          {isExpanded ? 'Hide Technical Details' : 'Show Technical Details'}
                         </Button>
                       </div>
                       {isExpanded ? (
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          <p>Tx ID: {record.blockchain?.txId || 'N/A'}</p>
-                          <p>Block: {record.blockchain?.blockNumber ?? 'N/A'}</p>
-                          <p>Status: {String(status)}</p>
+                        <div className="text-xs text-muted-foreground space-y-2">
+                          <p className="font-semibold text-foreground">Technical Details</p>
+                          <p className="break-all">
+                            <span className="font-medium">Record Hash:</span> {record.recordHash}
+                          </p>
+                          <p className="break-all">
+                            <span className="font-medium">Tx ID:</span> {record.blockchain?.txId || 'N/A'}
+                          </p>
+                          <p>
+                            <span className="font-medium">Block:</span> {record.blockchain?.blockNumber ?? 'N/A'}
+                          </p>
+                          <pre className="text-xs bg-background p-3 rounded overflow-x-auto">{JSON.stringify(record.data ?? {}, null, 2)}</pre>
                         </div>
                       ) : null}
                     </div>
@@ -225,7 +340,7 @@ export default function MedicalRecordsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <Button variant="outline" className="gap-2" onClick={() => verifyRecord(record._id)}>
                       <CheckCircle2 className="h-4 w-4" />
-                      Verify Authenticity
+                      Check Authenticity
                     </Button>
                     <Button variant="outline" className="gap-2" onClick={() => downloadRecord(record)}>
                       <Download className="h-4 w-4" />
@@ -238,7 +353,7 @@ export default function MedicalRecordsPage() {
                       disabled={extracting === record._id}
                     >
                       {extracting === record._id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-                      Extract On-Chain (You Pay Fee)
+                      Request Blockchain Export (Wallet Fee)
                     </Button>
                   </div>
                   {exportTxByRecord[record._id] ? (

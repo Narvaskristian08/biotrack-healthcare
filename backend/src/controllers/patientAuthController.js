@@ -15,6 +15,8 @@ import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
 
 const OTP_REGEX = /^\d{6}$/;
 const GENERIC_LOGIN_ERROR = 'Invalid credentials';
+const GENERIC_PASSWORD_RESET_REQUEST_MESSAGE = 'If an active patient account with that email exists, a reset code has been sent.';
+const GENERIC_PASSWORD_RESET_ERROR = 'Invalid or expired reset code';
 
 function normalizeVerificationMethod(value) {
   const method = String(value ?? '').trim().toLowerCase();
@@ -57,6 +59,24 @@ function buildHealthCenterSummary(center) {
     address: String(center.address ?? '').trim(),
     contactNumber: String(center.contactNumber ?? center.officialContactInfo ?? '').trim(),
     officialContactInfo: String(center.officialContactInfo ?? '').trim(),
+  };
+}
+
+function getPatientHealthCenterAccessError(healthCenter) {
+  if (!healthCenter) {
+    return {
+      statusCode: 409,
+      message: 'This patient account is linked to a missing health center. Please contact support.',
+      code: 'PATIENT_HEALTH_CENTER_MISSING',
+      reason: 'Missing health center reference',
+    };
+  }
+
+  return {
+    statusCode: 403,
+    message: 'This patient account is linked to an inactive health center. Please contact support.',
+    code: 'PATIENT_HEALTH_CENTER_INACTIVE',
+    reason: `Health center status is ${String(healthCenter.status ?? '').trim() || 'inactive'}`,
   };
 }
 
@@ -106,6 +126,15 @@ function clearPatientLoginMfa(patient) {
   patient.set('loginMfa.codeExpiresAt', null);
   patient.set('loginMfa.lastSentAt', null);
   patient.set('loginMfa.attempts', 0);
+}
+
+function clearPatientPasswordReset(patient) {
+  patient.set('passwordReset.method', '');
+  patient.set('passwordReset.codeHash', '');
+  patient.set('passwordReset.codeExpiresAt', null);
+  patient.set('passwordReset.lastSentAt', null);
+  patient.set('passwordReset.attempts', 0);
+  patient.set('passwordReset.requestedAt', null);
 }
 
 async function recordPatientLoginHistory({ req, patient, token }) {
@@ -513,6 +542,169 @@ export async function verifyPatientRegistrationCode(req, res) {
   });
 }
 
+export async function requestPatientPasswordResetCode(req, res) {
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  if (!email) {
+    return res.status(400).json({ error: { message: 'email is required' } });
+  }
+
+  const patients = await Patient.find({
+    email,
+    status: 'active',
+    'accountVerification.status': 'verified',
+  });
+
+  if (!patients.length) {
+    await writeAuditLog({
+      req,
+      action: 'PATIENT.PASSWORD_RESET.REQUEST',
+      entityType: 'Patient',
+      outcome: 'failure',
+      reason: 'No matching active verified patient account',
+      after: { email },
+    });
+    return res.json({
+      message: GENERIC_PASSWORD_RESET_REQUEST_MESSAGE,
+    });
+  }
+
+  const retryAfterSeconds = resendCooldownRemainingSeconds(patients[0]?.passwordReset?.lastSentAt);
+  if (retryAfterSeconds > 0) {
+    return res.json({
+      message: GENERIC_PASSWORD_RESET_REQUEST_MESSAGE,
+    });
+  }
+
+  const code = generateVerificationCode();
+  const codeHash = await hashPin(code);
+  const expiresAt = otpExpiryDate();
+  const now = new Date();
+
+  await Promise.all(
+    patients.map(async (patient) => {
+      patient.set('passwordReset.method', 'email');
+      patient.set('passwordReset.codeHash', codeHash);
+      patient.set('passwordReset.codeExpiresAt', expiresAt);
+      patient.set('passwordReset.lastSentAt', now);
+      patient.set('passwordReset.attempts', 0);
+      patient.set('passwordReset.requestedAt', now);
+      await patient.save();
+    })
+  );
+
+  const delivery = await deliverPatientVerificationCode({
+    method: 'email',
+    code,
+    email,
+    contactNumber: patients[0]?.contactNumber ?? '',
+  });
+
+  await Promise.all(
+    patients.map((patient) =>
+      writeAuditLog({
+        req,
+        action: 'PATIENT.PASSWORD_RESET.REQUEST',
+        entityType: 'Patient',
+        entityId: patient._id,
+        outcome: 'success',
+        after: { method: 'email', recipient: delivery.recipientMasked, expiresAt },
+      })
+    )
+  );
+
+  const devPreviewCode = env.NODE_ENV === 'production'
+    ? ''
+    : String(delivery.devPreviewCode ?? code);
+
+  return res.json({
+    message: GENERIC_PASSWORD_RESET_REQUEST_MESSAGE,
+    ...(devPreviewCode ? { devPreviewCode } : {}),
+  });
+}
+
+export async function resetPatientPasswordWithCode(req, res) {
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  const code = String(req.body?.code ?? '').trim();
+  const newPassword = String(req.body?.newPassword ?? '');
+
+  if (!email || !OTP_REGEX.test(code) || !newPassword) {
+    return res.status(400).json({ error: { message: 'Invalid password reset payload' } });
+  }
+
+  const passwordCheck = validatePasswordPolicy(newPassword);
+  if (!passwordCheck.ok) {
+    return res.status(400).json({ error: { message: passwordCheck.message } });
+  }
+
+  const patients = await Patient.find({
+    email,
+    status: 'active',
+    'accountVerification.status': 'verified',
+  });
+
+  const now = Date.now();
+  const activeChallenges = patients.filter((patient) => {
+    const codeHash = String(patient.passwordReset?.codeHash ?? '').trim();
+    const codeExpiresAt = patient.passwordReset?.codeExpiresAt ? new Date(patient.passwordReset.codeExpiresAt) : null;
+    return Boolean(codeHash && codeExpiresAt && codeExpiresAt.getTime() >= now);
+  });
+
+  let matchedPatient = null;
+  for (const patient of activeChallenges) {
+    const ok = await verifyPin(code, String(patient.passwordReset?.codeHash ?? ''));
+    if (ok) {
+      matchedPatient = patient;
+      break;
+    }
+  }
+
+  if (!matchedPatient) {
+    await Promise.all(
+      activeChallenges.map(async (patient) => {
+        const attempts = Number(patient.passwordReset?.attempts ?? 0) + 1;
+        patient.set('passwordReset.attempts', attempts);
+        if (attempts >= getMfaAttemptLimit()) {
+          clearPatientPasswordReset(patient);
+        }
+        await patient.save();
+      })
+    );
+
+    await writeAuditLog({
+      req,
+      action: 'PATIENT.PASSWORD_RESET.COMPLETE',
+      entityType: 'Patient',
+      outcome: 'failure',
+      reason: 'Invalid or expired reset code',
+      after: { email },
+    });
+
+    return res.status(401).json({
+      error: {
+        message: GENERIC_PASSWORD_RESET_ERROR,
+        code: 'PASSWORD_RESET_INVALID',
+      },
+    });
+  }
+
+  matchedPatient.passwordHash = await hashPassword(newPassword);
+  clearPatientPasswordReset(matchedPatient);
+  clearPatientLoginMfa(matchedPatient);
+  await matchedPatient.save();
+
+  await writeAuditLog({
+    req,
+    action: 'PATIENT.PASSWORD_RESET.COMPLETE',
+    entityType: 'Patient',
+    entityId: matchedPatient._id,
+    outcome: 'success',
+  });
+
+  return res.json({
+    message: 'Password updated successfully. You can now log in.',
+  });
+}
+
 export async function loginPatient(req, res) {
   const { email, password, mfaMethod } = req.body ?? {};
 
@@ -547,7 +739,25 @@ export async function loginPatient(req, res) {
     .select('status name barangayName cityMunicipality healthCenterName address contactNumber officialContactInfo')
     .lean();
   if (!owningHealthCenter || String(owningHealthCenter.status) !== 'active') {
-    return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
+    const healthCenterError = getPatientHealthCenterAccessError(owningHealthCenter);
+    await writeAuditLog({
+      req,
+      action: 'PATIENT.LOGIN',
+      entityType: 'Patient',
+      entityId: match._id,
+      outcome: 'failure',
+      reason: healthCenterError.reason,
+      after: {
+        patientEmail: match.email,
+        healthCenterId: match.healthCenterId,
+      },
+    });
+    return res.status(healthCenterError.statusCode).json({
+      error: {
+        message: healthCenterError.message,
+        code: healthCenterError.code,
+      },
+    });
   }
 
   if (getVerificationStatus(match) !== 'verified') {
@@ -731,7 +941,25 @@ export async function verifyPatientLoginMfa(req, res) {
     .select('status name barangayName cityMunicipality healthCenterName address contactNumber officialContactInfo')
     .lean();
   if (!owningHealthCenter || String(owningHealthCenter.status) !== 'active') {
-    return res.status(401).json({ error: { message: 'Invalid or expired MFA challenge' } });
+    const healthCenterError = getPatientHealthCenterAccessError(owningHealthCenter);
+    await writeAuditLog({
+      req,
+      action: 'PATIENT.LOGIN.MFA.VERIFY',
+      entityType: 'Patient',
+      entityId: patient._id,
+      outcome: 'failure',
+      reason: healthCenterError.reason,
+      after: {
+        patientEmail: patient.email,
+        healthCenterId: patient.healthCenterId,
+      },
+    });
+    return res.status(healthCenterError.statusCode).json({
+      error: {
+        message: healthCenterError.message,
+        code: healthCenterError.code,
+      },
+    });
   }
 
   const { identity } = await ensureBlockchainIdentityForDocument({

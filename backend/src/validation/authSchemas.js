@@ -59,6 +59,16 @@ export const patientLoginMfaVerifySchema = z.object({
   code: z.string().trim().regex(/^\d{6}$/, 'code must be a valid 6-digit number'),
 }).passthrough();
 
+export const patientForgotPasswordSchema = z.object({
+  email: z.string().trim().email('email must be a valid email address'),
+}).passthrough();
+
+export const patientResetPasswordSchema = z.object({
+  email: z.string().trim().email('email must be a valid email address'),
+  code: z.string().trim().regex(/^\d{6}$/, 'code must be a valid 6-digit number'),
+  newPassword: z.string().min(1, 'newPassword is required'),
+}).passthrough();
+
 export const adminUpsertSchema = z.object({
   role: z.enum(['patient', 'provider', 'admin']),
   email: z.string().trim().email('email must be a valid email address'),

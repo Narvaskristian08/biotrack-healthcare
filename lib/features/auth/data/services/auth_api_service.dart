@@ -61,6 +61,16 @@ class PatientVerificationCodeSendResult {
   final String devPreviewCode;
 }
 
+class PatientPasswordResetCodeSendResult {
+  const PatientPasswordResetCodeSendResult({
+    required this.message,
+    this.devPreviewCode = '',
+  });
+
+  final String message;
+  final String devPreviewCode;
+}
+
 class AssignedHealthCenterResult {
   const AssignedHealthCenterResult({
     required this.id,
@@ -102,8 +112,12 @@ class PatientProfileResult {
     required this.id,
     required this.firstName,
     required this.lastName,
+    required this.middleInitial,
     required this.email,
+    required this.address,
     required this.contactNumber,
+    required this.emergencyContactName,
+    required this.emergencyContactPhone,
     required this.healthCenterId,
     required this.assignedHealthCenter,
   });
@@ -111,8 +125,12 @@ class PatientProfileResult {
   final String id;
   final String firstName;
   final String lastName;
+  final String middleInitial;
   final String email;
+  final String address;
   final String contactNumber;
+  final String emergencyContactName;
+  final String emergencyContactPhone;
   final String healthCenterId;
   final AssignedHealthCenterResult? assignedHealthCenter;
 
@@ -120,6 +138,22 @@ class PatientProfileResult {
     final full = '$firstName $lastName'.trim();
     return full.isEmpty ? 'Patient' : full;
   }
+}
+
+class PatientLoginHistoryEntry {
+  const PatientLoginHistoryEntry({
+    required this.id,
+    required this.loginAt,
+    required this.expiresAt,
+    required this.ip,
+    required this.userAgent,
+  });
+
+  final String id;
+  final DateTime? loginAt;
+  final DateTime? expiresAt;
+  final String ip;
+  final String userAgent;
 }
 
 class AuthApiService {
@@ -367,32 +401,132 @@ class AuthApiService {
       );
     }
 
-    AssignedHealthCenterResult? assignedHealthCenter;
-    final rawCenter =
-        patient['assignedHealthCenter'] as Map<String, dynamic>? ?? const {};
-    if (rawCenter.isNotEmpty) {
-      assignedHealthCenter = AssignedHealthCenterResult(
-        id: (rawCenter['id'] ?? '').toString(),
-        name: (rawCenter['name'] ?? '').toString(),
-        barangayName: (rawCenter['barangayName'] ?? '').toString(),
-        cityMunicipality: (rawCenter['cityMunicipality'] ?? '').toString(),
-        healthCenterName: (rawCenter['healthCenterName'] ?? '').toString(),
-        address: (rawCenter['address'] ?? '').toString(),
-        contactNumber: (rawCenter['contactNumber'] ?? '').toString(),
-        officialContactInfo: (rawCenter['officialContactInfo'] ?? '')
-            .toString(),
+    return _parsePatientProfile(patient, resolvedId: resolvedId);
+  }
+
+  Future<PatientProfileResult> updateMyPatientProfile({
+    String? firstName,
+    String? lastName,
+    String? middleInitial,
+    String? email,
+    String? address,
+    String? contactNumber,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+  }) async {
+    final token = await AuthSessionStore.accessToken();
+    final patientId = await AuthSessionStore.patientId();
+    if (token == null ||
+        token.trim().isEmpty ||
+        patientId == null ||
+        patientId.trim().isEmpty) {
+      throw const AuthApiException(
+        'Patient session is missing. Please log in again.',
       );
     }
 
-    return PatientProfileResult(
-      id: resolvedId,
-      firstName: (patient['firstName'] ?? '').toString(),
-      lastName: (patient['lastName'] ?? '').toString(),
-      email: (patient['email'] ?? '').toString(),
-      contactNumber: (patient['contactNumber'] ?? '').toString(),
-      healthCenterId: (patient['healthCenterId'] ?? '').toString(),
-      assignedHealthCenter: assignedHealthCenter,
-    );
+    final payload = <String, dynamic>{};
+    if (firstName != null) payload['firstName'] = firstName.trim();
+    if (lastName != null) payload['lastName'] = lastName.trim();
+    if (middleInitial != null) {
+      payload['middleInitial'] = middleInitial.trim();
+    }
+    if (email != null) payload['email'] = email.trim().toLowerCase();
+    if (address != null) payload['address'] = address.trim();
+    if (contactNumber != null) {
+      payload['contactNumber'] = contactNumber.trim();
+    }
+    if (emergencyContactName != null) {
+      payload['emergencyContactName'] = emergencyContactName.trim();
+    }
+    if (emergencyContactPhone != null) {
+      payload['emergencyContactPhone'] = emergencyContactPhone.trim();
+    }
+
+    late final http.Response response;
+    try {
+      response = await _client.patch(
+        _buildUri('/api/patients/${patientId.trim()}'),
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${token.trim()}',
+        },
+        body: jsonEncode(payload),
+      );
+    } on SocketException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    }
+
+    final body = _safeDecodeJson(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(_extractErrorMessage(body, response));
+    }
+
+    final patient = (body['patient'] as Map<String, dynamic>? ?? const {});
+    final resolvedId = (patient['_id'] ?? patient['id'] ?? '')
+        .toString()
+        .trim();
+    if (resolvedId.isEmpty) {
+      throw const AuthApiException(
+        'Profile response is missing patient information.',
+      );
+    }
+
+    return _parsePatientProfile(patient, resolvedId: resolvedId);
+  }
+
+  Future<List<PatientLoginHistoryEntry>> fetchMyLoginHistory({
+    int limit = 20,
+  }) async {
+    final token = await AuthSessionStore.accessToken();
+    final patientId = await AuthSessionStore.patientId();
+    if (token == null ||
+        token.trim().isEmpty ||
+        patientId == null ||
+        patientId.trim().isEmpty) {
+      throw const AuthApiException(
+        'Patient session is missing. Please log in again.',
+      );
+    }
+
+    late final http.Response response;
+    try {
+      response = await _client.get(
+        _buildUri(
+          '/api/patients/${patientId.trim()}/login-history?limit=$limit',
+        ),
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${token.trim()}',
+        },
+      );
+    } on SocketException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    }
+
+    final body = _safeDecodeJson(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(_extractErrorMessage(body, response));
+    }
+
+    final items = (body['history'] as List<dynamic>? ?? const <dynamic>[])
+        .whereType<Map<String, dynamic>>()
+        .map(
+          (item) => PatientLoginHistoryEntry(
+            id: (item['id'] ?? item['_id'] ?? '').toString(),
+            loginAt: DateTime.tryParse((item['loginAt'] ?? '').toString()),
+            expiresAt: DateTime.tryParse((item['expiresAt'] ?? '').toString()),
+            ip: (item['ip'] ?? '').toString(),
+            userAgent: (item['userAgent'] ?? '').toString(),
+          ),
+        )
+        .toList(growable: false);
+
+    return items;
   }
 
   Future<AuthLoginResult> loginPatient({
@@ -500,6 +634,64 @@ class AuthApiService {
     );
   }
 
+  Future<PatientPasswordResetCodeSendResult>
+  requestPatientPasswordResetCode({
+    required String email,
+  }) async {
+    late final http.Response response;
+    try {
+      response = await _client.post(
+        _buildUri('/api/patients/password/forgot'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email.trim()}),
+      );
+    } on SocketException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    }
+
+    final body = _safeDecodeJson(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(_extractErrorMessage(body, response));
+    }
+
+    return PatientPasswordResetCodeSendResult(
+      message: (body['message'] ?? 'If your account exists, a reset code has been sent.').toString(),
+      devPreviewCode: (body['devPreviewCode'] ?? '').toString(),
+    );
+  }
+
+  Future<String> resetPatientPasswordWithCode({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    late final http.Response response;
+    try {
+      response = await _client.post(
+        _buildUri('/api/patients/password/reset'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email.trim(),
+          'code': code.trim(),
+          'newPassword': newPassword,
+        }),
+      );
+    } on SocketException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw AuthApiException(_networkErrorMessage());
+    }
+
+    final body = _safeDecodeJson(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(_extractErrorMessage(body, response));
+    }
+
+    return (body['message'] ?? 'Password updated successfully. You can now log in.').toString();
+  }
+
   Map<String, dynamic> _safeDecodeJson(String raw) {
     if (raw.trim().isEmpty) {
       return <String, dynamic>{};
@@ -531,5 +723,49 @@ class AuthApiService {
 
   String _networkErrorMessage() {
     return 'Cannot reach API at ${AppConfig.apiBaseUrl}. Check backend server and API_BASE_URL.';
+  }
+
+  PatientProfileResult _parsePatientProfile(
+    Map<String, dynamic> patient, {
+    required String resolvedId,
+  }) {
+    final assignedHealthCenter = _parseAssignedHealthCenter(
+      patient['assignedHealthCenter'] as Map<String, dynamic>? ?? const {},
+    );
+
+    return PatientProfileResult(
+      id: resolvedId,
+      firstName: (patient['firstName'] ?? '').toString(),
+      lastName: (patient['lastName'] ?? '').toString(),
+      middleInitial: (patient['middleInitial'] ?? '').toString(),
+      email: (patient['email'] ?? '').toString(),
+      address: (patient['address'] ?? '').toString(),
+      contactNumber: (patient['contactNumber'] ?? '').toString(),
+      emergencyContactName:
+          (patient['emergencyContactName'] ?? '').toString(),
+      emergencyContactPhone:
+          (patient['emergencyContactPhone'] ?? '').toString(),
+      healthCenterId: (patient['healthCenterId'] ?? '').toString(),
+      assignedHealthCenter: assignedHealthCenter,
+    );
+  }
+
+  AssignedHealthCenterResult? _parseAssignedHealthCenter(
+    Map<String, dynamic> rawCenter,
+  ) {
+    if (rawCenter.isEmpty) {
+      return null;
+    }
+
+    return AssignedHealthCenterResult(
+      id: (rawCenter['id'] ?? '').toString(),
+      name: (rawCenter['name'] ?? '').toString(),
+      barangayName: (rawCenter['barangayName'] ?? '').toString(),
+      cityMunicipality: (rawCenter['cityMunicipality'] ?? '').toString(),
+      healthCenterName: (rawCenter['healthCenterName'] ?? '').toString(),
+      address: (rawCenter['address'] ?? '').toString(),
+      contactNumber: (rawCenter['contactNumber'] ?? '').toString(),
+      officialContactInfo: (rawCenter['officialContactInfo'] ?? '').toString(),
+    );
   }
 }

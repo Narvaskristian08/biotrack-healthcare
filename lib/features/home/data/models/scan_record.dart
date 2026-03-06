@@ -1,3 +1,57 @@
+class ScanRecordBlockchainInfo {
+  const ScanRecordBlockchainInfo({
+    this.enabled = false,
+    this.verificationStatus = 'pending',
+    this.txId = '',
+    this.contractAddress = '',
+    this.anchoredAt,
+    this.lastVerifiedAt,
+  });
+
+  final bool enabled;
+  final String verificationStatus;
+  final String txId;
+  final String contractAddress;
+  final DateTime? anchoredAt;
+  final DateTime? lastVerifiedAt;
+
+  String get normalizedStatus => verificationStatus.trim().toLowerCase();
+
+  bool get isVerified =>
+      normalizedStatus == 'anchored' || normalizedStatus == 'verified';
+}
+
+class ScanRecordVerificationResult {
+  const ScanRecordVerificationResult({
+    required this.status,
+    required this.storedHash,
+    required this.recomputedHash,
+    required this.integrityMatch,
+    required this.blockchainAvailable,
+    required this.blockchainVerified,
+    required this.txId,
+    required this.blockNumber,
+    required this.reason,
+    required this.verifiedAt,
+  });
+
+  final String status;
+  final String storedHash;
+  final String recomputedHash;
+  final bool integrityMatch;
+  final bool blockchainAvailable;
+  final bool? blockchainVerified;
+  final String txId;
+  final int? blockNumber;
+  final String reason;
+  final DateTime? verifiedAt;
+
+  bool get isVerified {
+    final normalized = status.trim().toLowerCase();
+    return normalized == 'verified' || normalized == 'anchored';
+  }
+}
+
 class ScanRecord {
   const ScanRecord({
     required this.id,
@@ -9,6 +63,10 @@ class ScanRecord {
     required this.fingerConfidence,
     required this.movementIntensity,
     required this.gyroMagnitude,
+    this.type = 'vitals',
+    this.recordHash = '',
+    this.createdAt,
+    this.blockchain = const ScanRecordBlockchainInfo(),
   });
 
   final String id;
@@ -20,6 +78,10 @@ class ScanRecord {
   final double fingerConfidence;
   final double movementIntensity;
   final double gyroMagnitude;
+  final String type;
+  final String recordHash;
+  final DateTime? createdAt;
+  final ScanRecordBlockchainInfo blockchain;
 
   factory ScanRecord.fromJson(Map<String, dynamic> json) {
     return ScanRecord(
@@ -37,6 +99,22 @@ class ScanRecord {
           double.tryParse((json['movementIntensity'] ?? '0').toString()) ?? 0,
       gyroMagnitude:
           double.tryParse((json['gyroMagnitude'] ?? '0').toString()) ?? 0,
+      type: (json['type'] ?? 'vitals').toString(),
+      recordHash: (json['recordHash'] ?? '').toString(),
+      createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()),
+      blockchain: ScanRecordBlockchainInfo(
+        enabled: json['blockchainEnabled'] == true,
+        verificationStatus:
+            (json['blockchainStatus'] ?? 'pending').toString(),
+        txId: (json['blockchainTxId'] ?? '').toString(),
+        contractAddress: (json['blockchainContractAddress'] ?? '').toString(),
+        anchoredAt: DateTime.tryParse(
+          (json['blockchainAnchoredAt'] ?? '').toString(),
+        ),
+        lastVerifiedAt: DateTime.tryParse(
+          (json['blockchainLastVerifiedAt'] ?? '').toString(),
+        ),
+      ),
     );
   }
 
@@ -51,6 +129,16 @@ class ScanRecord {
       'fingerConfidence': fingerConfidence,
       'movementIntensity': movementIntensity,
       'gyroMagnitude': gyroMagnitude,
+      'type': type,
+      'recordHash': recordHash,
+      'createdAt': createdAt?.toIso8601String(),
+      'blockchainEnabled': blockchain.enabled,
+      'blockchainStatus': blockchain.verificationStatus,
+      'blockchainTxId': blockchain.txId,
+      'blockchainContractAddress': blockchain.contractAddress,
+      'blockchainAnchoredAt': blockchain.anchoredAt?.toIso8601String(),
+      'blockchainLastVerifiedAt':
+          blockchain.lastVerifiedAt?.toIso8601String(),
     };
   }
 

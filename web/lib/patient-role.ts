@@ -1,4 +1,4 @@
-import { apiGet, apiPatch } from './api';
+import { apiDelete, apiGet, apiPatch } from './api';
 import { getSession } from './auth';
 
 const RECORD_EXPORT_REQUEST_ABI = [
@@ -119,6 +119,15 @@ export interface SummaryInsightResponse {
     fallEvents: number;
   };
   insight?: string;
+}
+
+export interface ClearMonitoringHistoryResponse {
+  success: boolean;
+  message?: string;
+  deleted?: {
+    healthRecords: number;
+    alerts: number;
+  };
 }
 
 function getPatientIdFromSession(): string {
@@ -263,6 +272,17 @@ export async function fetchMyAlerts(limit = 20, requestOptions: RequestInit = {}
     return { alerts: result.data?.alerts ?? [] };
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to fetch alerts' };
+  }
+}
+
+export async function clearMyMonitoringHistory(): Promise<{ data?: ClearMonitoringHistoryResponse; error?: string }> {
+  try {
+    getPatientIdFromSession();
+    const result = await apiDelete<ClearMonitoringHistoryResponse>('/ai/history');
+    if (result.error) return { error: result.error.message };
+    return { data: result.data };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to clear monitoring history' };
   }
 }
 

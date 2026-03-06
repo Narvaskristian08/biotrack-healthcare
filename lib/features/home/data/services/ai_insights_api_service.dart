@@ -53,6 +53,18 @@ class AiInsightsBundle {
   final List<String> errors;
 }
 
+class ClearMonitoringHistoryResult {
+  const ClearMonitoringHistoryResult({
+    required this.message,
+    required this.deletedHealthRecords,
+    required this.deletedAlerts,
+  });
+
+  final String message;
+  final int deletedHealthRecords;
+  final int deletedAlerts;
+}
+
 class AiInsightsApiService {
   AiInsightsApiService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -161,6 +173,45 @@ class AiInsightsApiService {
       recentHeartRates: recentHeartRates,
       alerts: alerts,
       errors: errors,
+    );
+  }
+
+  Future<ClearMonitoringHistoryResult> clearMonitoringHistory() async {
+    final token = await AuthSessionStore.accessToken();
+    if (token == null || token.trim().isEmpty) {
+      throw const AiInsightsApiException(
+        'Patient session is missing. Please log in again.',
+      );
+    }
+
+    late final http.Response response;
+    try {
+      response = await _client.delete(
+        _buildUri('/api/ai/history'),
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${token.trim()}',
+        },
+      );
+    } on SocketException catch (_) {
+      throw AiInsightsApiException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw AiInsightsApiException(_networkErrorMessage());
+    }
+
+    final body = _safeDecodeJson(response.body);
+    if (!_isSuccessful(response.statusCode)) {
+      throw AiInsightsApiException(_extractErrorMessage(body, response));
+    }
+
+    final deleted = _asMap(body['deleted']);
+    return ClearMonitoringHistoryResult(
+      message: _stringValue(
+        body['message'],
+        fallback: 'Monitoring history cleared.',
+      ),
+      deletedHealthRecords: _intValue(deleted['healthRecords']),
+      deletedAlerts: _intValue(deleted['alerts']),
     );
   }
 

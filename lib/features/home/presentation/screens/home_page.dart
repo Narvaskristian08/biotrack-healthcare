@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../auth/data/services/auth_session_store.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../auth/data/services/auth_session_store.dart';
 import '../../data/models/scan_record.dart';
+import '../../data/services/ai_insights_api_service.dart';
 import '../../data/services/scan_record_store.dart';
 
 class HomePage extends StatefulWidget {
@@ -14,11 +15,15 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final AiInsightsApiService _insightsApi = AiInsightsApiService();
+
   String _patientName = 'Patient';
+  late Future<_HomeDashboardData> _dashboardFuture;
 
   @override
   void initState() {
     super.initState();
+    _dashboardFuture = _loadDashboard();
     _loadPatientName();
   }
 
@@ -31,14 +36,146 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<_HomeDashboardData> _loadDashboard() async {
+    final errors = <String>[];
+    List<ScanRecord> records = const <ScanRecord>[];
+    AiInsightsBundle? insights;
+
+    try {
+      records = await ScanRecordStore.list();
+    } on ScanRecordStoreException catch (error) {
+      errors.add(error.message);
+    } catch (_) {
+      errors.add('Unable to load your synced records.');
+    }
+
+    try {
+      insights = await _insightsApi.fetchInsights(days: 7, alertLimit: 10);
+      errors.addAll(insights.errors);
+    } on AiInsightsApiException catch (error) {
+      errors.add(error.message);
+    } catch (_) {
+      errors.add('Unable to load your AI health overview.');
+    }
+
+    return _HomeDashboardData(
+      records: records,
+      insights: insights,
+      errors: errors,
+    );
+  }
+
   void _refreshDashboard() {
-    setState(() {});
+    setState(() {
+      _dashboardFuture = _loadDashboard();
+    });
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final hour24 = dateTime.hour;
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final meridiem = hour24 >= 12 ? 'PM' : 'AM';
+    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+    return '$hour12:$minute $meridiem';
+  }
+
+  String _formatDay(DateTime dateTime) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(dateTime.year, dateTime.month, dateTime.day);
+    final diffDays = today.difference(target).inDays;
+
+    if (diffDays == 0) return 'Today';
+    if (diffDays == 1) return 'Yesterday';
+    return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
+  }
+
+  String _formatRecordType(String type) {
+    final normalized = type.trim().toLowerCase();
+    if (normalized.isEmpty) return 'Health Record';
+    return normalized
+        .replaceAll('_', ' ')
+        .split(' ')
+        .where((part) => part.isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
+  }
+
+  String _buildSnapshotMessage(_HomeDashboardData data) {
+    final insights = data.insights;
+    final risk = (insights?.overallRisk ?? '').trim().toUpperCase();
+    final alertsCount = insights?.alerts.length ?? 0;
+
+    if (risk == 'CRITICAL') {
+      return 'Critical changes were detected. Review your alerts and recent scans now.';
+    }
+    if (risk == 'HIGH') {
+      return 'Your latest readings need closer monitoring today.';
+    }
+    if (alertsCount > 0) {
+      return '$alertsCount alert(s) need review, but your latest data is synced and ready.';
+    }
+    if (insights != null && insights.summaryInsight.trim().isNotEmpty) {
+      return insights.summaryInsight.trim();
+    }
+    return 'Your latest synced health snapshot is ready to review.';
+  }
+
+  String _statusLabel(String status) {
+    final normalized = status.trim().toLowerCase();
+    if (normalized == 'anchored' || normalized == 'verified') {
+      return 'Verified';
+    }
+    if (normalized == 'local_hash_only') {
+      return 'Verified Locally';
+    }
+    if (normalized == 'tampered' || normalized == 'anchor_mismatch') {
+      return 'Needs Review';
+    }
+    return 'Pending';
+  }
+
+  Widget _quickActionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.mutedBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: AppColors.primaryGreenDark),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.secondaryText,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final recordsFuture = ScanRecordStore.list();
-
     return Scaffold(
       backgroundColor: AppColors.softBackground,
       body: SafeArea(
@@ -61,7 +198,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'Your health snapshot looks stable today.',
+                        'Your mobile dashboard now mirrors your synced patient data.',
                         style: TextStyle(
                           fontSize: 14,
                           color: AppColors.bodyText,
@@ -169,238 +306,247 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 18),
-            FutureBuilder<List<ScanRecord>>(
-              future: recordsFuture,
+            FutureBuilder<_HomeDashboardData>(
+              future: _dashboardFuture,
               builder: (context, snapshot) {
-                final records = snapshot.data ?? const <ScanRecord>[];
+                final data =
+                    snapshot.data ?? const _HomeDashboardData(records: <ScanRecord>[]);
+                final records = data.records;
+                final insights = data.insights;
                 final bpmValues = records
                     .map((item) => item.bpm)
                     .whereType<int>()
-                    .toList();
+                    .toList(growable: false);
                 final latestRecord = records.isNotEmpty ? records.first : null;
+                final latestBpm = latestRecord?.bpm;
                 final averageBpm = bpmValues.isEmpty
                     ? null
                     : (bpmValues.reduce((a, b) => a + b) / bpmValues.length)
-                          .round();
-                final hasRecentFall = records
-                    .take(5)
-                    .any((item) => item.fallDetected);
+                        .round();
+                final isLoading =
+                    snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData;
+                final alertsCount = insights?.alerts.length ?? 0;
+                final riskValue = insights?.overallRisk ?? 'LOW';
+                final trendStatus = insights?.trendStatus ?? 'SYNCING';
 
-                final heartRateValue = averageBpm == null
-                    ? '-- bpm'
-                    : '$averageBpm bpm';
-                final heartRateSubLabel = bpmValues.isEmpty
-                    ? 'Awaiting stable pulse'
-                    : 'Avg ${bpmValues.length} scans';
-
-                final activityValue = latestRecord?.activityLabel ?? 'No data';
-                final activitySubLabel = latestRecord == null
-                    ? 'Complete a new scan'
-                    : latestRecord.movementIntensity.toStringAsFixed(2);
-
-                final statusValue = hasRecentFall ? 'Alert' : 'Safe';
-                final statusSubLabel = latestRecord == null
-                    ? 'No alerts'
-                    : _formatDay(latestRecord.scannedAt);
-
-                return Row(
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _KpiCard(
-                        icon: Icons.favorite_outline,
-                        label: 'Heart Rate',
-                        value: heartRateValue,
-                        sublabel: heartRateSubLabel,
+                    if (isLoading) ...[
+                      const LinearProgressIndicator(minHeight: 3),
+                      const SizedBox(height: 12),
+                    ],
+                    if (data.errors.isNotEmpty) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF1F1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: data.errors
+                              .map(
+                                (error) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Text(
+                                    error,
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.danger,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(growable: false),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _KpiCard(
-                        icon: Icons.directions_walk_outlined,
-                        label: 'Activity',
-                        value: activityValue,
-                        sublabel: activitySubLabel,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _KpiCard(
-                        icon: Icons.verified_user_outlined,
-                        label: 'Status',
-                        value: statusValue,
-                        sublabel: statusSubLabel,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 22),
-            const Text(
-              'Quick Actions',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _quickActionCard(
-                    context: context,
-                    icon: Icons.camera_alt_outlined,
-                    title: 'New Scan',
-                    subtitle: 'Capture vitals now',
-                    onTap: () => context.go('/scan'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _quickActionCard(
-                    context: context,
-                    icon: Icons.insights_outlined,
-                    title: 'AI Advice',
-                    subtitle: 'View guidance',
-                    onTap: () => context.go('/ai-insights'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _quickActionCard(
-                    context: context,
-                    icon: Icons.bar_chart_outlined,
-                    title: 'Records',
-                    subtitle: 'See your trends',
-                    onTap: () => context.go('/records'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _quickActionCard(
-                    context: context,
-                    icon: Icons.person_outline,
-                    title: 'Profile',
-                    subtitle: 'Manage account',
-                    onTap: () => context.go('/profile'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 22),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'AI Health Insights',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'No incident detected. Recent trends are within healthy thresholds. Maintain hydration and light movement today.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.bodyText,
-                      height: 1.35,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  InkWell(
-                    onTap: () => context.go('/ai-insights'),
-                    child: const Text(
-                      'View full advice',
-                      style: TextStyle(
-                        color: AppColors.primaryGreenDark,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 22),
-            const Text(
-              'Recent Records',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            FutureBuilder<List<ScanRecord>>(
-              future: recordsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  final errorMessage =
-                      snapshot.error is ScanRecordStoreException
-                      ? (snapshot.error as ScanRecordStoreException).message
-                      : 'Unable to load records right now.';
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(height: 12),
+                    ],
+                    Row(
                       children: [
-                        Text(
-                          errorMessage,
-                          style: const TextStyle(
+                        Expanded(
+                          child: _KpiCard(
+                            icon: Icons.favorite_outline,
+                            label: 'Heart Rate',
+                            value: latestBpm == null ? '-- bpm' : '$latestBpm bpm',
+                            sublabel: averageBpm == null
+                                ? 'No synced BPM yet'
+                                : 'Avg $averageBpm bpm',
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _KpiCard(
+                            icon: Icons.notification_important_outlined,
+                            label: 'Alerts',
+                            value: '$alertsCount',
+                            sublabel: alertsCount == 0
+                                ? 'No active alerts'
+                                : '${insights?.alerts.first.severity ?? 'Active'} attention needed',
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _KpiCard(
+                            icon: Icons.health_and_safety_outlined,
+                            label: 'Risk',
+                            value: riskValue,
+                            sublabel:
+                                'Trend ${trendStatus.replaceAll('_', ' ')}',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 22),
+                    const Text(
+                      'Quick Actions',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _quickActionCard(
+                            icon: Icons.camera_alt_outlined,
+                            title: 'New Scan',
+                            subtitle: 'Capture vitals now',
+                            onTap: () => context.go('/scan'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _quickActionCard(
+                            icon: Icons.insights_outlined,
+                            title: 'AI Advice',
+                            subtitle: 'View guidance',
+                            onTap: () => context.go('/ai-insights'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _quickActionCard(
+                            icon: Icons.bar_chart_outlined,
+                            title: 'Records',
+                            subtitle: 'See medical history',
+                            onTap: () => context.go('/records'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _quickActionCard(
+                            icon: Icons.summarize_outlined,
+                            title: 'Reports',
+                            subtitle: 'Copy a mobile report',
+                            onTap: () => context.push('/reports'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 22),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppColors.mutedBorder),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'AI Health Insights',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            _buildSnapshotMessage(data),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.bodyText,
+                              height: 1.35,
+                            ),
+                          ),
+                          if ((insights?.summaryObservations ?? const <String>[])
+                              .isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            ...insights!.summaryObservations.take(2).map(
+                                  (entry) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Text(
+                                      '- $entry',
+                                      style: const TextStyle(
+                                        fontSize: 12.5,
+                                        color: AppColors.secondaryText,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                          ],
+                          const SizedBox(height: 12),
+                          InkWell(
+                            onTap: () => context.go('/ai-insights'),
+                            child: const Text(
+                              'View full advice',
+                              style: TextStyle(
+                                color: AppColors.primaryGreenDark,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    const Text(
+                      'Recent Records',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 10),
+                    if (isLoading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (records.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.mutedBorder),
+                        ),
+                        child: const Text(
+                          'No recent scan records yet.',
+                          style: TextStyle(
                             fontSize: 13,
                             color: AppColors.bodyText,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: _refreshDashboard,
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                final records = snapshot.data ?? const <ScanRecord>[];
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-
-                if (records.isEmpty) {
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Text(
-                      'No recent scan records yet.',
-                      style: TextStyle(fontSize: 13, color: AppColors.bodyText),
-                    ),
-                  );
-                }
-
-                final recent = records.take(3).toList(growable: false);
-                return Column(
-                  children: recent
-                      .map(
-                        (record) => _RecordRow(
-                          title: 'Heart Rate Scan',
-                          subtitle:
-                              '${_formatDay(record.scannedAt)}, ${_formatTime(record.scannedAt)}',
-                          onTap: () => context.push('/records/${record.id}'),
-                        ),
                       )
-                      .toList(growable: false),
+                    else
+                      ...records.take(3).map(
+                            (record) => _RecordRow(
+                              title: _formatRecordType(record.type),
+                              subtitle:
+                                  '${_formatDay(record.scannedAt)}, ${_formatTime(record.scannedAt)} • ${_statusLabel(record.blockchain.verificationStatus)}',
+                              onTap: () => context.push('/records/${record.id}'),
+                            ),
+                          ),
+                  ],
                 );
               },
             ),
@@ -409,65 +555,18 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
 
-  String _formatTime(DateTime dateTime) {
-    final hour24 = dateTime.hour;
-    final minute = dateTime.minute.toString().padLeft(2, '0');
-    final meridiem = hour24 >= 12 ? 'PM' : 'AM';
-    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
-    return '$hour12:$minute $meridiem';
-  }
+class _HomeDashboardData {
+  const _HomeDashboardData({
+    required this.records,
+    this.insights,
+    this.errors = const <String>[],
+  });
 
-  String _formatDay(DateTime dateTime) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final target = DateTime(dateTime.year, dateTime.month, dateTime.day);
-    final diffDays = today.difference(target).inDays;
-
-    if (diffDays == 0) return 'Today';
-    if (diffDays == 1) return 'Yesterday';
-    return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
-  }
-
-  Widget _quickActionCard({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.mutedBorder),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: AppColors.primaryGreenDark),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.secondaryText,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  final List<ScanRecord> records;
+  final AiInsightsBundle? insights;
+  final List<String> errors;
 }
 
 class _KpiCard extends StatelessWidget {
@@ -490,6 +589,7 @@ class _KpiCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.mutedBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -545,6 +645,7 @@ class _RecordRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.mutedBorder),
         ),
         child: Row(
           children: [

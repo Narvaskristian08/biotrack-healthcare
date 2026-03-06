@@ -36,6 +36,15 @@ class AuthSessionStore {
     return prefs.getString(_emailKey);
   }
 
+  static Future<void> updatePatientIdentity({
+    required String fullName,
+    required String email,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_patientNameKey, fullName.trim());
+    await prefs.setString(_emailKey, email.trim());
+  }
+
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);

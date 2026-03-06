@@ -1,9 +1,11 @@
 import HealthRecord from '../models/HealthRecord.js';
+import Alert from '../models/Alert.js';
 import { evaluateAlerts } from '../services/alertEngine.service.js';
 import { computeRiskLevel, runHealthInference } from '../services/ai/inference.service.js';
 import { resolveInsightPatientId } from '../services/ai/subjectResolver.service.js';
 import { encryptHealthTelemetryForStorage } from '../services/healthTelemetryEncryption.service.js';
 import { analyzeUserTrend } from '../services/trendAnalysis.service.js';
+import { writeAuditLog } from '../services/auditService.js';
 
 function httpError(statusCode, message, code = 'REQUEST_INVALID') {
   const err = new Error(message);
@@ -99,6 +101,43 @@ export async function analyzeVitals(req, res, next) {
       },
       trend: trendData.trend,
       alerts,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function clearMyMonitoringHistory(req, res, next) {
+  try {
+    const patientId = String(req.context?.patientId ?? '').trim();
+    const healthCenterId = String(req.context?.healthCenterId ?? '').trim();
+    if (!patientId || !healthCenterId) {
+      return res.status(401).json({ error: { message: 'Patient session context is required' } });
+    }
+
+    const [healthRecordResult, alertResult] = await Promise.all([
+      HealthRecord.deleteMany({ userId: patientId, healthCenterId }),
+      Alert.deleteMany({ userId: patientId }),
+    ]);
+
+    await writeAuditLog({
+      req,
+      action: 'PATIENT.MONITORING_HISTORY.CLEAR',
+      entityType: 'Patient',
+      entityId: patientId,
+      after: {
+        deletedHealthRecords: Number(healthRecordResult?.deletedCount ?? 0),
+        deletedAlerts: Number(alertResult?.deletedCount ?? 0),
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Monitoring history cleared.',
+      deleted: {
+        healthRecords: Number(healthRecordResult?.deletedCount ?? 0),
+        alerts: Number(alertResult?.deletedCount ?? 0),
+      },
     });
   } catch (err) {
     next(err);

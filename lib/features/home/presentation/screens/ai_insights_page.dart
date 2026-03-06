@@ -14,6 +14,7 @@ class _AiInsightsPageState extends State<AiInsightsPage> {
   final AiInsightsApiService _api = AiInsightsApiService();
 
   bool _loading = true;
+  bool _clearing = false;
   List<String> _errors = const <String>[];
 
   String _summaryInsight = '';
@@ -86,6 +87,79 @@ class _AiInsightsPageState extends State<AiInsightsPage> {
     final meridiem = hour24 >= 12 ? 'PM' : 'AM';
     final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
     return '$hour12:$minute $meridiem';
+  }
+
+  Future<void> _clearMonitoringHistory() async {
+    final shouldClear = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Clear monitoring history?'),
+          content: const Text(
+            'This removes your synced monitoring samples and generated alerts from the backend.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+              child: const Text('Clear'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldClear != true) return;
+
+    setState(() {
+      _clearing = true;
+    });
+
+    try {
+      final result = await _api.clearMonitoringHistory();
+      if (!mounted) return;
+      setState(() {
+        _errors = <String>[];
+        _summaryInsight = '';
+        _summaryObservations = const <String>[];
+        _overallRisk = 'LOW';
+        _fallEvents = 0;
+        _trendStatus = 'INSUFFICIENT_DATA';
+        _trendInsight = '';
+        _recentHeartRates = const <int>[];
+        _alerts = const <AiAlertItem>[];
+        _lastUpdatedAt = DateTime.now();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${result.message} (${result.deletedHealthRecords} samples, ${result.deletedAlerts} alerts)',
+          ),
+        ),
+      );
+    } on AiInsightsApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errors = <String>[error.message];
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _errors = const <String>[
+          'Failed to clear monitoring history. Please try again.',
+        ];
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _clearing = false;
+        });
+      }
+    }
   }
 
   Color _severityColor(String severity) {
@@ -224,6 +298,53 @@ class _AiInsightsPageState extends State<AiInsightsPage> {
                 ),
                 const SizedBox(height: 10),
               ],
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.mutedBorder),
+                ),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Monitoring Controls',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: AppColors.darkText,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Clear backend-generated monitoring samples and alerts when you need a fresh baseline.',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: AppColors.bodyText,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    OutlinedButton(
+                      onPressed: _loading || _clearing ? null : _clearMonitoringHistory,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.danger,
+                        side: const BorderSide(color: AppColors.danger),
+                      ),
+                      child: Text(_clearing ? 'Clearing...' : 'Clear'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   _metricCard(

@@ -224,3 +224,13 @@ export function apiPatch<T>(endpoint: string, body: unknown) {
         body: JSON.stringify(body),
     });
 }
+
+/**
+ * DELETE request helper
+ */
+export function apiDelete<T>(endpoint: string, body?: unknown) {
+    return apiFetch<T>(endpoint, {
+        method: 'DELETE',
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+}

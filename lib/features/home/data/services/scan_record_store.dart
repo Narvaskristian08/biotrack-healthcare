@@ -145,6 +145,49 @@ class ScanRecordStore {
     return _fromApiRecord(rawRecord);
   }
 
+  static Future<ScanRecordVerificationResult> verifyById(String recordId) async {
+    final normalizedRecordId = recordId.trim();
+    if (normalizedRecordId.isEmpty) {
+      throw const ScanRecordStoreException('Record ID is required.');
+    }
+
+    final session = await _requirePatientSession();
+    late final http.Response response;
+    try {
+      response = await _client.get(
+        _buildUri(
+          '/api/patients/${session.patientId}/records/$normalizedRecordId/verify',
+        ),
+        headers: _authHeaders(session.accessToken),
+      );
+    } on SocketException catch (_) {
+      throw ScanRecordStoreException(_networkErrorMessage());
+    } on http.ClientException catch (_) {
+      throw ScanRecordStoreException(_networkErrorMessage());
+    }
+
+    final body = _safeDecodeJson(response.body);
+    if (!_isSuccessful(response.statusCode)) {
+      throw ScanRecordStoreException(_extractErrorMessage(body, response));
+    }
+
+    final integrity = _asMap(body['dbIntegrity']);
+    final blockchain = _asMap(body['blockchain']);
+
+    return ScanRecordVerificationResult(
+      status: _stringValue(body['status'], fallback: 'pending'),
+      storedHash: _stringValue(integrity['storedHash']),
+      recomputedHash: _stringValue(integrity['recomputedHash']),
+      integrityMatch: _boolValue(integrity['match']) ?? false,
+      blockchainAvailable: _boolValue(blockchain['available']) ?? false,
+      blockchainVerified: _boolValue(blockchain['verified']),
+      txId: _stringValue(blockchain['txId']),
+      blockNumber: _intValue(blockchain['blockNumber']),
+      reason: _stringValue(blockchain['reason']),
+      verifiedAt: _dateValue(body['verifiedAt']),
+    );
+  }
+
   static Future<void> deleteById(String recordId) async {
     final normalizedRecordId = recordId.trim();
     if (normalizedRecordId.isEmpty) return;
@@ -229,6 +272,7 @@ class ScanRecordStore {
   static ScanRecord _fromApiRecord(Map<String, dynamic> rawRecord) {
     final data = _asMap(rawRecord['data']);
     final metrics = _asMap(data['metrics']);
+    final blockchain = _asMap(rawRecord['blockchain']);
     final id = _stringValue(
       rawRecord['_id'],
       fallback: _stringValue(rawRecord['id']),
@@ -274,6 +318,18 @@ class ScanRecordStore {
           _doubleValue(data['gyroMagnitude']) ??
           _doubleValue(metrics['gyroMagnitude']) ??
           0,
+      type: _stringValue(rawRecord['type'], fallback: 'vitals'),
+      recordHash: _stringValue(rawRecord['recordHash']),
+      createdAt: _dateValue(rawRecord['createdAt']),
+      blockchain: ScanRecordBlockchainInfo(
+        enabled: _boolValue(blockchain['enabled']) ?? false,
+        verificationStatus:
+            _stringValue(blockchain['verificationStatus'], fallback: 'pending'),
+        txId: _stringValue(blockchain['txId']),
+        contractAddress: _stringValue(blockchain['contractAddress']),
+        anchoredAt: _dateValue(blockchain['anchoredAt']),
+        lastVerifiedAt: _dateValue(blockchain['lastVerifiedAt']),
+      ),
     );
   }
 
