@@ -107,6 +107,8 @@ function parseGoogleMapsCoordinates(raw: string): { lat: number; lng: number } |
 
 const PHILIPPINES_CENTER = { lat: 14.5995, lng: 120.9842 };
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
+const GOOGLE_MAPS_SETUP_HINT =
+  'Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, enable Maps JavaScript API and Places API, attach billing, and allow http://127.0.0.1:3001/* and http://localhost:3001/* as referrers.';
 
 export default function AdminUsersPage() {
   const [query, setQuery] = useState('');
@@ -150,7 +152,11 @@ export default function AdminUsersPage() {
 
   const initGoogleMap = () => {
     const googleObj = (window as any).google;
-    if (!googleObj || !mapCanvasRef.current) return;
+    if (!googleObj?.maps || !mapCanvasRef.current) {
+      setMapReady(false);
+      setMapError('Google Maps loaded incorrectly. Check API key, enabled APIs, billing, and HTTP referrer restrictions.');
+      return;
+    }
     if (mapInstanceRef.current) return;
 
     const startLat = Number(form.latitude);
@@ -218,13 +224,27 @@ export default function AdminUsersPage() {
     if (form.role !== 'provider') return;
     if (!GOOGLE_MAPS_API_KEY) {
       setMapReady(false);
-      setMapError('Google Maps API key is missing. Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to enable interactive map picking.');
+      setMapError(`Google Maps API key is missing. ${GOOGLE_MAPS_SETUP_HINT}`);
       return;
     }
 
+    const previousAuthFailure = (window as any).gm_authFailure;
+    (window as any).gm_authFailure = () => {
+      setMapReady(false);
+      setMapError(`Google Maps authentication failed. ${GOOGLE_MAPS_SETUP_HINT}`);
+    };
+
     const existingScript = document.getElementById('google-maps-sdk');
     if (existingScript) {
-      initGoogleMap();
+      if ((window as any).google?.maps) {
+        initGoogleMap();
+      } else {
+        setMapReady(false);
+        setMapError(`Google Maps script is present but did not initialize correctly. ${GOOGLE_MAPS_SETUP_HINT}`);
+      }
+      return () => {
+        (window as any).gm_authFailure = previousAuthFailure;
+      };
       return;
     }
 
@@ -236,9 +256,12 @@ export default function AdminUsersPage() {
     script.onload = () => initGoogleMap();
     script.onerror = () => {
       setMapReady(false);
-      setMapError('Failed to load Google Maps script.');
+      setMapError(`Failed to load Google Maps script. ${GOOGLE_MAPS_SETUP_HINT}`);
     };
     document.head.appendChild(script);
+    return () => {
+      (window as any).gm_authFailure = previousAuthFailure;
+    };
   }, [form.role]);
 
   useEffect(() => {
@@ -545,7 +568,19 @@ export default function AdminUsersPage() {
                     Click the map or search a place to auto-fill latitude/longitude. Valid range: latitude -90..90, longitude -180..180.
                   </p>
                   <Input ref={mapSearchRef} placeholder="Search in map (e.g., Longos Barangay, San Fabian)" />
-                  <div ref={mapCanvasRef} className="h-64 w-full rounded-md border border-border bg-muted" />
+                  <div className="relative h-64 w-full overflow-hidden rounded-md border border-border bg-muted">
+                    <div ref={mapCanvasRef} className="absolute inset-0" />
+                    {!mapReady ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-muted/90 p-4 text-center">
+                        <div className="max-w-lg space-y-2">
+                          <p className="text-sm font-medium text-foreground">Map preview unavailable</p>
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            {mapError || `Google Maps has not been initialized yet. ${GOOGLE_MAPS_SETUP_HINT}`}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <Button type="button" variant="outline" onClick={useCurrentLocation}>
                       Use Current Location

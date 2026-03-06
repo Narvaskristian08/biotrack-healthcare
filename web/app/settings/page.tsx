@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DashboardLayout from '@/components/dashboard-layout';
+import LogoutConfirmDialog from '@/components/logout-confirm-dialog';
 import { getSession } from '@/lib/auth';
 import { useDashboardRole } from '@/hooks/use-dashboard-role';
 import { fetchMyPatientProfile, fetchMyPatientRecords, updateMyPatientProfile, downloadTextFile } from '@/lib/patient-role';
@@ -53,6 +54,8 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [logoutPending, setLogoutPending] = useState(false);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -325,9 +328,19 @@ export default function SettingsPage() {
     setMessage('Provider profile exported.');
   };
 
+  const requestLogout = () => {
+    setLogoutDialogOpen(true);
+  };
+
   const handleLogout = async () => {
-    await logout();
-    router.replace('/login');
+    setLogoutPending(true);
+    try {
+      await logout();
+      router.replace('/login');
+    } finally {
+      setLogoutPending(false);
+      setLogoutDialogOpen(false);
+    }
   };
 
   const saveDisabled = useMemo(() => {
@@ -339,6 +352,12 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
+      <LogoutConfirmDialog
+        open={logoutDialogOpen}
+        onOpenChange={setLogoutDialogOpen}
+        onConfirm={handleLogout}
+        loading={logoutPending}
+      />
       <div className="space-y-6">
         <div className="space-y-2">
           <h1 className="text-4xl font-bold tracking-tight text-foreground flex items-center gap-2">
@@ -487,7 +506,7 @@ export default function SettingsPage() {
               <CardHeader><CardTitle>Danger Zone</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <Button variant="outline" className="w-full" onClick={exportRoleData}>Export Data</Button>
-                <Button variant="destructive" className="w-full" onClick={handleLogout}><LogOut className="h-4 w-4 mr-2" />Logout</Button>
+                <Button variant="destructive" className="w-full" onClick={requestLogout}><LogOut className="h-4 w-4 mr-2" />Logout</Button>
               </CardContent>
             </Card>
           </TabsContent>

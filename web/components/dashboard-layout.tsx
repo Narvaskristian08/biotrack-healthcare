@@ -49,6 +49,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useDashboardRole, type UserRole } from '@/hooks/use-dashboard-role'
+import LogoutConfirmDialog from '@/components/logout-confirm-dialog'
 
 type NavItem = { label: string; href: string; icon: React.ComponentType<{ className?: string }> }
 
@@ -180,6 +181,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { role, sessionUser, logout } = useDashboardRole()
+  const [logoutDialogOpen, setLogoutDialogOpen] = React.useState(false)
+  const [logoutPending, setLogoutPending] = React.useState(false)
   const navigationItems = getNavigationItems(role)
   const roleLabel = getRoleLabel(role)
   const profileHref = getProfileHref(role)
@@ -189,13 +192,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     navigationItems.find((item) => pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`))) ?? null
   const pageTitle = activeNavItem?.label ?? toTitleCaseFromPath(pathname)
 
+  const requestLogout = () => {
+    setLogoutDialogOpen(true)
+  }
+
   const handleLogout = async () => {
-    await logout()
-    router.push('/login')
+    setLogoutPending(true)
+    try {
+      await logout()
+      router.push('/login')
+    } finally {
+      setLogoutPending(false)
+      setLogoutDialogOpen(false)
+    }
   }
 
   return (
     <SidebarProvider>
+      <LogoutConfirmDialog
+        open={logoutDialogOpen}
+        onOpenChange={setLogoutDialogOpen}
+        onConfirm={handleLogout}
+        loading={logoutPending}
+      />
       <div className="flex h-screen w-full">
         {/* Sidebar */}
         <Sidebar className="border-r border-sidebar-border/80 bg-sidebar/95 backdrop-blur-sm">
@@ -274,7 +293,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   className="h-10 rounded-lg px-3 text-red-600 hover:bg-red-500/10 hover:text-red-600 data-[active=true]:bg-red-500/10 data-[active=true]:text-red-600"
-                  onClick={handleLogout}
+                  onClick={requestLogout}
                 >
                   <span className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500/10 text-red-600">
                     <LogOut className="h-4 w-4" />
@@ -373,7 +392,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       <Link href="/help-support">Help & Support</Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
+                    <DropdownMenuItem className="text-red-600" onClick={requestLogout}>
                       Logout
                     </DropdownMenuItem>
                   </DropdownMenuContent>

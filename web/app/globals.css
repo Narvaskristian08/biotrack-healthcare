@@ -142,6 +142,11 @@
     @apply bg-background text-foreground;
   }
 
+  /* Tailwind preflight can shrink Google Maps tiles into a gray canvas. */
+  .gm-style img {
+    max-width: none;
+  }
+
   /* Added Poppins for headings */
   h1,
   h2,
