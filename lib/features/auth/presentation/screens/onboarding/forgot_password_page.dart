@@ -348,7 +348,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                           hintText: '123456',
                           keyboardType: TextInputType.number,
                           textInputAction: TextInputAction.next,
-                          inputFormatters: const [
+                          inputFormatters: [
                             FilteringTextInputFormatter.digitsOnly,
                             LengthLimitingTextInputFormatter(6),
                           ],

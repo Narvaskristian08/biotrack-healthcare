@@ -343,7 +343,7 @@ class _LoginPageState extends State<LoginPage> {
                             hintText: '123456',
                             keyboardType: TextInputType.number,
                             textInputAction: TextInputAction.done,
-                            inputFormatters: const [
+                            inputFormatters:  [
                               FilteringTextInputFormatter.digitsOnly,
                               LengthLimitingTextInputFormatter(6),
                             ],
