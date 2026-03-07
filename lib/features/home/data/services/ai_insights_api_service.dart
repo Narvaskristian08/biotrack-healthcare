@@ -66,7 +66,8 @@ class ClearMonitoringHistoryResult {
 }
 
 class AiInsightsApiService {
-  AiInsightsApiService({http.Client? client}) : _client = client ?? http.Client();
+  AiInsightsApiService({http.Client? client})
+    : _client = client ?? http.Client();
 
   final http.Client _client;
 
@@ -76,11 +77,14 @@ class AiInsightsApiService {
 
     // Prevent accidental double "/api" when API_BASE_URL already ends with /api.
     final hasApiSuffix = base.toLowerCase().endsWith('/api');
-    final resolvedPath = hasApiSuffix && normalizedPath.toLowerCase().startsWith('/api/')
+    final resolvedPath =
+        hasApiSuffix && normalizedPath.toLowerCase().startsWith('/api/')
         ? normalizedPath.substring(4)
         : normalizedPath;
 
-    return Uri.parse('$base$resolvedPath').replace(queryParameters: queryParameters);
+    return Uri.parse(
+      '$base$resolvedPath',
+    ).replace(queryParameters: queryParameters);
   }
 
   Future<AiInsightsBundle> fetchInsights({
@@ -89,7 +93,9 @@ class AiInsightsApiService {
   }) async {
     final token = await AuthSessionStore.accessToken();
     if (token == null || token.trim().isEmpty) {
-      throw const AiInsightsApiException('Patient session is missing. Please log in again.');
+      throw const AiInsightsApiException(
+        'Patient session is missing. Please log in again.',
+      );
     }
 
     final headers = <String, String>{
@@ -104,10 +110,7 @@ class AiInsightsApiService {
           _buildUri('/api/ai/summary', <String, String>{'days': '$days'}),
           headers: headers,
         ),
-        _client.get(
-          _buildUri('/api/ai/trend-insight'),
-          headers: headers,
-        ),
+        _client.get(_buildUri('/api/ai/trend-insight'), headers: headers),
         _client.get(
           _buildUri('/api/ai/alerts', <String, String>{'limit': '$alertLimit'}),
           headers: headers,
@@ -138,10 +141,15 @@ class AiInsightsApiService {
       final summaryData = _asMap(summaryBody['summaryData']);
       summaryInsight = _stringValue(summaryBody['insight']);
       summaryObservations = _stringList(summaryData['observations']);
-      overallRisk = _stringValue(summaryData['overallRisk'], fallback: 'LOW').toUpperCase();
+      overallRisk = _stringValue(
+        summaryData['overallRisk'],
+        fallback: 'LOW',
+      ).toUpperCase();
       fallEvents = _intValue(summaryData['fallEvents']);
     } else {
-      errors.add('Summary: ${_extractErrorMessage(summaryBody, summaryResponse)}');
+      errors.add(
+        'Summary: ${_extractErrorMessage(summaryBody, summaryResponse)}',
+      );
     }
 
     String trendStatus = 'INSUFFICIENT_DATA';
@@ -149,7 +157,10 @@ class AiInsightsApiService {
     List<int> recentHeartRates = const <int>[];
     if (_isSuccessful(trendResponse.statusCode)) {
       final trendData = _asMap(trendBody['trendData']);
-      trendStatus = _stringValue(trendData['trend'], fallback: 'INSUFFICIENT_DATA').toUpperCase();
+      trendStatus = _stringValue(
+        trendData['trend'],
+        fallback: 'INSUFFICIENT_DATA',
+      ).toUpperCase();
       trendInsight = _stringValue(trendBody['insight']);
       recentHeartRates = _intList(trendData['recentHeartRates']);
     } else {
@@ -251,7 +262,10 @@ class AiInsightsApiService {
 
   List<String> _stringList(Object? value) {
     if (value is! List) return const <String>[];
-    return value.map((entry) => _stringValue(entry)).where((entry) => entry.isNotEmpty).toList(growable: false);
+    return value
+        .map((entry) => _stringValue(entry))
+        .where((entry) => entry.isNotEmpty)
+        .toList(growable: false);
   }
 
   List<int> _intList(Object? value) {
@@ -274,15 +288,24 @@ class AiInsightsApiService {
         AiAlertItem(
           id: _stringValue(item['_id']),
           type: _stringValue(item['type'], fallback: 'ALERT'),
-          severity: _stringValue(item['severity'], fallback: 'LOW').toUpperCase(),
-          message: _stringValue(item['message'], fallback: 'No message provided.'),
+          severity: _stringValue(
+            item['severity'],
+            fallback: 'LOW',
+          ).toUpperCase(),
+          message: _stringValue(
+            item['message'],
+            fallback: 'No message provided.',
+          ),
         ),
       );
     }
     return parsed;
   }
 
-  String _extractErrorMessage(Map<String, dynamic> body, http.Response response) {
+  String _extractErrorMessage(
+    Map<String, dynamic> body,
+    http.Response response,
+  ) {
     final fromErrorMap = _asMap(body['error'])['message'];
     final fromMessage = body['message'];
     final message = _stringValue(fromErrorMap ?? fromMessage);

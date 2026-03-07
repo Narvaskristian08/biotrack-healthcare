@@ -634,8 +634,7 @@ class AuthApiService {
     );
   }
 
-  Future<PatientPasswordResetCodeSendResult>
-  requestPatientPasswordResetCode({
+  Future<PatientPasswordResetCodeSendResult> requestPatientPasswordResetCode({
     required String email,
   }) async {
     late final http.Response response;
@@ -657,7 +656,10 @@ class AuthApiService {
     }
 
     return PatientPasswordResetCodeSendResult(
-      message: (body['message'] ?? 'If your account exists, a reset code has been sent.').toString(),
+      message:
+          (body['message'] ??
+                  'If your account exists, a reset code has been sent.')
+              .toString(),
       devPreviewCode: (body['devPreviewCode'] ?? '').toString(),
     );
   }
@@ -689,7 +691,9 @@ class AuthApiService {
       throw AuthApiException(_extractErrorMessage(body, response));
     }
 
-    return (body['message'] ?? 'Password updated successfully. You can now log in.').toString();
+    return (body['message'] ??
+            'Password updated successfully. You can now log in.')
+        .toString();
   }
 
   Map<String, dynamic> _safeDecodeJson(String raw) {
@@ -741,10 +745,9 @@ class AuthApiService {
       email: (patient['email'] ?? '').toString(),
       address: (patient['address'] ?? '').toString(),
       contactNumber: (patient['contactNumber'] ?? '').toString(),
-      emergencyContactName:
-          (patient['emergencyContactName'] ?? '').toString(),
-      emergencyContactPhone:
-          (patient['emergencyContactPhone'] ?? '').toString(),
+      emergencyContactName: (patient['emergencyContactName'] ?? '').toString(),
+      emergencyContactPhone: (patient['emergencyContactPhone'] ?? '')
+          .toString(),
       healthCenterId: (patient['healthCenterId'] ?? '').toString(),
       assignedHealthCenter: assignedHealthCenter,
     );

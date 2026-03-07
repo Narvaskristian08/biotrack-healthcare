@@ -145,7 +145,9 @@ class ScanRecordStore {
     return _fromApiRecord(rawRecord);
   }
 
-  static Future<ScanRecordVerificationResult> verifyById(String recordId) async {
+  static Future<ScanRecordVerificationResult> verifyById(
+    String recordId,
+  ) async {
     final normalizedRecordId = recordId.trim();
     if (normalizedRecordId.isEmpty) {
       throw const ScanRecordStoreException('Record ID is required.');
@@ -323,8 +325,10 @@ class ScanRecordStore {
       createdAt: _dateValue(rawRecord['createdAt']),
       blockchain: ScanRecordBlockchainInfo(
         enabled: _boolValue(blockchain['enabled']) ?? false,
-        verificationStatus:
-            _stringValue(blockchain['verificationStatus'], fallback: 'pending'),
+        verificationStatus: _stringValue(
+          blockchain['verificationStatus'],
+          fallback: 'pending',
+        ),
         txId: _stringValue(blockchain['txId']),
         contractAddress: _stringValue(blockchain['contractAddress']),
         anchoredAt: _dateValue(blockchain['anchoredAt']),

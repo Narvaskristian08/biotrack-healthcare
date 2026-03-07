@@ -86,7 +86,8 @@ class ScanRecord {
   factory ScanRecord.fromJson(Map<String, dynamic> json) {
     return ScanRecord(
       id: (json['id'] ?? '').toString(),
-      scannedAt: DateTime.tryParse((json['scannedAt'] ?? '').toString()) ??
+      scannedAt:
+          DateTime.tryParse((json['scannedAt'] ?? '').toString()) ??
           DateTime.now(),
       bpm: json['bpm'] == null ? null : int.tryParse(json['bpm'].toString()),
       fallDetected: json['fallDetected'] == true,
@@ -104,8 +105,7 @@ class ScanRecord {
       createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()),
       blockchain: ScanRecordBlockchainInfo(
         enabled: json['blockchainEnabled'] == true,
-        verificationStatus:
-            (json['blockchainStatus'] ?? 'pending').toString(),
+        verificationStatus: (json['blockchainStatus'] ?? 'pending').toString(),
         txId: (json['blockchainTxId'] ?? '').toString(),
         contractAddress: (json['blockchainContractAddress'] ?? '').toString(),
         anchoredAt: DateTime.tryParse(
@@ -137,8 +137,7 @@ class ScanRecord {
       'blockchainTxId': blockchain.txId,
       'blockchainContractAddress': blockchain.contractAddress,
       'blockchainAnchoredAt': blockchain.anchoredAt?.toIso8601String(),
-      'blockchainLastVerifiedAt':
-          blockchain.lastVerifiedAt?.toIso8601String(),
+      'blockchainLastVerifiedAt': blockchain.lastVerifiedAt?.toIso8601String(),
     };
   }
 

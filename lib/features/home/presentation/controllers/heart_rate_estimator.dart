@@ -357,8 +357,7 @@ class HeartRateEstimator {
   }
 
   double _signalScoreFromStdDev(double stdDev) {
-    return ((stdDev - _minSignalStdDev) /
-            (_maxSignalStdDev - _minSignalStdDev))
+    return ((stdDev - _minSignalStdDev) / (_maxSignalStdDev - _minSignalStdDev))
         .clamp(0.0, 1.0)
         .toDouble();
   }

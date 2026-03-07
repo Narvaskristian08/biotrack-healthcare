@@ -33,26 +33,28 @@ class HealthCenterOption {
       barangayName: (json['barangayName'] ?? '').toString().trim(),
       cityMunicipality: (json['cityMunicipality'] ?? '').toString().trim(),
       healthCenterName: (json['healthCenterName'] ?? '').toString().trim(),
-      name: ((json['name'] ??
-                  json['displayName'] ??
-                  json['healthCenterName'] ??
-                  (fallbackNameParts.isNotEmpty
-                      ? fallbackNameParts.join(' - ')
-                      : ''))
-              .toString())
-          .trim(),
-      address: ((json['address'] ??
-                  json['location'] ??
-                  json['healthCenterName'] ??
-                  (fallbackAddressParts.isNotEmpty
-                      ? fallbackAddressParts.join(', ')
-                      : ''))
-              .toString())
-          .trim(),
+      name:
+          ((json['name'] ??
+                      json['displayName'] ??
+                      json['healthCenterName'] ??
+                      (fallbackNameParts.isNotEmpty
+                          ? fallbackNameParts.join(' - ')
+                          : ''))
+                  .toString())
+              .trim(),
+      address:
+          ((json['address'] ??
+                      json['location'] ??
+                      json['healthCenterName'] ??
+                      (fallbackAddressParts.isNotEmpty
+                          ? fallbackAddressParts.join(', ')
+                          : ''))
+                  .toString())
+              .trim(),
       contactNumber:
           ((json['contactNumber'] ?? json['officialContactInfo'] ?? '')
-              .toString())
-          .trim(),
+                  .toString())
+              .trim(),
     );
   }
 
