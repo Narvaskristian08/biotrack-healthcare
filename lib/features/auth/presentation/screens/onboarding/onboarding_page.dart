@@ -113,7 +113,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                               decoration: const BoxDecoration(
                                 shape: BoxShape.circle,
                                 gradient: LinearGradient(
-                                  colors: [Color(0xFF12935F), Color(0xFF33C481)],
+                                  colors: [
+                                    Color(0xFF12935F),
+                                    Color(0xFF33C481),
+                                  ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
@@ -483,7 +486,7 @@ class _IntroSlide extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
+            ],
           ),
         );
       },
