@@ -14,6 +14,7 @@ class OnboardingPage extends StatefulWidget {
 class _OnboardingPageState extends State<OnboardingPage> {
   final PageController _controller = PageController();
   int _index = 0;
+  
   static const List<_IntroData> _slides = [
     _IntroData(
       kicker: 'Daily Monitoring',
@@ -81,6 +82,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Detect small screens to adjust padding
+    final bool isSmallScreen = MediaQuery.of(context).size.height < 700;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -88,53 +92,34 @@ class _OnboardingPageState extends State<OnboardingPage> {
           SafeArea(
             child: Column(
               children: [
+                // Header
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(99),
                           color: Colors.white.withValues(alpha: 0.84),
-                          border: Border.all(
-                            color: const Color(0xFFBDE2CE),
-                            width: 1,
-                          ),
+                          border: Border.all(color: const Color(0xFFBDE2CE), width: 1),
                         ),
                         child: Row(
                           children: [
                             Container(
-                              height: 28,
-                              width: 28,
+                              height: 28, width: 28,
                               decoration: const BoxDecoration(
                                 shape: BoxShape.circle,
                                 gradient: LinearGradient(
-                                  colors: [
-                                    Color(0xFF12935F),
-                                    Color(0xFF33C481),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
+                                  colors: [Color(0xFF12935F), Color(0xFF33C481)],
                                 ),
                               ),
-                              child: const Icon(
-                                Icons.favorite_rounded,
-                                color: Colors.white,
-                                size: 16,
-                              ),
+                              child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 16),
                             ),
                             const SizedBox(width: 9),
                             const Text(
                               'BioTrack',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.darkText,
-                              ),
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.darkText),
                             ),
                           ],
                         ),
@@ -144,33 +129,33 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         onPressed: () => context.go('/auth'),
                         child: const Text(
                           'Skip',
-                          style: TextStyle(
-                            color: Color(0xFF0F8F60),
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: TextStyle(color: Color(0xFF0F8F60), fontWeight: FontWeight.w700),
                         ),
                       ),
                     ],
                   ),
                 ),
+
+                // Content
                 Expanded(
                   child: PageView.builder(
                     controller: _controller,
                     onPageChanged: (value) => setState(() => _index = value),
                     itemCount: _slides.length,
                     itemBuilder: (context, itemIndex) {
-                      final slide = _slides[itemIndex];
                       return _IntroSlide(
-                        data: slide,
+                        data: _slides[itemIndex],
                         position: itemIndex + 1,
                         total: _slides.length,
                       );
                     },
                   ),
                 ),
+
+                // Consistent Bottom Navigation Container
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                  padding: EdgeInsets.fromLTRB(20, 14, 20, isSmallScreen ? 16 : 24),
                   margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.94),
@@ -185,6 +170,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     ],
                   ),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min, // Fixes vertical growth
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -198,18 +184,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 14),
-                      if (_index == 0) ...[
-                        const Text(
-                          'Swipe to explore the care experience',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
+                      
+                      // Uniform spacing: No more jumping logic here
+                      const SizedBox(height: 18),
+
                       PrimaryButton(
                         text: _index == _slides.length - 1
                             ? 'Start with BioTrack'
@@ -316,18 +294,19 @@ class _IntroSlide extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxHeight < 480;
-        return Padding(
+        final bool isShort = constraints.maxHeight < 550;
+
+        return SingleChildScrollView(
+          // This allows the content to scroll if it's too long for the screen
+          physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Align(
                 alignment: Alignment.centerLeft,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(99),
                     color: Colors.white.withValues(alpha: 0.82),
@@ -343,153 +322,120 @@ class _IntroSlide extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(height: compact ? 8 : 12),
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.fromLTRB(
-                  compact ? 14 : 18,
-                  compact ? 14 : 18,
-                  compact ? 14 : 18,
-                  compact ? 14 : 18,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(26),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1CAA6D), Color(0xFF0E7A4E)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF0F6F48).withValues(alpha: 0.26),
-                      blurRadius: 26,
-                      offset: const Offset(0, 14),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            data.kicker.toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFFBFF2D8),
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            data.title,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: compact ? 20 : 24,
-                              height: 1.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      height: compact ? 58 : 68,
-                      width: compact ? 58 : 68,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.2),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.35),
-                        ),
-                      ),
-                      child: Icon(
-                        data.icon,
-                        color: Colors.white,
-                        size: compact ? 28 : 34,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: compact ? 10 : 14),
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.fromLTRB(
-                    compact ? 14 : 18,
-                    compact ? 14 : 18,
-                    compact ? 14 : 18,
-                    compact ? 12 : 14,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
-                    color: Colors.white.withValues(alpha: 0.95),
-                    border: Border.all(color: const Color(0xFFCEE5D9)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Why it matters',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.darkText,
-                        ),
-                      ),
-                      SizedBox(height: compact ? 6 : 8),
-                      Text(
-                        data.description,
-                        style: TextStyle(
-                          fontSize: compact ? 13 : 14.2,
-                          height: 1.45,
-                          color: AppColors.bodyText,
-                        ),
-                      ),
-                      const Spacer(),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: data.pills
-                            .map(
-                              (pill) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(99),
-                                  color: const Color(
-                                    0xFFEAF8F1,
-                                  ).withValues(alpha: 0.95),
-                                  border: Border.all(
-                                    color: const Color(0xFFBCE6D2),
-                                  ),
-                                ),
-                                child: Text(
-                                  pill,
-                                  style: const TextStyle(
-                                    color: Color(0xFF136A47),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 11.4,
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(growable: false),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              SizedBox(height: isShort ? 8 : 12),
+              
+              // Title Card
+              _buildTitleCard(isShort),
+
+              SizedBox(height: isShort ? 10 : 14),
+              
+              // Description Card (Removed Expanded here)
+              _buildDetailsCard(isShort),
+              
+              // Buffer for the bottom nav
+              const SizedBox(height: 10),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildTitleCard(bool isShort) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isShort ? 14 : 18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1CAA6D), Color(0xFF0E7A4E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data.kicker.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFBFF2D8),
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  data.title,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: isShort ? 20 : 24,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Icon(data.icon, color: Colors.white, size: isShort ? 32 : 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailsCard(bool isShort) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isShort ? 14 : 18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: Colors.white.withValues(alpha: 0.95),
+        border: Border.all(color: const Color(0xFFCEE5D9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Why it matters',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkText),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            data.description,
+            style: TextStyle(
+              fontSize: isShort ? 13 : 14.2,
+              height: 1.45,
+              color: AppColors.bodyText,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: data.pills.map((pill) => _buildPill(pill)).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(99),
+        color: const Color(0xFFEAF8F1).withValues(alpha: 0.95),
+        border: Border.all(color: const Color(0xFFBCE6D2)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(color: Color(0xFF136A47), fontWeight: FontWeight.w600, fontSize: 11.4),
+      ),
     );
   }
 }
