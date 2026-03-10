@@ -68,10 +68,22 @@ export interface AuditLogItem {
   reason?: string;
   actorType?: string;
   actorName?: string;
+  actorId?: string;
   createdAt: string;
   healthCenterId?: string;
   entityType?: string;
   entityId?: string;
+  ip?: string;
+  userAgent?: string;
+}
+
+export interface AuditLogPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasPrev: boolean;
+  hasNext: boolean;
 }
 
 export interface BlockchainOverviewResponse {
@@ -166,17 +178,23 @@ export async function fetchSystemLogs(params?: {
   q?: string;
   action?: string;
   outcome?: string;
+  page?: number;
   limit?: number;
-}): Promise<{ logs?: AuditLogItem[]; suspiciousCount?: number; error?: string }> {
+}): Promise<{ logs?: AuditLogItem[]; suspiciousCount?: number; pagination?: AuditLogPagination; error?: string }> {
   const qs = new URLSearchParams();
   if (params?.q) qs.set('q', params.q);
   if (params?.action) qs.set('action', params.action);
   if (params?.outcome) qs.set('outcome', params.outcome);
+  if (params?.page) qs.set('page', String(params.page));
   if (params?.limit) qs.set('limit', String(params.limit));
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
-  const result = await apiGet<{ logs: AuditLogItem[]; suspiciousCount: number }>(`/admin/logs${suffix}`);
+  const result = await apiGet<{ logs: AuditLogItem[]; suspiciousCount: number; pagination: AuditLogPagination }>(`/admin/logs${suffix}`);
   if (result.error) return { error: result.error.message };
-  return { logs: result.data?.logs ?? [], suspiciousCount: result.data?.suspiciousCount ?? 0 };
+  return {
+    logs: result.data?.logs ?? [],
+    suspiciousCount: result.data?.suspiciousCount ?? 0,
+    pagination: result.data?.pagination,
+  };
 }
 
 export async function fetchSystemMonitoring(): Promise<{

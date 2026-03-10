@@ -108,6 +108,11 @@ export interface GoogleOAuthConfig {
     clientId: string;
 }
 
+export interface PasswordResetRequestResult {
+    message?: string;
+    devPreviewCode?: string;
+}
+
 const CREDENTIAL_ERROR_MESSAGES = new Set([
     'Invalid credentials',
     'Invalid email or password',
@@ -253,6 +258,28 @@ export async function verifyPatientRegistrationCode(
         '/patients/verification/verify-code',
         { patientId, method, code }
     );
+    if (result.error) {
+        return { success: false, error: result.error.message };
+    }
+    return { success: true, message: result.data?.message };
+}
+
+export async function requestPatientPasswordReset(
+    email: string
+): Promise<{ success: boolean; data?: PasswordResetRequestResult; error?: string }> {
+    const result = await apiPost<PasswordResetRequestResult>('/patients/password/forgot', { email });
+    if (result.error) {
+        return { success: false, error: result.error.message };
+    }
+    return { success: true, data: result.data };
+}
+
+export async function resetPatientPasswordWithCode(payload: {
+    email: string;
+    code: string;
+    newPassword: string;
+}): Promise<{ success: boolean; message?: string; error?: string }> {
+    const result = await apiPost<{ message: string }>('/patients/password/reset', payload);
     if (result.error) {
         return { success: false, error: result.error.message };
     }

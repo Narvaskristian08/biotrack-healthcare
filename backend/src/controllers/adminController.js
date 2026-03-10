@@ -761,6 +761,7 @@ export async function listSystemLogs(req, res) {
   const q = String(req.query.q ?? '').trim();
   const action = String(req.query.action ?? '').trim();
   const outcome = String(req.query.outcome ?? '').trim();
+  const page = Math.max(Number(req.query.page ?? 1), 1);
   const limit = Math.min(Math.max(Number(req.query.limit ?? 200), 1), 500);
 
   const filter = {};
@@ -771,9 +772,35 @@ export async function listSystemLogs(req, res) {
     filter.$or = [{ action: re }, { reason: re }, { actorName: re }, { userAgent: re }];
   }
 
-  const logs = await AuditLog.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
-  const suspicious = logs.filter((log) => log.outcome === 'failure' || String(log.action ?? '').includes('SECURITY'));
-  return res.json({ logs, suspiciousCount: suspicious.length });
+  const total = await AuditLog.countDocuments(filter);
+  const totalPages = Math.max(Math.ceil(total / limit), 1);
+  const safePage = Math.min(page, totalPages);
+  const skip = (safePage - 1) * limit;
+
+  const [logs, suspiciousCount] = await Promise.all([
+    AuditLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    AuditLog.countDocuments({
+      $and: [
+        filter,
+        {
+          $or: [{ outcome: 'failure' }, { action: /SECURITY/i }],
+        },
+      ],
+    }),
+  ]);
+
+  return res.json({
+    logs,
+    suspiciousCount,
+    pagination: {
+      page: safePage,
+      limit,
+      total,
+      totalPages,
+      hasPrev: safePage > 1,
+      hasNext: safePage < totalPages,
+    },
+  });
 }
 
 export async function getSystemMonitoring(req, res) {

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { requestPatientPasswordReset, resetPatientPasswordWithCode } from '@/lib/auth'
 
 export default function ForgotPasswordPage() {
   const router = useRouter()
@@ -25,6 +26,7 @@ export default function ForgotPasswordPage() {
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setSuccess('')
 
     if (!email.includes('@')) {
       setError('Please enter a valid email address')
@@ -32,11 +34,17 @@ export default function ForgotPasswordPage() {
     }
 
     setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const result = await requestPatientPasswordReset(email.trim())
     setIsLoading(false)
 
-    // Demo: always show verification step
-    setSuccess('Verification code sent to your email')
+    if (!result.success) {
+      setError(result.error || 'Unable to send reset code')
+      return
+    }
+
+    const backendMessage = result.data?.message || 'If an active patient account with that email exists, a reset code has been sent.'
+    const devHint = result.data?.devPreviewCode ? ` Dev code: ${result.data.devPreviewCode}` : ''
+    setSuccess(`${backendMessage}${devHint}`)
     setStep('verify')
   }
 
@@ -61,6 +69,7 @@ export default function ForgotPasswordPage() {
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setSuccess('')
 
     if (!formData.password || !formData.confirmPassword) {
       setError('Please enter password')
@@ -72,16 +81,47 @@ export default function ForgotPasswordPage() {
       return
     }
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters')
+    if (!code || code.length !== 6) {
+      setError('Please enter a valid 6-digit code')
       return
     }
 
     setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const result = await resetPatientPasswordWithCode({
+      email: email.trim(),
+      code: code.trim(),
+      newPassword: formData.password,
+    })
+    setIsLoading(false)
 
-    // Password reset successful
+    if (!result.success) {
+      setError(result.error || 'Unable to reset password')
+      return
+    }
+
     router.push('/login?reset=success')
+  }
+
+  const handleResendCode = async () => {
+    setError('')
+    setSuccess('')
+    if (!email.includes('@')) {
+      setError('Please enter a valid email address')
+      setStep('email')
+      return
+    }
+
+    setIsLoading(true)
+    const result = await requestPatientPasswordReset(email.trim())
+    setIsLoading(false)
+    if (!result.success) {
+      setError(result.error || 'Unable to resend code')
+      return
+    }
+
+    const backendMessage = result.data?.message || 'If an active patient account with that email exists, a reset code has been sent.'
+    const devHint = result.data?.devPreviewCode ? ` Dev code: ${result.data.devPreviewCode}` : ''
+    setSuccess(`${backendMessage}${devHint}`)
   }
 
   return (
@@ -207,7 +247,7 @@ export default function ForgotPasswordPage() {
                   Didn't receive the code?{' '}
                   <button
                     type="button"
-                    onClick={handleEmailSubmit}
+                    onClick={handleResendCode}
                     className="text-primary hover:underline"
                   >
                     Resend
@@ -235,7 +275,7 @@ export default function ForgotPasswordPage() {
                     required
                   />
                   <p className="text-xs text-muted-foreground">
-                    At least 6 characters recommended
+                    Must satisfy the active password policy
                   </p>
                 </div>
 

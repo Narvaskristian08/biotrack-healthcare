@@ -203,6 +203,7 @@ export const adminLogsQuerySchema = z.object({
   q: optionalShortTextQuerySchema('q', 160),
   action: optionalShortTextQuerySchema('action', 120),
   outcome: optionalShortTextQuerySchema('outcome', 40),
+  page: z.coerce.number().int().min(1, 'page must be at least 1').max(100000, 'page is too large').optional(),
   limit: z.coerce.number().int().min(1, 'limit must be at least 1').max(500, 'limit must be at most 500').optional(),
 });
 
