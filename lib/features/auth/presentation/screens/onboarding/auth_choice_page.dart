@@ -126,13 +126,13 @@ class AuthChoicePage extends StatelessWidget {
                         const SizedBox(height: 18),
                         PrimaryButton(
                           text: 'Create Patient Account',
-                          onTap: () => context.go('/signup'),
+                          onTap: () => context.push('/signup'),
                         ),
                         const SizedBox(height: 12),
                         PrimaryButton(
                           text: 'Log In',
                           outlined: true,
-                          onTap: () => context.go('/login'),
+                          onTap: () => context.push('/login'),
                         ),
                       ],
                     ),

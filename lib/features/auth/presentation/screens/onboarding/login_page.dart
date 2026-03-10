@@ -291,8 +291,8 @@ class _LoginPageState extends State<LoginPage> {
                         ],
                         AuthTextField(
                           controller: _emailController,
-                          label: 'Email address',
-                          hintText: 'your@gmail.com or your@yahoo.com',
+                          label: 'Email',
+                          hintText: 'Enter your email',
                           readOnly: _isMfaStep,
                           keyboardType: TextInputType.emailAddress,
                           autofillHints: const [
@@ -439,7 +439,7 @@ class _LoginPageState extends State<LoginPage> {
                             child: TextButton(
                               onPressed: _isLoading
                                   ? null
-                                  : () => context.go(
+                                  : () => context.push(
                                       '/forgot-password?email=${Uri.encodeComponent(_emailController.text.trim())}',
                                     ),
                               child: const Text(
@@ -474,7 +474,7 @@ class _LoginPageState extends State<LoginPage> {
                         ] else ...[
                           const SizedBox(height: 8),
                           TextButton(
-                            onPressed: _isLoading ? null : () => context.go('/signup'),
+                            onPressed: _isLoading ? null : () => context.push('/signup'),
                             child: const Text(
                               'Create patient account',
                               style: TextStyle(
