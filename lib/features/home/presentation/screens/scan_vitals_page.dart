@@ -63,6 +63,7 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
   double _movementIntensity = 0;
   double _gyroMagnitude = 0;
   String? _errorMessage;
+  String? _motionWarningMessage;
   int _noFingerFrameStreak = 0;
   int _lowQualityFrameStreak = 0;
 
@@ -94,6 +95,7 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
       _movementIntensity = 0;
       _gyroMagnitude = 0;
       _errorMessage = null;
+      _motionWarningMessage = null;
       _noFingerFrameStreak = 0;
       _lowQualityFrameStreak = 0;
       _showingCompletionDialog = false;
@@ -114,6 +116,9 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
     }
 
     await _initializeCamera();
+    if (_cameraController == null || _errorMessage != null) {
+      return;
+    }
     _startMotionTracking();
   }
 
@@ -369,38 +374,82 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
     _accelerometerSub?.cancel();
     _gyroscopeSub?.cancel();
 
-    _accelerometerSub = accelerometerEventStream().listen((event) {
-      final magnitude = math.sqrt(
-        event.x * event.x + event.y * event.y + event.z * event.z,
-      );
-      final movement = (magnitude - 9.81).abs();
-      _movementIntensity = movement;
-
-      if (magnitude > 24) {
-        _impactDetectedAt = DateTime.now();
-      }
-
-      final hasRecentImpact =
-          _impactDetectedAt != null &&
-          DateTime.now().difference(_impactDetectedAt!) <
-              const Duration(seconds: 2);
-      if (hasRecentImpact && movement < 1.3) {
-        _fallDetected = true;
-      }
-
+    if (!_hasMotionPermission) {
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _motionWarningMessage =
+              'Motion permission is blocked. Fall detection is disabled for this scan.';
+        });
       }
-    });
+      return;
+    }
 
-    _gyroscopeSub = gyroscopeEventStream().listen((event) {
-      _gyroMagnitude = math.sqrt(
-        event.x * event.x + event.y * event.y + event.z * event.z,
+    try {
+      _accelerometerSub = accelerometerEventStream().listen(
+        (event) {
+          final magnitude = math.sqrt(
+            event.x * event.x + event.y * event.y + event.z * event.z,
+          );
+          final movement = (magnitude - 9.81).abs();
+          _movementIntensity = movement;
+
+          if (magnitude > 24) {
+            _impactDetectedAt = DateTime.now();
+          }
+
+          final hasRecentImpact =
+              _impactDetectedAt != null &&
+              DateTime.now().difference(_impactDetectedAt!) <
+                  const Duration(seconds: 2);
+          if (hasRecentImpact && movement < 1.3) {
+            _fallDetected = true;
+          }
+
+          if (mounted) {
+            setState(() {});
+          }
+        },
+        onError: (_) {
+          if (!mounted) return;
+          setState(() {
+            _movementIntensity = 0;
+            _motionWarningMessage =
+                'Accelerometer sensor is unavailable. Fall detection is limited.';
+          });
+        },
       );
-      if (mounted) {
-        setState(() {});
-      }
-    });
+    } catch (_) {
+      _motionWarningMessage =
+          'Accelerometer sensor could not be started. Fall detection is limited.';
+    }
+
+    try {
+      _gyroscopeSub = gyroscopeEventStream().listen(
+        (event) {
+          _gyroMagnitude = math.sqrt(
+            event.x * event.x + event.y * event.y + event.z * event.z,
+          );
+          if (mounted) {
+            setState(() {});
+          }
+        },
+        onError: (_) {
+          if (!mounted) return;
+          setState(() {
+            _gyroMagnitude = 0;
+            _motionWarningMessage =
+                'Gyroscope sensor is unavailable. Fall detection is limited.';
+          });
+        },
+      );
+    } catch (_) {
+      _motionWarningMessage =
+          'Gyroscope sensor could not be started. Fall detection is limited.';
+    }
+
+    if (_motionWarningMessage != null && mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _finishScan() async {
@@ -830,7 +879,8 @@ class _ScanVitalsPageState extends State<ScanVitalsPage> {
                               'Signal quality: ${_signalQualityScore.toStringAsFixed(2)} '
                               '| Camera: ${_hasCameraPermission ? "granted" : "blocked"} '
                               '| Motion: ${_hasMotionPermission ? "granted" : "blocked"} '
-                              '| Notifications: ${_hasNotificationPermission ? "granted" : "blocked"}',
+                              '| Notifications: ${_hasNotificationPermission ? "granted" : "blocked"}'
+                              '${_motionWarningMessage == null ? '' : '\n$_motionWarningMessage'}',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ),

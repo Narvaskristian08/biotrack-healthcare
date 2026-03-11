@@ -136,6 +136,7 @@ export const env = {
 
   OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ?? '',
   AI_TIMING_LOGS: toBool(process.env.AI_TIMING_LOGS, false),
+  AI_ADVISORY_TIMEOUT_MS: toNumber(process.env.AI_ADVISORY_TIMEOUT_MS, 4500),
   CORS_ORIGIN: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
 
   SMTP_HOST: process.env.SMTP_HOST ?? '',

@@ -72,13 +72,43 @@ export function computeRiskLevel(vitals) {
   return 'LOW';
 }
 
+function resolveAdvisoryTimeoutMs(rawValue) {
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed)) return 4500;
+  // Keep the timeout in a sane range for prototype responsiveness.
+  return Math.max(1000, Math.min(5000, Math.round(parsed)));
+}
+
+function withTimeout(promise, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const timeoutError = new Error(`AI advisory timeout after ${timeoutMs}ms`);
+      timeoutError.code = 'AI_TIMEOUT';
+      reject(timeoutError);
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
 /**
  * Main AI inference function
  */
 export async function runHealthInference(vitals) {
   const riskHint = computeRiskLevel(vitals);
   const timingEnabled = Boolean(env.AI_TIMING_LOGS);
+  const timeoutMs = resolveAdvisoryTimeoutMs(env.AI_ADVISORY_TIMEOUT_MS);
   let aiRequestMs = null;
+  let timedOut = false;
   const model = 'meta-llama/llama-3-8b-instruct';
 
   try {
@@ -104,16 +134,18 @@ System pre-assessed risk level: ${riskHint}
     };
 
     let response;
+    const timedRequest = withTimeout(aiClient.chat.completions.create(request), timeoutMs);
+
     if (timingEnabled) {
       const start = process.hrtime.bigint();
       try {
-        response = await aiClient.chat.completions.create(request);
+        response = await timedRequest;
       } finally {
         const end = process.hrtime.bigint();
         aiRequestMs = Number(end - start) / 1e6;
       }
     } else {
-      response = await aiClient.chat.completions.create(request);
+      response = await timedRequest;
     }
 
     let output = response.choices[0].message.content?.trim() ?? '';
@@ -126,6 +158,7 @@ System pre-assessed risk level: ${riskHint}
 
     return output;
   } catch (err) {
+    timedOut = err?.code === 'AI_TIMEOUT';
     console.error('AI INFERENCE ERROR:', err?.message || err);
 
     // Graceful fallback (system stays operational)
@@ -156,7 +189,7 @@ If concerning symptoms occur, seek medical evaluation.
   } finally {
     if (timingEnabled && typeof aiRequestMs === 'number') {
       console.log(
-        `[AI_TIMING] runHealthInference model=${model} riskHint=${riskHint} aiRequestMs=${aiRequestMs.toFixed(1)}`
+        `[AI_TIMING] runHealthInference model=${model} riskHint=${riskHint} timeoutMs=${timeoutMs} timedOut=${timedOut} aiRequestMs=${aiRequestMs.toFixed(1)}`
       );
     }
   }
