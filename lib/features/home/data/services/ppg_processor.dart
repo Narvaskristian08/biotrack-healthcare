@@ -1,111 +1,107 @@
-import 'dart:math' as math;
 import 'package:camera/camera.dart';
 
 class FrameMetrics {
   const FrameMetrics({required this.intensity, required this.fingerConfidence});
-
   final double intensity;
   final double fingerConfidence;
 }
 
 class PPGProcessor {
+  static const double _roiSizePercent = 0.4; 
+  static const int _sampleStride = 4;        
+
   static FrameMetrics extractFrameMetrics(CameraImage image) {
-    if (image.planes.isEmpty) {
-      return const FrameMetrics(intensity: 0, fingerConfidence: 0);
-    }
+    if (image.planes.isEmpty) return const FrameMetrics(intensity: 0, fingerConfidence: 0);
 
     if (image.format.group == ImageFormatGroup.yuv420) {
-      final yBytes = image.planes[0].bytes;
-      final uBytes = image.planes.length > 1 ? image.planes[1].bytes : yBytes;
-      final vBytes = image.planes.length > 2 ? image.planes[2].bytes : yBytes;
+      return _processYUV(image);
+    } else {
+      return _processBGRA(image);
+    }
+  }
 
-      var sumY = 0;
-      var sumU = 0;
-      var sumV = 0;
-      var count = 0;
-      var redLikeCount = 0;
+  static FrameMetrics _processYUV(CameraImage image) {
+    final yPlane = image.planes[0];
+    final uPlane = image.planes[1];
+    final vPlane = image.planes[2];
 
-      for (var i = 0; i < yBytes.length; i += 24) {
-        sumY += yBytes[i];
+    final int width = image.width;
+    final int height = image.height;
+
+    final int startX = (width * (1 - _roiSizePercent) / 2).toInt();
+    final int startY = (height * (1 - _roiSizePercent) / 2).toInt();
+    final int endX = (width * (1 + _roiSizePercent) / 2).toInt();
+    final int endY = (height * (1 + _roiSizePercent) / 2).toInt();
+
+    double totalY = 0, totalU = 0, totalV = 0;
+    int count = 0;
+
+    for (int y = startY; y < endY; y += _sampleStride) {
+      for (int x = startX; x < endX; x += _sampleStride) {
+        final int yIndex = y * width + x;
+        final int uvIndex = (y ~/ 2) * (uPlane.bytesPerRow) + (x ~/ 2) * (uPlane.bytesPerPixel ?? 1);
+
+        totalY += yPlane.bytes[yIndex];
+        totalU += uPlane.bytes[uvIndex];
+        totalV += vPlane.bytes[uvIndex];
         count++;
       }
-
-      for (var i = 0; i < uBytes.length; i += 8) {
-        sumU += uBytes[i];
-      }
-      for (var i = 0; i < vBytes.length; i += 8) {
-        sumV += vBytes[i];
-      }
-
-      final avgY = count == 0 ? 0.0 : (sumY / count);
-      final avgU = sumU / math.max(1, uBytes.length ~/ 8);
-      final avgV = sumV / math.max(1, vBytes.length ~/ 8);
-      final redChroma = (avgV - avgU).clamp(-128.0, 128.0);
-
-      final uvCount = math.min(uBytes.length, vBytes.length);
-      for (var i = 0; i < uvCount; i += 12) {
-        final redLike = (vBytes[i] - uBytes[i]) > 12;
-        if (redLike && avgY > 55) {
-          redLikeCount++;
-        }
-      }
-
-      final coverageScore = redLikeCount / math.max(1, uvCount ~/ 12);
-      final redDominance = ((avgV - avgU - 8) / 70).clamp(0.0, 1.0).toDouble();
-      final brightnessScore = ((avgY - 45) / 150).clamp(0.0, 1.0).toDouble();
-      final fingerConfidence =
-          (0.5 * redDominance + 0.3 * coverageScore + 0.2 * brightnessScore)
-              .clamp(0.0, 1.0)
-              .toDouble();
-      final yNorm = (avgY / 255).clamp(0.0, 1.0).toDouble();
-      final redNorm = ((redChroma + 128) / 256).clamp(0.0, 1.0).toDouble();
-      final intensity = (0.45 * yNorm + 0.55 * redNorm).clamp(0.0, 1.0);
-
-      return FrameMetrics(
-        intensity: intensity.toDouble(),
-        fingerConfidence: fingerConfidence,
-      );
     }
 
-    final bytes = image.planes.first.bytes;
-    var sumLuma = 0.0;
-    var sumR = 0.0;
-    var sumG = 0.0;
-    var count = 0;
-    var redPixelCount = 0;
+    final avgY = totalY / count;
+    final avgU = totalU / count;
+    final avgV = totalV / count;
 
-    for (var i = 0; i + 3 < bytes.length; i += 24) {
-      final b = bytes[i].toDouble();
-      final g = bytes[i + 1].toDouble();
-      final r = bytes[i + 2].toDouble();
-      sumLuma += (0.114 * b + 0.587 * g + 0.299 * r);
-      sumR += r;
-      sumG += g;
-      if (r > g * 1.12 && r > b * 1.25 && r > 75) {
-        redPixelCount++;
-      }
-      count++;
-    }
-
-    if (count == 0) {
-      return const FrameMetrics(intensity: 0, fingerConfidence: 0);
-    }
-
-    final avgR = sumR / count;
-    final avgG = sumG / count;
-    final avgLuma = sumLuma / count;
-    final redDominance = ((avgR - avgG) / 80).clamp(0.0, 1.0).toDouble();
-    final coverageScore = (redPixelCount / count).clamp(0.0, 1.0).toDouble();
-    final brightnessScore = (avgLuma / 255).clamp(0.0, 1.0).toDouble();
-    final fingerConfidence =
-        (0.45 * redDominance + 0.35 * coverageScore + 0.2 * brightnessScore)
-            .clamp(0.0, 1.0)
-            .toDouble();
-    final intensity = ((avgR * 0.7) + (avgG * 0.3)) / 255;
+    // Green component is best for heart rate SNR (Signal-to-Noise Ratio)
+    final double greenComponent = avgY - 0.344 * (avgU - 128) - 0.714 * (avgV - 128);
+    
+    final double redDominance = (avgV - avgU).clamp(0, 100) / 100.0;
+    final double brightnessLevel = (avgY / 255.0).clamp(0.0, 1.0);
+    final double fingerConfidence = (redDominance * 0.7 + brightnessLevel * 0.3);
 
     return FrameMetrics(
-      intensity: intensity.clamp(0.0, 1.0).toDouble(),
-      fingerConfidence: fingerConfidence,
+      intensity: greenComponent / 255.0,
+      fingerConfidence: fingerConfidence.clamp(0.0, 1.0),
+    );
+  }
+
+  static FrameMetrics _processBGRA(CameraImage image) {
+    final bytes = image.planes[0].bytes;
+    final int width = image.width;
+    final int height = image.height;
+
+    final int startX = (width * (1 - _roiSizePercent) / 2).toInt();
+    final int startY = (height * (1 - _roiSizePercent) / 2).toInt();
+    final int endX = (width * (1 + _roiSizePercent) / 2).toInt();
+    final int endY = (height * (1 + _roiSizePercent) / 2).toInt();
+
+    double totalR = 0, totalG = 0, totalB = 0;
+    int count = 0;
+
+    for (int y = startY; y < endY; y += _sampleStride) {
+      for (int x = startX; x < endX; x += _sampleStride) {
+        final int index = (y * width + x) * 4;
+        totalB += bytes[index];
+        totalG += bytes[index + 1];
+        totalR += bytes[index + 2];
+        count++;
+      }
+    }
+
+    final avgR = totalR / count;
+    final avgG = totalG / count;
+    final avgB = totalB / count; 
+
+    final double intensity = avgG / 255.0;
+
+    final double redOverGreen = ((avgR - avgG) / (avgR + 1)).clamp(0.0, 1.0);
+    final double redOverBlue = ((avgR - avgB) / (avgR + 1)).clamp(0.0, 1.0);
+    
+    final double fingerConfidence = (redOverGreen * 0.4 + redOverBlue * 0.4 + (avgR / 255.0) * 0.2);
+
+    return FrameMetrics(
+      intensity: intensity,
+      fingerConfidence: fingerConfidence.clamp(0.0, 1.0),
     );
   }
 }

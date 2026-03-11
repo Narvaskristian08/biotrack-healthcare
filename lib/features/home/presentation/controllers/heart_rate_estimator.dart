@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:collection';
 
 class _SignalSample {
   const _SignalSample({required this.timestampMs, required this.value});
@@ -37,13 +38,16 @@ class HeartRateEstimator {
   final int minSamplesForEstimate;
   final double reliabilityThreshold;
   final double minimumAcceptConfidence;
+  
   static const double _minSignalStdDev = 0.0018;
   static const double _maxSignalStdDev = 0.018;
   static const int _maxStepPerUpdate = 7;
   static const int _consensusToleranceBpm = 8;
   static const int _hardDisagreementBpm = 24;
 
-  final List<_SignalSample> _samples = <_SignalSample>[];
+  // Optimized: Using ListQueue for O(1) removals at the front of the window.
+  final ListQueue<_SignalSample> _samples = ListQueue<_SignalSample>();
+  
   int _lastPeakMs = -1;
   int _lastBpm = 0;
   int _lastCandidateBpm = 0;
@@ -85,13 +89,28 @@ class HeartRateEstimator {
       return null;
     }
 
-    final values = _samples.map((e) => e.value).toList(growable: false);
+    // Optimized: Extracting values into a fixed-length list for fast access
+    final length = _samples.length;
+    final values = List<double>.generate(length, (i) => _samples.elementAt(i).value);
+    
     final smoothed = _smooth(values);
-    final mean = smoothed.reduce((a, b) => a + b) / smoothed.length;
-    final centered = smoothed.map((e) => e - mean).toList(growable: false);
+    
+    // Optimized: Calculate mean and variance in streamlined passes
+    var sum = 0.0;
+    for (var i = 0; i < length; i++) {
+      sum += smoothed[i];
+    }
+    final mean = sum / length;
 
-    final variance =
-        centered.map((v) => v * v).reduce((a, b) => a + b) / centered.length;
+    var varianceSum = 0.0;
+    final centered = List<double>.filled(length, 0.0);
+    for (var i = 0; i < length; i++) {
+      final c = smoothed[i] - mean;
+      centered[i] = c;
+      varianceSum += c * c;
+    }
+    
+    final variance = varianceSum / length;
     final stdDev = math.sqrt(variance);
     _lastSignalStrength = stdDev;
 
@@ -152,11 +171,10 @@ class HeartRateEstimator {
           centered[i] > centered[i - 1] &&
           centered[i] > centered[i + 1] &&
           centered[i] > threshold;
-      if (!isPeak) {
-        continue;
-      }
+          
+      if (!isPeak) continue;
 
-      final peakTimeMs = _samples[i].timestampMs;
+      final peakTimeMs = _samples.elementAt(i).timestampMs;
       if (peaks.isNotEmpty && peakTimeMs - peaks.last < 300) {
         continue;
       }
@@ -164,46 +182,46 @@ class HeartRateEstimator {
       peakValues.add(centered[i].abs());
     }
 
-    if (peaks.length < 3) {
-      return null;
-    }
+    if (peaks.length < 3) return null;
 
     final intervalsMs = <int>[];
+    var intervalSum = 0;
     for (var i = 1; i < peaks.length; i++) {
-      intervalsMs.add(peaks[i] - peaks[i - 1]);
+      final interval = peaks[i] - peaks[i - 1];
+      intervalsMs.add(interval);
+      intervalSum += interval;
     }
-    if (intervalsMs.length < 2) {
-      return null;
-    }
+    
+    if (intervalsMs.length < 2) return null;
 
-    final avgIntervalMs =
-        intervalsMs.reduce((a, b) => a + b) / intervalsMs.length;
+    final avgIntervalMs = intervalSum / intervalsMs.length;
     final bpm = (60000 / avgIntervalMs).round();
-    if (bpm < minBpm || bpm > maxBpm) {
-      return null;
-    }
+    if (bpm < minBpm || bpm > maxBpm) return null;
 
-    final intervalVariance =
-        intervalsMs
-            .map((v) => (v - avgIntervalMs) * (v - avgIntervalMs))
-            .reduce((a, b) => a + b) /
-        intervalsMs.length;
+    var intervalVarianceSum = 0.0;
+    for (final v in intervalsMs) {
+      final diff = v - avgIntervalMs;
+      intervalVarianceSum += diff * diff;
+    }
+    
+    final intervalVariance = intervalVarianceSum / intervalsMs.length;
     final intervalStdDev = math.sqrt(intervalVariance);
     final regularityRatio = intervalStdDev / avgIntervalMs;
-    final regularity = (1 - (regularityRatio / 0.45))
-        .clamp(0.0, 1.0)
-        .toDouble();
+    final regularity = (1 - (regularityRatio / 0.45)).clamp(0.0, 1.0).toDouble();
 
-    final avgPeakAmplitude =
-        peakValues.reduce((a, b) => a + b) / math.max(1, peakValues.length);
-    final noiseFloor =
-        centered.map((v) => v.abs()).reduce((a, b) => a + b) / centered.length;
+    var peakAmplitudeSum = 0.0;
+    for (final v in peakValues) peakAmplitudeSum += v;
+    final avgPeakAmplitude = peakAmplitudeSum / math.max(1, peakValues.length);
+    
+    var noiseFloorSum = 0.0;
+    for (final v in centered) noiseFloorSum += v.abs();
+    final noiseFloor = noiseFloorSum / centered.length;
+    
     final snr = avgPeakAmplitude / (noiseFloor + 1e-9);
     final snrScore = ((snr - 0.95) / 1.5).clamp(0.0, 1.0).toDouble();
     final signalScore = _signalScoreFromStdDev(stdDev);
 
-    final confidence =
-        (0.35 * signalScore + 0.35 * regularity + 0.30 * snrScore).toDouble();
+    final confidence = (0.35 * signalScore + 0.35 * regularity + 0.30 * snrScore).toDouble();
 
     return _BpmCandidate(
       bpm: bpm,
@@ -218,29 +236,18 @@ class HeartRateEstimator {
     required double stdDev,
     required double sampleIntervalMs,
   }) {
-    if (sampleIntervalMs <= 0 || centered.length < 35) {
-      return null;
-    }
+    if (sampleIntervalMs <= 0 || centered.length < 35) return null;
 
-    final minLag = (60000 / maxBpm / sampleIntervalMs).floor().clamp(
-      2,
-      centered.length ~/ 2,
-    );
-    final maxLag = (60000 / minBpm / sampleIntervalMs).ceil().clamp(
-      minLag + 1,
-      centered.length - 2,
-    );
-    if (maxLag <= minLag) {
-      return null;
-    }
+    final minLag = (60000 / maxBpm / sampleIntervalMs).floor().clamp(2, centered.length ~/ 2);
+    final maxLag = (60000 / minBpm / sampleIntervalMs).ceil().clamp(minLag + 1, centered.length - 2);
+    
+    if (maxLag <= minLag) return null;
 
     var signalEnergy = 0.0;
     for (final value in centered) {
       signalEnergy += value * value;
     }
-    if (signalEnergy <= 1e-12) {
-      return null;
-    }
+    if (signalEnergy <= 1e-12) return null;
 
     var bestLag = -1;
     var bestCorr = -1.0;
@@ -262,23 +269,17 @@ class HeartRateEstimator {
       }
     }
 
-    if (bestLag <= 0 || bestCorr <= 0) {
-      return null;
-    }
+    if (bestLag <= 0 || bestCorr <= 0) return null;
 
     final bpm = (60000 / (bestLag * sampleIntervalMs)).round();
-    if (bpm < minBpm || bpm > maxBpm) {
-      return null;
-    }
+    if (bpm < minBpm || bpm > maxBpm) return null;
 
     final periodicity = bestCorr.clamp(0.0, 1.0).toDouble();
     final separation = (bestCorr - math.max(0, secondCorr)).clamp(0.0, 1.0);
     final separationScore = (separation / 0.16).clamp(0.0, 1.0).toDouble();
     final signalScore = _signalScoreFromStdDev(stdDev);
 
-    final confidence =
-        (0.45 * periodicity + 0.35 * separationScore + 0.20 * signalScore)
-            .toDouble();
+    final confidence = (0.45 * periodicity + 0.35 * separationScore + 0.20 * signalScore).toDouble();
 
     return _BpmCandidate(
       bpm: bpm,
@@ -292,27 +293,15 @@ class HeartRateEstimator {
     _BpmCandidate? first,
     _BpmCandidate? second,
   ) {
-    if (first == null) {
-      return second;
-    }
-    if (second == null) {
-      return first;
-    }
+    if (first == null) return second;
+    if (second == null) return first;
 
     final gap = (first.bpm - second.bpm).abs();
     if (gap <= _consensusToleranceBpm) {
       final totalConfidence = first.confidence + second.confidence + 1e-9;
-      final blendedBpm =
-          ((first.bpm * first.confidence + second.bpm * second.confidence) /
-                  totalConfidence)
-              .round();
-      final blendedConfidence =
-          ((first.confidence + second.confidence) / 2 + 0.07)
-              .clamp(0.0, 1.0)
-              .toDouble();
-      final blendedRegularity = ((first.regularity + second.regularity) / 2)
-          .clamp(0.0, 1.0)
-          .toDouble();
+      final blendedBpm = ((first.bpm * first.confidence + second.bpm * second.confidence) / totalConfidence).round();
+      final blendedConfidence = ((first.confidence + second.confidence) / 2 + 0.07).clamp(0.0, 1.0).toDouble();
+      final blendedRegularity = ((first.regularity + second.regularity) / 2).clamp(0.0, 1.0).toDouble();
       final blendedSnr = (first.snr + second.snr) / 2;
 
       return _BpmCandidate(
@@ -324,8 +313,7 @@ class HeartRateEstimator {
     }
 
     final stronger = first.confidence >= second.confidence ? first : second;
-    if (gap >= _hardDisagreementBpm &&
-        stronger.confidence < minimumAcceptConfidence + 0.06) {
+    if (gap >= _hardDisagreementBpm && stronger.confidence < minimumAcceptConfidence + 0.06) {
       return null;
     }
 
@@ -343,16 +331,12 @@ class HeartRateEstimator {
 
   int _stabilizeBpm(int incomingBpm) {
     final incoming = incomingBpm.clamp(minBpm, maxBpm).toInt();
-    if (_lastBpm <= 0) {
-      return incoming;
-    }
+    if (_lastBpm <= 0) return incoming;
 
-    final delta = (incoming - _lastBpm).clamp(
-      -_maxStepPerUpdate,
-      _maxStepPerUpdate,
-    );
+    final delta = (incoming - _lastBpm).clamp(-_maxStepPerUpdate, _maxStepPerUpdate);
     final limited = (_lastBpm + delta).clamp(minBpm, maxBpm).toInt();
     final blended = ((_lastBpm * 0.72) + (limited * 0.28)).round();
+    
     return blended.clamp(minBpm, maxBpm).toInt();
   }
 
@@ -363,39 +347,34 @@ class HeartRateEstimator {
   }
 
   double _estimatedSampleIntervalMs() {
-    if (_samples.length < 2) {
-      return 0;
-    }
+    if (_samples.length < 2) return 0;
+    
     final durationMs = _samples.last.timestampMs - _samples.first.timestampMs;
-    if (durationMs <= 0) {
-      return 0;
-    }
+    if (durationMs <= 0) return 0;
+    
     return durationMs / (_samples.length - 1);
   }
 
   List<double> _smooth(List<double> values) {
-    if (values.length < 5) {
-      return values;
-    }
+    if (values.length < 5) return values;
+    
     final out = List<double>.filled(values.length, 0);
     for (var i = 0; i < values.length; i++) {
       final start = math.max(0, i - 2);
       final end = math.min(values.length - 1, i + 2);
       var sum = 0.0;
-      var count = 0;
       for (var j = start; j <= end; j++) {
         sum += values[j];
-        count++;
       }
-      out[i] = sum / count;
+      out[i] = sum / (end - start + 1);
     }
     return out;
   }
 
   void _trimSamples(int nowMs) {
-    while (_samples.isNotEmpty &&
-        nowMs - _samples.first.timestampMs > windowMs) {
-      _samples.removeAt(0);
+    // Optimized: O(1) removal using removeFirst on the ListQueue
+    while (_samples.isNotEmpty && nowMs - _samples.first.timestampMs > windowMs) {
+      _samples.removeFirst();
     }
   }
 }
