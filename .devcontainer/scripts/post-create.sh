@@ -5,6 +5,38 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUNTIME_DIR="${ROOT_DIR}/.devcontainer/.runtime"
 LOG_DIR="${RUNTIME_DIR}/logs"
 PID_DIR="${RUNTIME_DIR}/pids"
+COMPOSE_FILE="${ROOT_DIR}/.devcontainer/docker-compose.yml"
+APP_SERVICE="app"
+CONTAINER_WORKSPACE="/workspaces/$(basename "${ROOT_DIR}")"
+
+running_inside_container() {
+  [[ -f "/.dockerenv" ]]
+}
+
+run_in_devcontainer() {
+  local container_id
+  local container_command
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "This script must run inside the dev container. Docker CLI is unavailable on the host."
+    return 1
+  fi
+
+  container_id="$(docker compose -f "${COMPOSE_FILE}" ps -q "${APP_SERVICE}" 2>/dev/null || true)"
+  if [[ -z "${container_id}" ]]; then
+    echo "The ${APP_SERVICE} container is not running."
+    echo "Start it first with: docker compose -f .devcontainer/docker-compose.yml up -d"
+    return 1
+  fi
+
+  container_command="$(printf 'cd %q && bash .devcontainer/scripts/post-create.sh' "${CONTAINER_WORKSPACE}")"
+  echo "Host shell detected. Running setup inside the ${APP_SERVICE} container..."
+  exec docker compose -f "${COMPOSE_FILE}" exec -T "${APP_SERVICE}" bash -lc "${container_command}"
+}
+
+if ! running_inside_container; then
+  run_in_devcontainer
+fi
 
 mkdir -p "${LOG_DIR}" "${PID_DIR}"
 

@@ -135,6 +135,7 @@ export const env = {
   BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS: process.env.BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS ?? '',
 
   OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ?? '',
+  AI_TIMING_LOGS: toBool(process.env.AI_TIMING_LOGS, false),
   CORS_ORIGIN: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
 
   SMTP_HOST: process.env.SMTP_HOST ?? '',

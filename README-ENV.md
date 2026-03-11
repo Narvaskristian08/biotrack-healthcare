@@ -43,6 +43,7 @@ OPENROUTER_API_KEY=dev-placeholder
 Notes:
 - `OPENROUTER_API_KEY` must be non-empty due to startup validation.
 - SMTP/Twilio/Blockchain vars are optional unless you are testing those flows.
+- AI timing (AI Track): run `npm --workspace backend run ai:timing` to execute `runHealthInference` 3 times with different inputs and print request timing logs.
 - Security defaults added:
   - `PASSWORD_MIN_LENGTH=12`
   - `LOGIN_RATE_LIMIT_WINDOW_MS=900000`

@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
+    "ai:timing": "node scripts/ai-track-timing.js",
     "test": "node --test test/**/*.test.js"
   },
   "repository": {

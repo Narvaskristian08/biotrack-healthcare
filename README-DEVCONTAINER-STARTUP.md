@@ -38,13 +38,19 @@ The first setup can take several minutes because the container installs:
 - Flutter dependencies (`flutter pub get`)
 - local env files for backend/web if missing
 
-## 4) Daily Startup (Inside Dev Container Terminal)
+## 4) Daily Startup
 
 Usually this is enough:
 
 ```bash
 bash .devcontainer/scripts/post-start.sh
 ```
+
+You can run that command from either:
+- the Dev Container terminal
+- a host shell after `docker compose -f .devcontainer/docker-compose.yml up -d`
+
+If you run it from the host, the script now detects that context and re-runs itself inside the `app` container automatically.
 
 If you just rebuilt or dependencies changed, run:
 

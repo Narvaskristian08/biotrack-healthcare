@@ -1,4 +1,5 @@
 import { aiClient } from './aiClient.js';
+import { env } from '../../config/env.js';
 
 /**
  * SYSTEM PROMPT
@@ -76,10 +77,13 @@ export function computeRiskLevel(vitals) {
  */
 export async function runHealthInference(vitals) {
   const riskHint = computeRiskLevel(vitals);
+  const timingEnabled = Boolean(env.AI_TIMING_LOGS);
+  let aiRequestMs = null;
+  const model = 'meta-llama/llama-3-8b-instruct';
 
   try {
-    const response = await aiClient.chat.completions.create({
-      model: 'meta-llama/llama-3-8b-instruct',
+    const request = {
+      model,
       temperature: 0.3,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -97,7 +101,20 @@ System pre-assessed risk level: ${riskHint}
           `,
         },
       ],
-    });
+    };
+
+    let response;
+    if (timingEnabled) {
+      const start = process.hrtime.bigint();
+      try {
+        response = await aiClient.chat.completions.create(request);
+      } finally {
+        const end = process.hrtime.bigint();
+        aiRequestMs = Number(end - start) / 1e6;
+      }
+    } else {
+      response = await aiClient.chat.completions.create(request);
+    }
 
     let output = response.choices[0].message.content?.trim() ?? '';
 
@@ -136,5 +153,11 @@ If concerning symptoms occur, seek medical evaluation.
 
 ⚠️ This system does not diagnose medical conditions. It provides risk assessment and decision support only.
     `.trim();
+  } finally {
+    if (timingEnabled && typeof aiRequestMs === 'number') {
+      console.log(
+        `[AI_TIMING] runHealthInference model=${model} riskHint=${riskHint} aiRequestMs=${aiRequestMs.toFixed(1)}`
+      );
+    }
   }
 }
