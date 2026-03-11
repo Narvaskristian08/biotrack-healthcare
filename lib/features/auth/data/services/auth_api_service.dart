@@ -157,7 +157,11 @@ class PatientLoginHistoryEntry {
 }
 
 class AuthApiService {
-  AuthApiService({http.Client? client}) : _client = client ?? http.Client();
+  AuthApiService({http.Client? client})
+    : _client = _TimeoutHttpClient(
+        client ?? http.Client(),
+        AppConfig.apiRequestTimeout,
+      );
 
   final http.Client _client;
 
@@ -726,7 +730,12 @@ class AuthApiService {
   }
 
   String _networkErrorMessage() {
-    return 'Cannot reach API at ${AppConfig.apiBaseUrl}. Check backend server and API_BASE_URL.';
+    final base = AppConfig.apiBaseUrl;
+    final androidPhysicalHint = base.contains('10.0.2.2')
+        ? ' On physical Android devices, 10.0.2.2 does not point to your PC. '
+              'Use --dart-define=API_BASE_URL=http://<PC_LAN_IP>:3000.'
+        : '';
+    return 'Cannot reach API at $base. Check backend server, same Wi-Fi network, and API_BASE_URL.$androidPhysicalHint';
   }
 
   PatientProfileResult _parsePatientProfile(
@@ -770,5 +779,30 @@ class AuthApiService {
       contactNumber: (rawCenter['contactNumber'] ?? '').toString(),
       officialContactInfo: (rawCenter['officialContactInfo'] ?? '').toString(),
     );
+  }
+}
+
+class _TimeoutHttpClient extends http.BaseClient {
+  _TimeoutHttpClient(this._inner, this._timeout);
+
+  final http.Client _inner;
+  final Duration _timeout;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    return _inner.send(request).timeout(
+      _timeout,
+      onTimeout: () {
+        throw http.ClientException(
+          'Request timed out after ${_timeout.inMilliseconds}ms',
+          request.url,
+        );
+      },
+    );
+  }
+
+  @override
+  void close() {
+    _inner.close();
   }
 }

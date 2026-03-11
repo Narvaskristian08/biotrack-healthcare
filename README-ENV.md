@@ -118,6 +118,12 @@ Physical Android device:
 flutter run --dart-define=API_BASE_URL=http://<YOUR_PC_LAN_IP>:3000
 ```
 
+Optional request timeout override:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://<YOUR_PC_LAN_IP>:3000 --dart-define=API_REQUEST_TIMEOUT_MS=12000
+```
+
 Default when omitted:
 - `http://10.0.2.2:3000` (see `lib/core/config/app_config.dart`)
 
