@@ -7,7 +7,8 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "ai:timing": "node scripts/ai-track-timing.js",
-    "test": "node --test test/**/*.test.js"
+    "test": "node --test test/**/*.test.js",
+    "gas:benchmark": "node scripts/gas-benchmark.mjs"
   },
   "repository": {
     "type": "git",
@@ -41,6 +42,8 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "nodemon": "^3.1.11"
+    "ganache": "^7.9.2",
+    "nodemon": "^3.1.11",
+    "solc": "^0.8.30"
   }
 }

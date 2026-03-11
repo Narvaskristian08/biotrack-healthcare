@@ -395,3 +395,13 @@ Check these collections in MongoDB:
 5. Tamper record in MongoDB
 6. Re-run verify endpoint (`status: tampered`)
 7. Show `blockchainprooflogs` entries as audit proof
+
+## 18. Gas Tracking (Remix `setMessage`)
+
+For a dedicated low-gas measurement workflow and 3-case tracking table, see:
+
+- `docs/BLOCKCHAIN_GAS_TRACKING.md`
+
+For project-scope gas tracking using real registry functions (`registerIdentity`, `anchorRecord`, `requestRecordExport`), see Section 7 in:
+
+- `docs/BLOCKCHAIN_GAS_TRACKING.md`
