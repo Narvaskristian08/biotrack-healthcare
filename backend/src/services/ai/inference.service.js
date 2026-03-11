@@ -1,10 +1,11 @@
-import { aiClient } from './aiClient.js';
+﻿import { aiClient } from './aiClient.js';
 import { env } from '../../config/env.js';
+import { aiLanguageLabel, normalizeAiLanguage } from './language.service.js';
 
 /**
  * SYSTEM PROMPT
  * Forces the AI to act as a clinical decision support system,
- * NOT a diagnostic system.
+ * not a diagnostic system.
  */
 const SYSTEM_PROMPT = `
 You are an AI Health Decision Support Assistant.
@@ -29,9 +30,9 @@ NOT ALLOWED:
 - Disease names
 - Definitive or authoritative medical claims
 
-OUTPUT FORMAT (STRICT — FOLLOW EXACTLY):
+OUTPUT FORMAT (STRICT - FOLLOW EXACTLY):
 
-📊 AI Health Insight
+AI Health Insight
 
 Risk Level:
 <LOW | MODERATE | HIGH | CRITICAL>
@@ -40,7 +41,7 @@ Summary:
 <one sentence summary>
 
 Clinical Interpretation:
-<2–3 sentences explaining why this risk level was assigned>
+<2-3 sentences explaining why this risk level was assigned>
 
 Possible Contributing Factors:
 - <factor 1>
@@ -55,7 +56,8 @@ Recommended Actions:
 Urgency Guidance:
 <clear guidance on when to monitor or seek professional help>
 
-⚠️ This system does not diagnose medical conditions. It provides risk assessment and decision support only.
+Disclaimer:
+This system does not diagnose medical conditions. It provides risk assessment and decision support only.
 `;
 
 /**
@@ -100,13 +102,76 @@ function withTimeout(promise, timeoutMs) {
   });
 }
 
+function buildDisclaimer(language) {
+  if (normalizeAiLanguage(language) === 'fil') {
+    return 'Paalala: Hindi ito pang-diagnose. Para lamang ito sa risk assessment at decision support.';
+  }
+  return 'Disclaimer: This system does not diagnose medical conditions. It provides risk assessment and decision support only.';
+}
+
+function buildFallbackInsight({ riskHint, language }) {
+  if (normalizeAiLanguage(language) === 'fil') {
+    return `
+AI Health Insight
+
+Risk Level:
+${riskHint}
+
+Summary:
+Pansamantalang hindi available ang AI analysis.
+
+Clinical Interpretation:
+Hindi nakumpleto ng system ang full AI reasoning sa oras na ito. Gumamit ng baseline risk estimation gamit ang predefined thresholds.
+
+Possible Contributing Factors:
+- Pansamantalang pagkaantala ng serbisyo
+
+Recommended Actions:
+- Magpahinga at i-monitor ang vital signs
+- Subukang muli mamaya
+
+Urgency Guidance:
+Kung may nakakabahalang sintomas, magpatingin agad sa health professional.
+
+${buildDisclaimer('fil')}
+    `.trim();
+  }
+
+  return `
+AI Health Insight
+
+Risk Level:
+${riskHint}
+
+Summary:
+AI analysis is temporarily unavailable.
+
+Clinical Interpretation:
+The system could not complete full AI reasoning at this time. A baseline risk level was estimated using predefined thresholds.
+
+Possible Contributing Factors:
+- Temporary service interruption
+
+Recommended Actions:
+- Rest and monitor vital signs
+- Retry analysis later
+
+Urgency Guidance:
+If concerning symptoms occur, seek medical evaluation.
+
+${buildDisclaimer('en')}
+  `.trim();
+}
+
 /**
  * Main AI inference function
  */
-export async function runHealthInference(vitals) {
+export async function runHealthInference(vitals, options = {}) {
   const riskHint = computeRiskLevel(vitals);
   const timingEnabled = Boolean(env.AI_TIMING_LOGS);
   const timeoutMs = resolveAdvisoryTimeoutMs(env.AI_ADVISORY_TIMEOUT_MS);
+  const language = normalizeAiLanguage(options?.language, 'en');
+  const languageLabel = aiLanguageLabel(language);
   let aiRequestMs = null;
   let timedOut = false;
   const model = 'meta-llama/llama-3-8b-instruct';
@@ -121,6 +186,7 @@ export async function runHealthInference(vitals) {
           role: 'user',
           content: `
 User state: resting
+Preferred response language: ${languageLabel}
 
 Heart rate: ${vitals.heartRate}
 Activity level: ${vitals.activity}
@@ -150,10 +216,12 @@ System pre-assessed risk level: ${riskHint}
 
     let output = response.choices[0].message.content?.trim() ?? '';
 
-    // Backend safety enforcement (disclaimer guarantee)
-    if (!output.includes('⚠️')) {
-      output +=
-        '\n\n⚠️ This system does not diagnose medical conditions. It provides risk assessment and decision support only.';
+    // Backend safety enforcement (disclaimer guarantee).
+    const disclaimer = buildDisclaimer(language);
+    const normalized = output.toLowerCase();
+    const hasDisclaimer = normalized.includes('disclaimer') || normalized.includes('paalala') || normalized.includes('does not diagnose') || normalized.includes('hindi ito pang-diagnose');
+    if (!hasDisclaimer) {
+      output += `\n\n${disclaimer}`;
     }
 
     return output;
@@ -161,35 +229,12 @@ System pre-assessed risk level: ${riskHint}
     timedOut = err?.code === 'AI_TIMEOUT';
     console.error('AI INFERENCE ERROR:', err?.message || err);
 
-    // Graceful fallback (system stays operational)
-    return `
-📊 AI Health Insight
-
-Risk Level:
-${riskHint}
-
-Summary:
-AI analysis is temporarily unavailable.
-
-Clinical Interpretation:
-The system could not complete full AI reasoning at this time. A baseline risk level was estimated using predefined thresholds.
-
-Possible Contributing Factors:
-- Temporary service interruption
-
-Recommended Actions:
-- Rest and monitor vital signs
-- Retry analysis later
-
-Urgency Guidance:
-If concerning symptoms occur, seek medical evaluation.
-
-⚠️ This system does not diagnose medical conditions. It provides risk assessment and decision support only.
-    `.trim();
+    // Graceful fallback (system stays operational).
+    return buildFallbackInsight({ riskHint, language });
   } finally {
     if (timingEnabled && typeof aiRequestMs === 'number') {
       console.log(
-        `[AI_TIMING] runHealthInference model=${model} riskHint=${riskHint} timeoutMs=${timeoutMs} timedOut=${timedOut} aiRequestMs=${aiRequestMs.toFixed(1)}`
+        `[AI_TIMING] runHealthInference model=${model} riskHint=${riskHint} language=${language} timeoutMs=${timeoutMs} timedOut=${timedOut} aiRequestMs=${aiRequestMs.toFixed(1)}`
       );
     }
   }

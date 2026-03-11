@@ -131,6 +131,7 @@ function recommendedActions(risk: RiskLevel, trend: TrendLevel, fallEvents: numb
 }
 
 export default function AIHealthAdvisoryPage() {
+  const [language, setLanguage] = useState<'en' | 'fil'>('en');
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState('');
   const [summaryObservations, setSummaryObservations] = useState<string[]>([]);
@@ -142,10 +143,21 @@ export default function AIHealthAdvisoryPage() {
   const [errors, setErrors] = useState<string[]>([]);
 
   useEffect(() => {
+    const persisted = typeof window !== 'undefined' ? window.localStorage.getItem('biotrack.ai.language') : null;
+    if (persisted === 'fil' || persisted === 'en') {
+      setLanguage(persisted);
+    }
+  }, []);
+
+  useEffect(() => {
     let active = true;
     (async () => {
       setLoading(true);
-      const [summaryRes, trendRes, alertsRes] = await Promise.all([fetchMyHealthSummary(7), fetchMyTrendInsight(), fetchMyAlerts(10)]);
+      const [summaryRes, trendRes, alertsRes] = await Promise.all([
+        fetchMyHealthSummary(7, {}, language),
+        fetchMyTrendInsight({}, language),
+        fetchMyAlerts(10),
+      ]);
       if (!active) return;
       const nextErrors: string[] = [];
 
@@ -185,7 +197,7 @@ export default function AIHealthAdvisoryPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [language]);
 
   const normalizedRisk = useMemo(() => normalizeRisk(riskLevel), [riskLevel]);
   const normalizedTrend = useMemo(() => normalizeTrend(trend), [trend]);
@@ -236,6 +248,28 @@ export default function AIHealthAdvisoryPage() {
               </p>
             </CardContent>
           </Card>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={`rounded-md border px-3 py-1 text-sm ${language === 'en' ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
+              onClick={() => {
+                setLanguage('en');
+                window.localStorage.setItem('biotrack.ai.language', 'en');
+              }}
+            >
+              English
+            </button>
+            <button
+              type="button"
+              className={`rounded-md border px-3 py-1 text-sm ${language === 'fil' ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
+              onClick={() => {
+                setLanguage('fil');
+                window.localStorage.setItem('biotrack.ai.language', 'fil');
+              }}
+            >
+              Filipino
+            </button>
+          </div>
         </header>
 
         {errors.length > 0 ? (

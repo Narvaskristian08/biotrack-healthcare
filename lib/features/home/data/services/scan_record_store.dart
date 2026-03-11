@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/app_preferences_service.dart';
 import '../../../auth/data/services/auth_session_store.dart';
 import '../models/scan_record.dart';
 
@@ -14,6 +16,18 @@ class ScanRecordStoreException implements Exception {
 
   @override
   String toString() => message;
+}
+
+class PendingSyncResult {
+  const PendingSyncResult({
+    required this.attempted,
+    required this.synced,
+    required this.remaining,
+  });
+
+  final int attempted;
+  final int synced;
+  final int remaining;
 }
 
 class _PatientSessionContext {
@@ -30,6 +44,8 @@ class ScanRecordStore {
   ScanRecordStore._();
 
   static final http.Client _client = http.Client();
+  static const String _pendingQueueStorageKey = 'scan.pending_queue.v1';
+  static const int _maxQueuedItems = 60;
 
   static Uri _buildUri(String path) {
     final base = AppConfig.apiBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
@@ -46,6 +62,7 @@ class ScanRecordStore {
 
   static Future<List<ScanRecord>> list() async {
     final session = await _requirePatientSession();
+    await _flushPendingQueueBestEffort(session);
 
     late final http.Response response;
     try {
@@ -76,25 +93,35 @@ class ScanRecordStore {
 
   static Future<ScanRecord> add(ScanRecord record) async {
     final session = await _requirePatientSession();
+    await _flushPendingQueueBestEffort(session);
+
+    final requestBody = <String, dynamic>{
+      'type': 'vitals',
+      'capturedAt': record.scannedAt.toIso8601String(),
+      'data': _toRecordPayload(record),
+    };
+
     late final http.Response response;
     try {
       response = await _client.post(
         _buildUri('/api/patients/${session.patientId}/records'),
         headers: _authHeaders(session.accessToken),
-        body: jsonEncode({
-          'type': 'vitals',
-          'capturedAt': record.scannedAt.toIso8601String(),
-          'data': _toRecordPayload(record),
-        }),
+        body: jsonEncode(requestBody),
       );
     } on SocketException catch (_) {
-      throw ScanRecordStoreException(_networkErrorMessage());
+      await _enqueuePendingPayload(requestBody);
+      return record;
     } on http.ClientException catch (_) {
-      throw ScanRecordStoreException(_networkErrorMessage());
+      await _enqueuePendingPayload(requestBody);
+      return record;
     }
 
     final body = _safeDecodeJson(response.body);
     if (!_isSuccessful(response.statusCode)) {
+      if (_shouldQueueOnHttpFailure(response.statusCode)) {
+        await _enqueuePendingPayload(requestBody);
+        return record;
+      }
       throw ScanRecordStoreException(_extractErrorMessage(body, response));
     }
 
@@ -225,6 +252,16 @@ class ScanRecordStore {
     );
   }
 
+  static Future<int> pendingQueueCount() async {
+    final queue = await _readPendingQueue();
+    return queue.length;
+  }
+
+  static Future<PendingSyncResult> syncPendingNow() async {
+    final session = await _requirePatientSession();
+    return _flushPendingQueueBestEffort(session);
+  }
+
   static Future<_PatientSessionContext> _requirePatientSession() async {
     final token = (await AuthSessionStore.accessToken() ?? '').trim();
     final patientId = (await AuthSessionStore.patientId() ?? '').trim();
@@ -247,6 +284,7 @@ class ScanRecordStore {
 
   static Map<String, dynamic> _toRecordPayload(ScanRecord record) {
     return <String, dynamic>{
+      'clientRecordId': record.id,
       'source': 'mobile_scan',
       'scannedAt': record.scannedAt.toIso8601String(),
       'heartRate': record.bpm,
@@ -352,11 +390,112 @@ class ScanRecordStore {
           'heartRate': heartRate,
           'activity': record.activityLabel,
           'fallDetected': record.fallDetected,
+          'language': await AppPreferencesService.advisoryLanguageCode(),
         }),
       );
     } catch (_) {
       // Keep patient record storage successful even if AI analysis fails.
     }
+  }
+
+  static Future<PendingSyncResult> _flushPendingQueueBestEffort(
+    _PatientSessionContext session,
+  ) async {
+    final queue = await _readPendingQueue();
+    if (queue.isEmpty) {
+      return const PendingSyncResult(attempted: 0, synced: 0, remaining: 0);
+    }
+
+    final remaining = <Map<String, dynamic>>[];
+    var attempted = 0;
+    var synced = 0;
+
+    for (final payload in queue) {
+      attempted += 1;
+      try {
+        final response = await _client.post(
+          _buildUri('/api/patients/${session.patientId}/records'),
+          headers: _authHeaders(session.accessToken),
+          body: jsonEncode(payload),
+        );
+
+        if (!_isSuccessful(response.statusCode)) {
+          if (_shouldQueueOnHttpFailure(response.statusCode)) {
+            remaining.add(payload);
+            continue;
+          }
+          continue;
+        }
+
+        synced += 1;
+        final body = _safeDecodeJson(response.body);
+        final created = _asMap(body['record']);
+        if (created.isNotEmpty) {
+          await _syncAiTelemetryBestEffort(
+            accessToken: session.accessToken,
+            record: _fromApiRecord(created),
+          );
+        }
+      } on SocketException catch (_) {
+        remaining.add(payload);
+      } on http.ClientException catch (_) {
+        remaining.add(payload);
+      }
+    }
+
+    await _writePendingQueue(remaining);
+    return PendingSyncResult(
+      attempted: attempted,
+      synced: synced,
+      remaining: remaining.length,
+    );
+  }
+
+  static bool _shouldQueueOnHttpFailure(int statusCode) {
+    if (statusCode == 408 || statusCode == 425 || statusCode == 429) {
+      return true;
+    }
+    return statusCode >= 500 && statusCode <= 599;
+  }
+
+  static Future<void> _enqueuePendingPayload(
+    Map<String, dynamic> payload,
+  ) async {
+    final queue = await _readPendingQueue();
+    queue.add(payload);
+
+    // Keep queue bounded so storage does not grow unbounded in long offline runs.
+    if (queue.length > _maxQueuedItems) {
+      queue.removeRange(0, queue.length - _maxQueuedItems);
+    }
+
+    await _writePendingQueue(queue);
+  }
+
+  static Future<List<Map<String, dynamic>>> _readPendingQueue() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_pendingQueueStorageKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return <Map<String, dynamic>>[];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return <Map<String, dynamic>>[];
+      return decoded.map(_asMap).where((entry) => entry.isNotEmpty).toList();
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  static Future<void> _writePendingQueue(List<Map<String, dynamic>> queue) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (queue.isEmpty) {
+      await prefs.remove(_pendingQueueStorageKey);
+      return;
+    }
+
+    await prefs.setString(_pendingQueueStorageKey, jsonEncode(queue));
   }
 
   static bool _isSuccessful(int statusCode) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:biotrack_healthcare/core/theme/app_colors.dart';
+import 'package:biotrack_healthcare/core/services/app_preferences_service.dart';
 
 class AppSettingsPage extends StatefulWidget {
   const AppSettingsPage({super.key});
@@ -12,6 +13,21 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
   bool healthAlerts = true;
   bool generalNotifications = true;
   bool exportHealthData = true;
+  String advisoryLanguage = AppPreferencesService.english;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final language = await AppPreferencesService.advisoryLanguageCode();
+    if (!mounted) return;
+    setState(() {
+      advisoryLanguage = language;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +62,44 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
               trailing: const Text(
                 'Verification Status: Active',
                 style: TextStyle(color: Colors.green),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            const Text(
+              'AI Advisory Language',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: advisoryLanguage,
+                  isExpanded: true,
+                  items: const [
+                    DropdownMenuItem(
+                      value: AppPreferencesService.english,
+                      child: Text('English'),
+                    ),
+                    DropdownMenuItem(
+                      value: AppPreferencesService.filipino,
+                      child: Text('Filipino'),
+                    ),
+                  ],
+                  onChanged: (value) async {
+                    if (value == null) return;
+                    await AppPreferencesService.setAdvisoryLanguageCode(value);
+                    if (!mounted) return;
+                    setState(() => advisoryLanguage = value);
+                  },
+                ),
               ),
             ),
 

@@ -1,29 +1,46 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import DashboardLayout from '@/components/dashboard-layout';
-import { exportAdminJson, fetchBlockchainOverview, type BlockchainOverviewResponse } from '@/lib/admin-role';
+import {
+  exportAdminJson,
+  fetchBlockchainMetrics,
+  fetchBlockchainOverview,
+  type BlockchainMetricsResponse,
+  type BlockchainOverviewResponse,
+} from '@/lib/admin-role';
+
+type MetricsRange = 7 | 14 | 30;
 
 export default function AdminBlockchainPage() {
-  const [data, setData] = useState<BlockchainOverviewResponse | null>(null);
+  const [overview, setOverview] = useState<BlockchainOverviewResponse | null>(null);
+  const [metrics, setMetrics] = useState<BlockchainMetricsResponse | null>(null);
+  const [rangeDays, setRangeDays] = useState<MetricsRange>(7);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
     (async () => {
-      const res = await fetchBlockchainOverview();
+      setLoading(true);
+      const [overviewRes, metricsRes] = await Promise.all([
+        fetchBlockchainOverview(),
+        fetchBlockchainMetrics(rangeDays),
+      ]);
       if (!active) return;
-      if (res.error) setError(res.error);
-      else setData(res.data ?? null);
+
+      const nextError = overviewRes.error || metricsRes.error || '';
+      setError(nextError);
+      setOverview(overviewRes.data ?? null);
+      setMetrics(metricsRes.data ?? null);
       setLoading(false);
     })();
     return () => {
       active = false;
     };
-  }, []);
+  }, [rangeDays]);
 
   return (
     <DashboardLayout>
@@ -39,13 +56,13 @@ export default function AdminBlockchainPage() {
           </Card>
         ) : null}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardHeader>
               <CardTitle>Proof Logs (24h)</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{data?.overview?.proofs24h ?? 0}</div>
+              <div className="text-3xl font-bold">{overview?.overview?.proofs24h ?? 0}</div>
             </CardContent>
           </Card>
           <Card>
@@ -53,18 +70,63 @@ export default function AdminBlockchainPage() {
               <CardTitle>Failed Verifications (24h)</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{data?.overview?.failed24h ?? 0}</div>
+              <div className="text-3xl font-bold">{overview?.overview?.failed24h ?? 0}</div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Entries Loaded</CardTitle>
+              <CardTitle>Success Rate ({rangeDays}d)</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{data?.recent?.length ?? 0}</div>
+              <div className="text-3xl font-bold">{metrics?.metrics?.totals?.successRatePct ?? 0}%</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Avg Proofs / Day</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{metrics?.metrics?.avgProofsPerDay ?? 0}</div>
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Daily Proof Metrics</CardTitle>
+            <CardDescription>Operational trend for success/failed/skipped logs</CardDescription>
+            <div className="flex flex-wrap gap-2">
+              <Button variant={rangeDays === 7 ? 'default' : 'outline'} size="sm" onClick={() => setRangeDays(7)}>
+                7 Days
+              </Button>
+              <Button variant={rangeDays === 14 ? 'default' : 'outline'} size="sm" onClick={() => setRangeDays(14)}>
+                14 Days
+              </Button>
+              <Button variant={rangeDays === 30 ? 'default' : 'outline'} size="sm" onClick={() => setRangeDays(30)}>
+                30 Days
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <p className="text-sm text-muted-foreground">Loading blockchain metrics...</p>
+            ) : (
+              <div className="space-y-2">
+                {(metrics?.metrics?.daily ?? []).map((entry) => (
+                  <div key={entry.day} className="rounded-md border p-3 text-sm">
+                    <div className="font-medium">{entry.day}</div>
+                    <div className="text-muted-foreground">
+                      Total: {entry.total} | Success: {entry.success} | Failed: {entry.failed} | Skipped: {entry.skipped}
+                    </div>
+                  </div>
+                ))}
+                {(metrics?.metrics?.daily?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-muted-foreground">No metrics available for this range.</p>
+                ) : null}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -76,7 +138,7 @@ export default function AdminBlockchainPage() {
               <p className="text-sm text-muted-foreground">Loading blockchain logs...</p>
             ) : (
               <div className="space-y-2">
-                {(data?.recent ?? []).map((entry) => (
+                {(overview?.recent ?? []).map((entry) => (
                   <Card key={entry._id}>
                     <CardContent className="pt-4">
                       <p className="text-sm font-medium">
@@ -88,7 +150,7 @@ export default function AdminBlockchainPage() {
                     </CardContent>
                   </Card>
                 ))}
-                {(data?.recent?.length ?? 0) === 0 ? <p className="text-sm text-muted-foreground">No blockchain history available.</p> : null}
+                {(overview?.recent?.length ?? 0) === 0 ? <p className="text-sm text-muted-foreground">No blockchain history available.</p> : null}
               </div>
             )}
           </CardContent>
@@ -109,7 +171,9 @@ export default function AdminBlockchainPage() {
           onClick={() =>
             exportAdminJson(`admin-blockchain-overview-${new Date().toISOString().slice(0, 10)}.json`, {
               generatedAt: new Date().toISOString(),
-              data,
+              rangeDays,
+              overview,
+              metrics,
             })
           }
         >

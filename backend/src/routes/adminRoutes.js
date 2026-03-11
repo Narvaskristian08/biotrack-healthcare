@@ -8,6 +8,7 @@ import { adminRegisterSchema, adminUpsertSchema, loginSchema, providerCreateSche
 import {
   emptyBodySchema,
   adminGovernanceUpdateSchema,
+  blockchainMetricsQuerySchema,
   adminLogsQuerySchema,
   adminRbacUpdateSchema,
   adminUserUpdateParamsSchema,
@@ -24,6 +25,7 @@ import {
   getAdminOverview,
   getBlockchainOverview,
   getDataGovernanceSettings,
+  getBlockchainMetrics,
   getRbacSettings,
   getSystemMonitoring,
   listAdminUsers,
@@ -80,6 +82,13 @@ adminRoutes.get('/logs', requireAdminAuth, requireAdminCapability('canMonitorSys
 adminRoutes.get('/monitoring', requireAdminAuth, requireAdminCapability('canMonitorSystem'), asyncHandler(getSystemMonitoring));
 
 adminRoutes.get('/blockchain/overview', requireAdminAuth, requireAdminCapability('canMonitorBlockchain'), asyncHandler(getBlockchainOverview));
+adminRoutes.get(
+  '/blockchain/metrics',
+  requireAdminAuth,
+  requireAdminCapability('canMonitorBlockchain'),
+  validateQuery(blockchainMetricsQuerySchema),
+  asyncHandler(getBlockchainMetrics)
+);
 
 adminRoutes.get('/governance', requireAdminAuth, requireAdminCapability('canManagePolicies'), asyncHandler(getDataGovernanceSettings));
 adminRoutes.patch('/governance', requireAdminAuth, requireAdminCapability('canManagePolicies'), validateBody(adminGovernanceUpdateSchema), asyncHandler(updateDataGovernanceSettings));

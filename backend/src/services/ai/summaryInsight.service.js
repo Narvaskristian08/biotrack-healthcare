@@ -1,4 +1,5 @@
-import { aiClient } from './aiClient.js';
+﻿import { aiClient } from './aiClient.js';
+import { aiLanguageLabel, normalizeAiLanguage } from './language.service.js';
 
 const SYSTEM_PROMPT = `
 You are an AI Health Summary Assistant.
@@ -35,7 +36,8 @@ Recommended Focus:
 This summary is informational and not a medical diagnosis.
 `;
 
-function buildSummaryFallback(summaryData = {}) {
+function buildSummaryFallback(summaryData = {}, language = 'en') {
+  const selectedLanguage = normalizeAiLanguage(language);
   const period = String(summaryData?.period ?? 'weekly');
   const overallRisk = String(summaryData?.overallRisk ?? 'UNKNOWN').toUpperCase();
   const trend = String(summaryData?.trend ?? 'INSUFFICIENT_DATA').toUpperCase();
@@ -48,6 +50,27 @@ function buildSummaryFallback(summaryData = {}) {
   const observationLines = observations.length > 0
     ? observations.map((entry) => `- ${entry}`)
     : ['- No notable observations recorded for this period.'];
+
+  if (selectedLanguage === 'fil') {
+    return [
+      'Health Summary Report',
+      '',
+      `Period: ${period}`,
+      `Overall Risk Level: ${overallRisk}`,
+      `Trend Overview: ${trend}`,
+      `Safety Events: ${fallEvents > 0 ? `${fallEvents} fall-related event(s)` : 'Walang naitalang fall event'}`,
+      '',
+      'Key Observations:',
+      ...observationLines,
+      '',
+      'Recommended Focus:',
+      '- Ituloy ang regular na monitoring',
+      '- Sundin ang kasalukuyang care at safety plan',
+      '- Kumonsulta kung lumalala ang sintomas',
+      '',
+      'Pansamantalang unavailable ang AI summary. Ang report na ito ay mula sa kasalukuyang monitoring data lamang.',
+    ].join('\n');
+  }
 
   return [
     'Health Summary Report',
@@ -69,7 +92,9 @@ function buildSummaryFallback(summaryData = {}) {
   ].join('\n');
 }
 
-export async function generateSummaryInsight(summaryData = {}) {
+export async function generateSummaryInsight(summaryData = {}, options = {}) {
+  const language = normalizeAiLanguage(options?.language, 'en');
+
   try {
     const response = await aiClient.chat.completions.create({
       model: 'meta-llama/llama-3-8b-instruct',
@@ -78,7 +103,10 @@ export async function generateSummaryInsight(summaryData = {}) {
         { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
-          content: JSON.stringify(summaryData, null, 2),
+          content: [
+            `Preferred response language: ${aiLanguageLabel(language)}`,
+            JSON.stringify(summaryData, null, 2),
+          ].join('\n\n'),
         },
       ],
     });
@@ -92,5 +120,5 @@ export async function generateSummaryInsight(summaryData = {}) {
     console.error('SUMMARY INSIGHT AI ERROR:', err?.message || err);
   }
 
-  return buildSummaryFallback(summaryData);
+  return buildSummaryFallback(summaryData, language);
 }

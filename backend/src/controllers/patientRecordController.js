@@ -31,6 +31,24 @@ export async function addPatientRecord(req, res) {
   const patient = await Patient.findOne({ _id: patientId, healthCenterId }).lean();
   if (!patient) return res.status(404).json({ error: { message: 'Patient not found' } });
 
+  const sourceClientId = typeof data === 'object' && data !== null
+    ? String(data.clientRecordId ?? '').trim().slice(0, 120)
+    : '';
+
+  if (sourceClientId) {
+    const existingByClientId = await PatientRecord.findOne({
+      healthCenterId,
+      patientId,
+      sourceClientId,
+    });
+    if (existingByClientId) {
+      return res.status(200).json({
+        deduplicated: true,
+        record: toRecordResponse(existingByClientId, { healthCenterId, patientId }),
+      });
+    }
+  }
+
   const recordId = new mongoose.Types.ObjectId();
   let capturedAt = new Date();
   if (capturedAtInput !== undefined && capturedAtInput !== null && String(capturedAtInput).trim() !== '') {
@@ -69,6 +87,7 @@ export async function addPatientRecord(req, res) {
     recordHash,
     hashSchemaVersion: RECORD_HASH_SCHEMA_VERSION,
     recordNonce,
+    sourceClientId,
     capturedAt,
     blockchain: {
       enabled: shouldAnchor,

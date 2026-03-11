@@ -41,6 +41,8 @@ class ScanVitalsController extends ChangeNotifier {
   double movementIntensity = 0;
   double gyroMagnitude = 0;
   double hrConfidence = 0;
+  bool accelerometerAvailable = true;
+  bool gyroscopeAvailable = true;
   String? errorMessage;
   DateTime? scanStartedAt;
 
@@ -92,6 +94,8 @@ class ScanVitalsController extends ChangeNotifier {
     movementIntensity = 0;
     gyroMagnitude = 0;
     hrConfidence = 0;
+    accelerometerAvailable = true;
+    gyroscopeAvailable = true;
     errorMessage = null;
     _noFingerFrameStreak = 0;
     _lowQualityFrameStreak = 0;
@@ -194,25 +198,41 @@ class ScanVitalsController extends ChangeNotifier {
 
   void _startMotionTracking() {
     _accelerometerSub?.cancel();
-    _accelerometerSub = accelerometerEventStream().listen((event) {
-      final mag = math.sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
-      movementIntensity = (mag - 9.81).abs();
-      
-      // Simple Fall Detection Logic
-      if (mag > 24) _impactDetectedAt = DateTime.now();
-      if (_impactDetectedAt != null && 
-          DateTime.now().difference(_impactDetectedAt!) < const Duration(seconds: 2) && 
-          movementIntensity < 1.3) {
-        fallDetected = true;
-      }
-      notifyListeners();
-    });
+    _accelerometerSub = accelerometerEventStream().listen(
+      (event) {
+        accelerometerAvailable = true;
+        final mag = math.sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+        movementIntensity = (mag - 9.81).abs();
+
+        // Simple fall detection logic.
+        if (mag > 24) _impactDetectedAt = DateTime.now();
+        if (_impactDetectedAt != null &&
+            DateTime.now().difference(_impactDetectedAt!) < const Duration(seconds: 2) &&
+            movementIntensity < 1.3) {
+          fallDetected = true;
+        }
+        notifyListeners();
+      },
+      onError: (_) {
+        accelerometerAvailable = false;
+        movementIntensity = 0;
+        notifyListeners();
+      },
+    );
 
     _gyroscopeSub?.cancel();
-    _gyroscopeSub = gyroscopeEventStream().listen((event) {
-      gyroMagnitude = math.sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
-      notifyListeners();
-    });
+    _gyroscopeSub = gyroscopeEventStream().listen(
+      (event) {
+        gyroscopeAvailable = true;
+        gyroMagnitude = math.sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+        notifyListeners();
+      },
+      onError: (_) {
+        gyroscopeAvailable = false;
+        gyroMagnitude = 0;
+        notifyListeners();
+      },
+    );
   }
 
   void _startTicker() {
@@ -293,6 +313,46 @@ class ScanVitalsController extends ChangeNotifier {
     estimatedBpm: estimatedBpm,
     hrConfidence: hrConfidence,
   );
+  double get qualityCoachScore {
+    final fingerPart = fingerConfidence.clamp(0.0, 1.0).toDouble() * 0.55;
+    final confidencePart = hrConfidence.clamp(0.0, 1.0).toDouble() * 0.30;
+    final movementPenalty = (1 - (movementIntensity / 3.5).clamp(0.0, 1.0)).toDouble() * 0.15;
+
+    final sensorPenalty = (!accelerometerAvailable || !gyroscopeAvailable) ? 0.12 : 0.0;
+    final score = (fingerPart + confidencePart + movementPenalty - sensorPenalty).clamp(0.0, 1.0);
+    return score;
+  }
+
+  String get qualityCoachLevel {
+    final score = qualityCoachScore;
+    if (score >= 0.75) return 'Excellent';
+    if (score >= 0.5) return 'Good';
+    if (score >= 0.3) return 'Fair';
+    return 'Poor';
+  }
+
+  String get qualityCoachMessage {
+    if (!fingerDetected) {
+      return 'Cover the camera and flash fully with your fingertip.';
+    }
+    if (movementIntensity > 2.8) {
+      return 'Reduce hand movement for a cleaner pulse signal.';
+    }
+    if (!accelerometerAvailable || !gyroscopeAvailable) {
+      return 'Motion sensors unavailable. Heart-rate scan still works with reduced motion context.';
+    }
+    if (hrConfidence < 0.12) {
+      return 'Hold still for a few more seconds to stabilize pulse detection.';
+    }
+    return 'Signal looks stable. Keep your finger in place until scan ends.';
+  }
+
+  String get sensorHealthLabel {
+    if (accelerometerAvailable && gyroscopeAvailable) return 'All sensors active';
+    if (!accelerometerAvailable && !gyroscopeAvailable) return 'Accelerometer and gyroscope unavailable';
+    if (!accelerometerAvailable) return 'Accelerometer unavailable';
+    return 'Gyroscope unavailable';
+  }
 
   @override
   void dispose() {

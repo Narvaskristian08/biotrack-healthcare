@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/app_preferences_service.dart';
 import '../../../auth/data/services/auth_session_store.dart';
 
 class AiInsightsApiException implements Exception {
@@ -98,6 +99,8 @@ class AiInsightsApiService {
       );
     }
 
+    final language = await AppPreferencesService.advisoryLanguageCode();
+
     final headers = <String, String>{
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ${token.trim()}',
@@ -107,10 +110,10 @@ class AiInsightsApiService {
     try {
       responses = await Future.wait<http.Response>([
         _client.get(
-          _buildUri('/api/ai/summary', <String, String>{'days': '$days'}),
+          _buildUri('/api/ai/summary', <String, String>{'days': '$days', 'language': language}),
           headers: headers,
         ),
-        _client.get(_buildUri('/api/ai/trend-insight'), headers: headers),
+        _client.get(_buildUri('/api/ai/trend-insight', <String, String>{'language': language}), headers: headers),
         _client.get(
           _buildUri('/api/ai/alerts', <String, String>{'limit': '$alertLimit'}),
           headers: headers,

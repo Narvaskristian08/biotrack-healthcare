@@ -853,6 +853,97 @@ export async function getBlockchainOverview(req, res) {
   });
 }
 
+export async function getBlockchainMetrics(req, res) {
+  const days = Math.min(Math.max(Number(req.query?.days ?? 7), 1), 30);
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const [byStatus, byKind, dailyRaw] = await Promise.all([
+    BlockchainProofLog.aggregate([
+      { $match: { createdAt: { $gte: since } } },
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]),
+    BlockchainProofLog.aggregate([
+      { $match: { createdAt: { $gte: since } } },
+      { $group: { _id: '$kind', count: { $sum: 1 } } },
+    ]),
+    BlockchainProofLog.aggregate([
+      { $match: { createdAt: { $gte: since } } },
+      {
+        $group: {
+          _id: {
+            day: {
+              $dateToString: {
+                format: '%Y-%m-%d',
+                date: '$createdAt',
+                timezone: 'UTC',
+              },
+            },
+            status: '$status',
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { '_id.day': 1 } },
+    ]),
+  ]);
+
+  const statusCounts = { success: 0, failed: 0, skipped: 0 };
+  byStatus.forEach((entry) => {
+    const key = String(entry?._id ?? '').trim().toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(statusCounts, key)) return;
+    statusCounts[key] = Number(entry?.count ?? 0);
+  });
+
+  const totalProofs = statusCounts.success + statusCounts.failed + statusCounts.skipped;
+  const successRatePct = totalProofs > 0 ? Math.round((statusCounts.success / totalProofs) * 1000) / 10 : 0;
+
+  const dayMap = new Map();
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    const day = new Date(Date.now() - offset * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    dayMap.set(day, {
+      day,
+      total: 0,
+      success: 0,
+      failed: 0,
+      skipped: 0,
+    });
+  }
+
+  dailyRaw.forEach((entry) => {
+    const day = String(entry?._id?.day ?? '').trim();
+    const status = String(entry?._id?.status ?? '').trim().toLowerCase();
+    const count = Number(entry?.count ?? 0);
+    const bucket = dayMap.get(day);
+    if (!bucket) return;
+
+    bucket.total += count;
+    if (status === 'success' || status === 'failed' || status === 'skipped') {
+      bucket[status] += count;
+    }
+  });
+
+  const daily = Array.from(dayMap.values());
+  const avgProofsPerDay = daily.length > 0
+    ? Math.round((daily.reduce((sum, row) => sum + row.total, 0) / daily.length) * 10) / 10
+    : 0;
+
+  return res.json({
+    metrics: {
+      days,
+      totals: {
+        proofs: totalProofs,
+        byStatus: statusCounts,
+        successRatePct,
+      },
+      byKind,
+      daily,
+      avgProofsPerDay,
+    },
+  });
+}
+
 export async function getDataGovernanceSettings(req, res) {
   const cfg = await getOrCreateAdminConfig(req.context.adminId);
   return res.json({ dataGovernance: cfg.dataGovernance, performanceThresholds: cfg.performanceThresholds });

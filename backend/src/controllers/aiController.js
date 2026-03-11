@@ -6,6 +6,7 @@ import { resolveInsightPatientId } from '../services/ai/subjectResolver.service.
 import { encryptHealthTelemetryForStorage } from '../services/healthTelemetryEncryption.service.js';
 import { analyzeUserTrend } from '../services/trendAnalysis.service.js';
 import { writeAuditLog } from '../services/auditService.js';
+import { normalizeAiLanguage } from '../services/ai/language.service.js';
 
 function httpError(statusCode, message, code = 'REQUEST_INVALID') {
   const err = new Error(message);
@@ -45,6 +46,7 @@ function normalizeActivityLevel(activity) {
 export async function analyzeVitals(req, res, next) {
   try {
     const vitals = req.body ?? {};
+    const language = normalizeAiLanguage(vitals.language, 'en');
     const patientId = await resolveInsightPatientId(req, { source: 'body', field: 'patientId' });
     const heartRate = toNumberOrNull(vitals.heartRate);
     if (heartRate === null || heartRate <= 0) {
@@ -57,7 +59,7 @@ export async function analyzeVitals(req, res, next) {
       fallDetected: toBoolean(vitals.fallDetected),
     };
 
-    const aiResult = await runHealthInference(normalizedVitals);
+    const aiResult = await runHealthInference(normalizedVitals, { language });
     const riskLevel = computeRiskLevel(normalizedVitals);
     const activityLevel = normalizeActivityLevel(vitals.activity);
 
@@ -94,6 +96,7 @@ export async function analyzeVitals(req, res, next) {
     res.json({
       success: true,
       aiResult,
+      language,
       record: {
         id: record._id,
         userId: record.userId,

@@ -37,13 +37,13 @@ class _ScanVitalsViewState extends State<_ScanVitalsView> {
       final controller = context.read<ScanVitalsController>();
       controller.addListener(() {
         if (controller.scanComplete && !_isShowingPopup && mounted) {
-          _handleFinish(context, controller);
+          _handleFinish(controller);
         }
       });
     });
   }
 
-  Future<void> _handleFinish(BuildContext context, ScanVitalsController controller) async {
+  Future<void> _handleFinish(ScanVitalsController controller) async {
     if (_isShowingPopup) return;
     setState(() => _isShowingPopup = true);
 
@@ -166,6 +166,43 @@ class _ScanVitalsViewState extends State<_ScanVitalsView> {
             const SizedBox(width: 10),
             Expanded(child: _MetricCard(title: 'Signal State', value: controller.signalLabel)),
           ]),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Quality Coach',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${(controller.qualityCoachScore * 100).toStringAsFixed(0)}% - ${controller.qualityCoachLevel}',
+                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  controller.qualityCoachMessage,
+                  style: const TextStyle(fontSize: 13, color: Colors.black87),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  controller.sensorHealthLabel,
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 20),
 
           // Control Button
@@ -174,7 +211,7 @@ class _ScanVitalsViewState extends State<_ScanVitalsView> {
               if (controller.scanComplete) {
                 controller.startScan(); // Resets the scan
               } else {
-                _handleFinish(context, controller); // Finishes early
+                _handleFinish(controller); // Finishes early
               }
             },
             style: ElevatedButton.styleFrom(

@@ -19,6 +19,7 @@ const PatientRecordSchema = new mongoose.Schema(
     recordHash: { type: String, required: true, index: true }, // sha256(canonical JSON of data + metadata)
     hashSchemaVersion: { type: Number, enum: [1, 2], default: 2, index: true },
     recordNonce: { type: String, default: '', trim: true, index: true },
+    sourceClientId: { type: String, default: '', trim: true, index: true },
     capturedAt: { type: Date, default: null, index: true },
     blockchain: {
       enabled: { type: Boolean, default: false },
@@ -45,6 +46,7 @@ const PatientRecordSchema = new mongoose.Schema(
 );
 
 PatientRecordSchema.index({ healthCenterId: 1, patientId: 1, createdAt: -1 });
+PatientRecordSchema.index({ healthCenterId: 1, patientId: 1, sourceClientId: 1 }, { unique: false });
 
 export const PatientRecord = mongoose.model('PatientRecord', PatientRecordSchema);
 

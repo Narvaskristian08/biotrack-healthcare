@@ -104,6 +104,30 @@ export interface BlockchainOverviewResponse {
   }>;
 }
 
+export interface BlockchainMetricsResponse {
+  metrics: {
+    days: number;
+    totals: {
+      proofs: number;
+      byStatus: {
+        success: number;
+        failed: number;
+        skipped: number;
+      };
+      successRatePct: number;
+    };
+    byKind: Array<{ _id: string; count: number }>;
+    daily: Array<{
+      day: string;
+      total: number;
+      success: number;
+      failed: number;
+      skipped: number;
+    }>;
+    avgProofsPerDay: number;
+  };
+}
+
 export async function fetchAdminOverview(): Promise<{ overview?: AdminOverview; error?: string }> {
   try {
     assertAdminSession();
@@ -226,6 +250,12 @@ export async function fetchSystemMonitoring(): Promise<{
 
 export async function fetchBlockchainOverview(): Promise<{ data?: BlockchainOverviewResponse; error?: string }> {
   const result = await apiGet<BlockchainOverviewResponse>('/admin/blockchain/overview');
+  if (result.error) return { error: result.error.message };
+  return { data: result.data };
+}
+
+export async function fetchBlockchainMetrics(days = 7): Promise<{ data?: BlockchainMetricsResponse; error?: string }> {
+  const result = await apiGet<BlockchainMetricsResponse>(`/admin/blockchain/metrics?days=${days}`);
   if (result.error) return { error: result.error.message };
   return { data: result.data };
 }

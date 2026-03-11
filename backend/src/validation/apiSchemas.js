@@ -50,6 +50,8 @@ const assignedProviderSchema = z.object({
   contactNumber: z.string().trim().max(40).optional(),
 });
 
+const aiLanguageSchema = z.preprocess(emptyStringToUndefined, z.enum(['en', 'fil']).optional());
+
 export const emptyBodySchema = z.object({}).strict();
 
 export const aiAnalyzeSchema = z.object({
@@ -57,6 +59,7 @@ export const aiAnalyzeSchema = z.object({
   heartRate: z.coerce.number().positive('heartRate must be a positive number'),
   activity: z.union([z.string().trim().min(1), z.coerce.number()]).optional(),
   fallDetected: booleanInputSchema.optional(),
+  language: aiLanguageSchema,
 }).passthrough();
 
 export const activityInsightSchema = z
@@ -89,11 +92,19 @@ export const fallInsightSchema = z
 
 export const trendInsightQuerySchema = z.object({
   patientId: optionalObjectIdSchema,
+  language: aiLanguageSchema,
+});
+
+export const trendCompareQuerySchema = z.object({
+  patientId: optionalObjectIdSchema,
+  currentDays: z.coerce.number().int().min(1, 'currentDays must be at least 1').max(30, 'currentDays must be at most 30').optional(),
+  previousDays: z.coerce.number().int().min(1, 'previousDays must be at least 1').max(30, 'previousDays must be at most 30').optional(),
 });
 
 export const summaryInsightQuerySchema = z.object({
   patientId: optionalObjectIdSchema,
   days: z.coerce.number().int().min(1, 'days must be at least 1').max(30, 'days must be at most 30').optional(),
+  language: aiLanguageSchema,
 });
 
 export const alertListQuerySchema = z.object({
@@ -205,6 +216,10 @@ export const adminLogsQuerySchema = z.object({
   outcome: optionalShortTextQuerySchema('outcome', 40),
   page: z.coerce.number().int().min(1, 'page must be at least 1').max(100000, 'page is too large').optional(),
   limit: z.coerce.number().int().min(1, 'limit must be at least 1').max(500, 'limit must be at most 500').optional(),
+});
+
+export const blockchainMetricsQuerySchema = z.object({
+  days: z.coerce.number().int().min(1, 'days must be at least 1').max(30, 'days must be at most 30').optional(),
 });
 
 export const adminUserUpdateParamsSchema = z.object({

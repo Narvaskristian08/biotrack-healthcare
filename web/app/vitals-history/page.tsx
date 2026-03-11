@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import DashboardLayout from '@/components/dashboard-layout';
 import { PatientPageContentSkeleton } from '@/components/patient-page-skeleton';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { fetchMyAlerts, fetchMyHealthSummary, fetchMyTrendInsight } from '@/lib/patient-role';
+import { fetchMyAlerts, fetchMyHealthSummary, fetchMyTrendCompare, fetchMyTrendInsight } from '@/lib/patient-role';
 
 type Range = 'daily' | 'weekly' | 'monthly';
 
@@ -126,6 +126,13 @@ export default function VitalsHistoryPage() {
   const [summary, setSummary] = useState(DEFAULT_SUMMARY);
   const [summaryInsight, setSummaryInsight] = useState('');
   const [alerts, setAlerts] = useState<{ id: string; message: string; severity: string }[]>([]);
+  const [comparison, setComparison] = useState<{
+    currentWindow: { averageHeartRate: number | null; sampleCount: number; trend: string; days: number };
+    previousWindow: { averageHeartRate: number | null; sampleCount: number; trend: string; days: number };
+    deltaBpm: number | null;
+    deltaPercent: number | null;
+    direction: string;
+  } | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -180,6 +187,25 @@ export default function VitalsHistoryPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const selectedDays = timeRange === 'daily' ? 1 : timeRange === 'weekly' ? 7 : 30;
+
+    (async () => {
+      const result = await fetchMyTrendCompare(selectedDays, selectedDays);
+      if (!active) return;
+      if (result.error) {
+        setError((prev) => prev || result.error || '');
+        return;
+      }
+      setComparison(result.data?.comparison ?? null);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [timeRange]);
 
   const rangeSampleCount = timeRange === 'daily' ? 8 : timeRange === 'weekly' ? 20 : 40;
   const filteredHeartRates = useMemo(() => heartRates.slice(-rangeSampleCount), [heartRates, rangeSampleCount]);
@@ -344,6 +370,36 @@ export default function VitalsHistoryPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Period-over-Period Comparison</CardTitle>
+            <CardDescription>
+              Current {timeRange} window versus previous {timeRange} window.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!comparison ? (
+              <p className="text-sm text-muted-foreground">Comparison data is not available yet.</p>
+            ) : (
+              <div className="space-y-2 text-sm">
+                <p>
+                  Current avg: {comparison.currentWindow.averageHeartRate ?? 'N/A'} bpm ({comparison.currentWindow.sampleCount} sample(s))
+                </p>
+                <p>
+                  Previous avg: {comparison.previousWindow.averageHeartRate ?? 'N/A'} bpm ({comparison.previousWindow.sampleCount} sample(s))
+                </p>
+                <p>
+                  Delta: {comparison.deltaBpm === null ? 'N/A' : `${comparison.deltaBpm >= 0 ? '+' : ''}${comparison.deltaBpm} bpm`} |{' '}
+                  {comparison.deltaPercent === null ? 'N/A' : `${comparison.deltaPercent >= 0 ? '+' : ''}${comparison.deltaPercent}%`}
+                </p>
+                <Badge variant={comparison.direction === 'higher' ? 'destructive' : comparison.direction === 'lower' ? 'default' : 'secondary'}>
+                  {comparison.direction.replace('_', ' ')}
+                </Badge>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

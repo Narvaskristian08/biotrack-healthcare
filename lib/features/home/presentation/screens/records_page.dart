@@ -21,6 +21,8 @@ class _RecordsPageState extends State<RecordsPage> {
   StreamSubscription<GyroscopeEvent>? _gyroscopeSub;
   double _liveGyroMagnitude = 0;
   bool _gyroStreamError = false;
+  int _pendingQueueCount = 0;
+  bool _syncingPendingQueue = false;
   final Set<String> _deletingRecordIds = <String>{};
 
   @override
@@ -28,6 +30,8 @@ class _RecordsPageState extends State<RecordsPage> {
     super.initState();
     _recordsFuture = ScanRecordStore.list();
     _startGyroscopeTracking();
+    _loadPendingQueueStatus();
+    _syncPendingQueue(silent: true);
   }
 
   @override
@@ -42,8 +46,45 @@ class _RecordsPageState extends State<RecordsPage> {
     });
     try {
       await _recordsFuture;
+      await _loadPendingQueueStatus();
     } catch (_) {
       // Surface errors through FutureBuilder UI.
+    }
+  }
+
+  Future<void> _loadPendingQueueStatus() async {
+    final pendingCount = await ScanRecordStore.pendingQueueCount();
+    if (!mounted) return;
+    setState(() {
+      _pendingQueueCount = pendingCount;
+    });
+  }
+
+  Future<void> _syncPendingQueue({bool silent = false}) async {
+    if (_syncingPendingQueue) return;
+    setState(() => _syncingPendingQueue = true);
+
+    try {
+      final result = await ScanRecordStore.syncPendingNow();
+      await _loadPendingQueueStatus();
+      await _reload();
+      if (!mounted || silent) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Pending sync: ${result.synced} uploaded, ${result.remaining} remaining.',
+          ),
+        ),
+      );
+    } on ScanRecordStoreException catch (error) {
+      if (!mounted || silent) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } finally {
+      if (mounted) {
+        setState(() => _syncingPendingQueue = false);
+      }
     }
   }
 
@@ -180,6 +221,34 @@ class _RecordsPageState extends State<RecordsPage> {
                   ),
                 ],
               ),
+              if (_pendingQueueCount > 0 || _syncingPendingQueue) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.sync, color: AppColors.primaryGreenDark),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _syncingPendingQueue
+                              ? 'Syncing pending offline records...'
+                              : 'Offline queue: $_pendingQueueCount pending record(s)',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _syncingPendingQueue ? null : () => _syncPendingQueue(),
+                        child: Text(_syncingPendingQueue ? 'Syncing...' : 'Sync now'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),

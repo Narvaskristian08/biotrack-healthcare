@@ -1,4 +1,5 @@
-import { aiClient } from './aiClient.js';
+﻿import { aiClient } from './aiClient.js';
+import { aiLanguageLabel, normalizeAiLanguage } from './language.service.js';
 
 const SYSTEM_PROMPT = `
 You are an AI Health Trend Interpretation Assistant.
@@ -27,7 +28,8 @@ Recommended Action:
 Trend analysis is observational and not diagnostic.
 `;
 
-function buildTrendFallback(trendData = {}) {
+function buildTrendFallback(trendData = {}, language = 'en') {
+  const selectedLanguage = normalizeAiLanguage(language);
   const trend = String(trendData?.trend ?? 'INSUFFICIENT_DATA').toUpperCase();
   const baselineValue = Number(trendData?.baseline);
   const baseline = Number.isFinite(baselineValue) ? baselineValue : null;
@@ -37,6 +39,27 @@ function buildTrendFallback(trendData = {}) {
 
   const latestSample = recentSamples.length > 0 ? recentSamples[recentSamples.length - 1] : null;
   const sampleSummary = recentSamples.length > 0 ? recentSamples.join(', ') : 'none';
+
+  if (selectedLanguage === 'fil') {
+    return [
+      'Health Trend Insight',
+      '',
+      `Trend Status: ${trend}`,
+      `Baseline Heart Rate: ${baseline ?? 'N/A'}`,
+      `Latest Heart Rate: ${latestSample ?? 'N/A'}`,
+      `Recent Samples: ${sampleSummary}`,
+      '',
+      'Interpretation:',
+      'Pansamantalang hindi available ang AI explanation, kaya ang summary na ito ay base muna sa measured trend values.',
+      '',
+      'Recommended Action:',
+      '- Ipagpatuloy ang regular na monitoring',
+      '- Ihambing ang pagbabago sa mga susunod na araw',
+      '- Magpatingin kung lumalala ang sintomas',
+      '',
+      'Ang trend analysis ay obserbasyon lamang at hindi medical diagnosis.',
+    ].join('\n');
+  }
 
   return [
     'Health Trend Insight',
@@ -58,7 +81,8 @@ function buildTrendFallback(trendData = {}) {
   ].join('\n');
 }
 
-export async function generateTrendInsight(trendData = {}) {
+export async function generateTrendInsight(trendData = {}, options = {}) {
+  const language = normalizeAiLanguage(options?.language, 'en');
   const recentHeartRates = Array.isArray(trendData?.recentHeartRates) ? trendData.recentHeartRates : [];
 
   try {
@@ -70,6 +94,7 @@ export async function generateTrendInsight(trendData = {}) {
         {
           role: 'user',
           content: `
+Preferred response language: ${aiLanguageLabel(language)}
 Trend: ${trendData?.trend ?? 'INSUFFICIENT_DATA'}
 Baseline heart rate: ${trendData?.baseline ?? 'N/A'}
 Recent heart rates: ${recentHeartRates.join(', ') || 'none'}
@@ -87,5 +112,5 @@ Recent heart rates: ${recentHeartRates.join(', ') || 'none'}
     console.error('TREND INSIGHT AI ERROR:', err?.message || err);
   }
 
-  return buildTrendFallback({ ...trendData, recentHeartRates });
+  return buildTrendFallback({ ...trendData, recentHeartRates }, language);
 }

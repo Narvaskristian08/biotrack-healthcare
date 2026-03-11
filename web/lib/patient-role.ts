@@ -109,6 +109,31 @@ export interface TrendInsightResponse {
   insight?: string;
 }
 
+export interface TrendCompareResponse {
+  success: boolean;
+  comparison: {
+    currentWindow: {
+      days: number;
+      sampleCount: number;
+      averageHeartRate: number | null;
+      minHeartRate: number | null;
+      maxHeartRate: number | null;
+      trend: string;
+    };
+    previousWindow: {
+      days: number;
+      sampleCount: number;
+      averageHeartRate: number | null;
+      minHeartRate: number | null;
+      maxHeartRate: number | null;
+      trend: string;
+    };
+    deltaBpm: number | null;
+    deltaPercent: number | null;
+    direction: 'higher' | 'lower' | 'flat' | 'insufficient_data';
+  };
+}
+
 export interface SummaryInsightResponse {
   success: boolean;
   summaryData: {
@@ -241,11 +266,15 @@ export async function requestMyRecordExtractionOnChain(
   }
 }
 
-export async function fetchMyTrendInsight(requestOptions: RequestInit = {}): Promise<{ data?: TrendInsightResponse; error?: string }> {
+export async function fetchMyTrendInsight(
+  requestOptions: RequestInit = {},
+  language = 'en'
+): Promise<{ data?: TrendInsightResponse; error?: string }> {
   try {
     // Ensure bearer token is present before calling protected endpoints.
     getPatientIdFromSession();
-    const result = await apiGet<TrendInsightResponse>('/ai/trend-insight', requestOptions);
+    const endpoint = `/ai/trend-insight?language=${encodeURIComponent(language)}`;
+    const result = await apiGet<TrendInsightResponse>(endpoint, requestOptions);
     if (result.error) return { error: result.error.message };
     return { data: result.data };
   } catch (error) {
@@ -253,14 +282,35 @@ export async function fetchMyTrendInsight(requestOptions: RequestInit = {}): Pro
   }
 }
 
-export async function fetchMyHealthSummary(days = 7, requestOptions: RequestInit = {}): Promise<{ data?: SummaryInsightResponse; error?: string }> {
+export async function fetchMyHealthSummary(
+  days = 7,
+  requestOptions: RequestInit = {},
+  language = 'en'
+): Promise<{ data?: SummaryInsightResponse; error?: string }> {
   try {
     getPatientIdFromSession();
-    const result = await apiGet<SummaryInsightResponse>(`/ai/summary?days=${days}`, requestOptions);
+    const endpoint = `/ai/summary?days=${days}&language=${encodeURIComponent(language)}`;
+    const result = await apiGet<SummaryInsightResponse>(endpoint, requestOptions);
     if (result.error) return { error: result.error.message };
     return { data: result.data };
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to fetch health summary' };
+  }
+}
+
+export async function fetchMyTrendCompare(
+  currentDays = 7,
+  previousDays = 7
+): Promise<{ data?: TrendCompareResponse; error?: string }> {
+  try {
+    getPatientIdFromSession();
+    const result = await apiGet<TrendCompareResponse>(
+      `/ai/trend-compare?currentDays=${currentDays}&previousDays=${previousDays}`
+    );
+    if (result.error) return { error: result.error.message };
+    return { data: result.data };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to fetch trend comparison' };
   }
 }
 
