@@ -79,6 +79,10 @@ class ScanVitalsController extends ChangeNotifier {
   }
 
   void _resetState() {
+    _progressTicker?.cancel();
+    _accelerometerSub?.cancel(); // Safety: clear previous subs
+    _gyroscopeSub?.cancel();
+    
     initializing = true;
     scanComplete = false;
     fallDetected = false;
@@ -91,6 +95,7 @@ class ScanVitalsController extends ChangeNotifier {
     errorMessage = null;
     _noFingerFrameStreak = 0;
     _lowQualityFrameStreak = 0;
+    _impactDetectedAt = null;
     _liveBpmSamples.clear();
     _heartRateEstimator.reset();
   }
@@ -115,7 +120,6 @@ class ScanVitalsController extends ChangeNotifier {
     await cameraController!.lockCaptureOrientation(DeviceOrientation.portraitUp);
     await cameraController!.setFlashMode(FlashMode.torch);
     
-    // Optional camera locks
     try { await cameraController!.setExposureMode(ExposureMode.locked); } catch (_) {}
     try { await cameraController!.setFocusMode(FocusMode.locked); } catch (_) {}
     
@@ -193,6 +197,8 @@ class ScanVitalsController extends ChangeNotifier {
     _accelerometerSub = accelerometerEventStream().listen((event) {
       final mag = math.sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
       movementIntensity = (mag - 9.81).abs();
+      
+      // Simple Fall Detection Logic
       if (mag > 24) _impactDetectedAt = DateTime.now();
       if (_impactDetectedAt != null && 
           DateTime.now().difference(_impactDetectedAt!) < const Duration(seconds: 2) && 
@@ -221,9 +227,13 @@ class ScanVitalsController extends ChangeNotifier {
     if (scanComplete) return {'success': false};
     scanComplete = true;
     _progressTicker?.cancel();
+    _accelerometerSub?.cancel();
+    _gyroscopeSub?.cancel();
 
     try {
-      await cameraController?.stopImageStream();
+      if (cameraController != null && cameraController!.value.isStreamingImages) {
+        await cameraController?.stopImageStream();
+      }
       await cameraController?.setFlashMode(FlashMode.off);
     } catch (_) {}
 
