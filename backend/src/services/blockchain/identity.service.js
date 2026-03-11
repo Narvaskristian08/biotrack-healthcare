@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto';
-import { isAddress } from 'ethers';
+import { isAddress, keccak256, toUtf8Bytes } from 'ethers';
 import { BlockchainProofLog } from '../../models/BlockchainProofLog.js';
 import { HealthCenter } from '../../models/HealthCenter.js';
 import { Patient } from '../../models/Patient.js';
@@ -83,6 +83,10 @@ function buildIdentityReference({ subjectType, subjectId, uniqueSeed }) {
 
   const identityId = `did:biotrack:${String(subjectType).toLowerCase()}:${identityHash.slice(0, 24)}`;
   return { identityId, identityHash, identitySalt };
+}
+
+function buildSubjectIdHash(subjectId) {
+  return keccak256(toUtf8Bytes(String(subjectId ?? '')));
 }
 
 function normalizeBlockchainIdentity(identity = {}) {
@@ -182,7 +186,7 @@ export async function provisionBlockchainIdentity({
       identityId,
       toBytes32Hex(identityHash),
       String(subjectType),
-      String(subjectId)
+      buildSubjectIdHash(subjectId)
     );
     const receipt = await tx.wait();
 

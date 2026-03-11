@@ -5,7 +5,7 @@ export const IDENTITY_REGISTRY_ABI = [
   'function setWritesPaused(bool paused)',
   'function setWriter(address account, bool allowed)',
   'function transferOwnership(address newOwner)',
-  'function registerIdentity(string identityId, bytes32 identityHash, string subjectType, string subjectId) returns (bytes32 proofId)',
+  'function registerIdentity(string identityId, bytes32 identityHash, string subjectType, bytes32 subjectIdHash) returns (bytes32 proofId)',
   'function isIdentityRegistered(string identityId, bytes32 identityHash) view returns (bool)',
 ];
 

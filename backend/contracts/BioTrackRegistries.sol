@@ -60,7 +60,7 @@ contract IdentityRegistry is BioTrackAccessControlled {
     struct IdentityEntry {
         bytes32 identityHash;
         string subjectType;
-        string subjectId;
+        bytes32 subjectIdHash;
         uint256 createdAt;
         bool exists;
     }
@@ -72,7 +72,7 @@ contract IdentityRegistry is BioTrackAccessControlled {
         string indexed identityId,
         bytes32 indexed identityHash,
         string subjectType,
-        string subjectId,
+        bytes32 subjectIdHash,
         bytes32 proofId,
         address indexed submittedBy
     );
@@ -81,12 +81,12 @@ contract IdentityRegistry is BioTrackAccessControlled {
         string calldata identityId,
         bytes32 identityHash,
         string calldata subjectType,
-        string calldata subjectId
+        bytes32 subjectIdHash
     ) external onlyWriter returns (bytes32 proofId) {
         require(bytes(identityId).length > 0, "identityId required");
         require(identityHash != bytes32(0), "identityHash required");
         require(bytes(subjectType).length > 0, "subjectType required");
-        require(bytes(subjectId).length > 0, "subjectId required");
+        require(subjectIdHash != bytes32(0), "subjectIdHash required");
 
         bytes32 idKey = keccak256(bytes(identityId));
         require(!identitiesById[idKey].exists, "IdentityId already used");
@@ -95,7 +95,7 @@ contract IdentityRegistry is BioTrackAccessControlled {
         identitiesById[idKey] = IdentityEntry({
             identityHash: identityHash,
             subjectType: subjectType,
-            subjectId: subjectId,
+            subjectIdHash: subjectIdHash,
             createdAt: block.timestamp,
             exists: true
         });
@@ -107,7 +107,7 @@ contract IdentityRegistry is BioTrackAccessControlled {
                 identityId,
                 identityHash,
                 subjectType,
-                subjectId,
+                subjectIdHash,
                 block.chainid,
                 block.number,
                 block.timestamp,
@@ -115,7 +115,7 @@ contract IdentityRegistry is BioTrackAccessControlled {
             )
         );
 
-        emit IdentityRegistered(identityId, identityHash, subjectType, subjectId, proofId, msg.sender);
+        emit IdentityRegistered(identityId, identityHash, subjectType, subjectIdHash, proofId, msg.sender);
     }
 
     function isIdentityRegistered(string calldata identityId, bytes32 identityHash) external view returns (bool) {
