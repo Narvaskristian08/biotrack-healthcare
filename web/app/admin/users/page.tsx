@@ -105,6 +105,40 @@ function parseGoogleMapsCoordinates(raw: string): { lat: number; lng: number } |
   return null;
 }
 
+const CITY_COMPONENT_PRIORITY = [
+  'locality',
+  'administrative_area_level_3',
+  'administrative_area_level_2',
+  'postal_town',
+  'sublocality_level_1',
+  'neighborhood',
+];
+
+function extractCityMunicipalityFromComponents(
+  components: Array<{ long_name?: string; types?: string[] }> = []
+): string {
+  if (!Array.isArray(components)) return '';
+  for (const type of CITY_COMPONENT_PRIORITY) {
+    const match = components.find((component) => Array.isArray(component?.types) && component.types.includes(type));
+    if (match?.long_name) {
+      const value = String(match.long_name).trim();
+      if (value) return value;
+    }
+  }
+  return '';
+}
+
+function extractCityMunicipality(
+  results: Array<{ address_components?: Array<{ long_name?: string; types?: string[] }> }> = []
+): string {
+  if (!Array.isArray(results)) return '';
+  for (const result of results) {
+    const value = extractCityMunicipalityFromComponents(result?.address_components ?? []);
+    if (value) return value;
+  }
+  return '';
+}
+
 const PHILIPPINES_CENTER = { lat: 14.5995, lng: 120.9842 };
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 const GOOGLE_MAPS_SETUP_HINT =
@@ -121,6 +155,7 @@ export default function AdminUsersPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [mapError, setMapError] = useState('');
+  const [mapNotice, setMapNotice] = useState('');
   const [mapReady, setMapReady] = useState(false);
   const [mapsUrlInput, setMapsUrlInput] = useState('');
   const [updatingUserKey, setUpdatingUserKey] = useState<string | null>(null);
@@ -134,8 +169,35 @@ export default function AdminUsersPage() {
   const placeAutocompleteRef = useRef<any>(null);
   const clickListenerRef = useRef<any>(null);
   const dragListenerRef = useRef<any>(null);
+  const geocoderRef = useRef<any>(null);
+  const geocodeRequestRef = useRef(0);
 
-  const applyCoordinates = (lat: number, lng: number, pan = true) => {
+  const reverseGeocodeCityMunicipality = (lat: number, lng: number) => {
+    if (form.role !== 'provider') return;
+    const googleObj = (window as any).google;
+    if (!googleObj?.maps?.Geocoder) return;
+    if (!geocoderRef.current) {
+      geocoderRef.current = new googleObj.maps.Geocoder();
+    }
+
+    const requestId = ++geocodeRequestRef.current;
+    geocoderRef.current.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+      if (requestId !== geocodeRequestRef.current) return;
+      if (status !== 'OK' || !Array.isArray(results)) {
+        setMapNotice('');
+        return;
+      }
+      const city = extractCityMunicipality(results);
+      if (city) {
+        setForm((prev) => ({ ...prev, cityMunicipality: city }));
+        setMapNotice(`City / Municipality set to ${city}.`);
+      } else {
+        setMapNotice('City / Municipality not detected. You can type it manually.');
+      }
+    });
+  };
+
+  const applyCoordinates = (lat: number, lng: number, pan = true, resolveCity = true) => {
     setForm((prev) => ({
       ...prev,
       latitude: lat.toFixed(6),
@@ -148,6 +210,10 @@ export default function AdminUsersPage() {
       mapInstanceRef.current.panTo(next);
       mapInstanceRef.current.setZoom(15);
     }
+
+    if (resolveCity) {
+      reverseGeocodeCityMunicipality(lat, lng);
+    }
   };
 
   const initGoogleMap = () => {
@@ -155,6 +221,7 @@ export default function AdminUsersPage() {
     if (!googleObj?.maps || !mapCanvasRef.current) {
       setMapReady(false);
       setMapError('Google Maps loaded incorrectly. Check API key, enabled APIs, billing, and HTTP referrer restrictions.');
+      setMapNotice('');
       return;
     }
     if (mapInstanceRef.current) return;
@@ -196,7 +263,7 @@ export default function AdminUsersPage() {
 
     if (mapSearchRef.current) {
       const autocomplete = new googleObj.maps.places.Autocomplete(mapSearchRef.current, {
-        fields: ['geometry', 'formatted_address', 'name'],
+        fields: ['geometry', 'formatted_address', 'name', 'address_components'],
       });
 
       autocomplete.addListener('place_changed', () => {
@@ -208,7 +275,12 @@ export default function AdminUsersPage() {
           return;
         }
         setMapError('');
-        applyCoordinates(Number(lat), Number(lng));
+        const cityFromPlace = extractCityMunicipalityFromComponents(place?.address_components ?? []);
+        if (cityFromPlace) {
+          setForm((prev) => ({ ...prev, cityMunicipality: cityFromPlace }));
+          setMapNotice(`City / Municipality set to ${cityFromPlace}.`);
+        }
+        applyCoordinates(Number(lat), Number(lng), true, !cityFromPlace);
       });
 
       placeAutocompleteRef.current = autocomplete;
@@ -225,6 +297,7 @@ export default function AdminUsersPage() {
     if (!GOOGLE_MAPS_API_KEY) {
       setMapReady(false);
       setMapError(`Google Maps API key is missing. ${GOOGLE_MAPS_SETUP_HINT}`);
+      setMapNotice('');
       return;
     }
 
@@ -232,6 +305,7 @@ export default function AdminUsersPage() {
     (window as any).gm_authFailure = () => {
       setMapReady(false);
       setMapError(`Google Maps authentication failed. ${GOOGLE_MAPS_SETUP_HINT}`);
+      setMapNotice('');
     };
 
     const existingScript = document.getElementById('google-maps-sdk');
@@ -241,6 +315,7 @@ export default function AdminUsersPage() {
       } else {
         setMapReady(false);
         setMapError(`Google Maps script is present but did not initialize correctly. ${GOOGLE_MAPS_SETUP_HINT}`);
+        setMapNotice('');
       }
       return () => {
         (window as any).gm_authFailure = previousAuthFailure;
@@ -257,6 +332,7 @@ export default function AdminUsersPage() {
     script.onerror = () => {
       setMapReady(false);
       setMapError(`Failed to load Google Maps script. ${GOOGLE_MAPS_SETUP_HINT}`);
+      setMapNotice('');
     };
     document.head.appendChild(script);
     return () => {
@@ -592,22 +668,23 @@ export default function AdminUsersPage() {
                     >
                       Open Google Maps
                     </Button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                    <div className="sm:col-span-3">
-                      <Input
-                        placeholder="Paste Google Maps link or 'lat,lng' then click Extract"
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                  <div className="sm:col-span-3">
+                    <Input
+                      placeholder="Paste Google Maps link or 'lat,lng' then click Extract"
                         value={mapsUrlInput}
                         onChange={(e) => setMapsUrlInput(e.target.value)}
                       />
-                    </div>
-                    <Button type="button" variant="outline" onClick={extractCoordinatesFromMapsUrl}>
-                      Extract
-                    </Button>
                   </div>
-                  {mapError ? <p className="text-xs text-destructive">{mapError}</p> : null}
-                  {!mapError && mapReady ? <p className="text-xs text-muted-foreground">Map picker is ready.</p> : null}
+                  <Button type="button" variant="outline" onClick={extractCoordinatesFromMapsUrl}>
+                    Extract
+                  </Button>
                 </div>
+                {mapError ? <p className="text-xs text-destructive">{mapError}</p> : null}
+                {!mapError && mapNotice ? <p className="text-xs text-muted-foreground">{mapNotice}</p> : null}
+                {!mapError && mapReady ? <p className="text-xs text-muted-foreground">Map picker is ready.</p> : null}
+              </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input
                     placeholder="Assigned Healthcare Providers (comma separated)"

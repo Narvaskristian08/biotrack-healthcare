@@ -42,6 +42,10 @@ const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()\-_=+[\]
 const NAME_REGEX = /^[a-zA-Z\s\-']+$/
 const STEP_LABELS = ['Identity', 'Contact', 'Security'] as const
 
+function normalizeCity(value: string): string {
+  return value.trim().toLowerCase()
+}
+
 function buildHealthCenterPrimaryLabel(center: HealthCenter): string {
   const barangay = String(center.barangayName ?? '').trim()
   const city = String(center.cityMunicipality ?? '').trim()
@@ -126,6 +130,7 @@ export default function RegisterPage() {
   const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([])
   const [loadingHealthCenters, setLoadingHealthCenters] = useState(false)
   const [healthCentersLoadError, setHealthCentersLoadError] = useState('')
+  const [cityFilter, setCityFilter] = useState('')
 
   const [patientData, setPatientData] = useState({
     healthCenterId: '',
@@ -176,6 +181,39 @@ export default function RegisterPage() {
     }
   }, [])
 
+  const cityOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    healthCenters.forEach((center) => {
+      const city = String(center.cityMunicipality ?? '').trim()
+      if (!city) return
+      const key = normalizeCity(city)
+      if (!map.has(key)) {
+        map.set(key, city)
+      }
+    })
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b))
+  }, [healthCenters])
+
+  const filteredHealthCenters = useMemo(() => {
+    if (!cityFilter) return healthCenters
+    const target = normalizeCity(cityFilter)
+    return healthCenters.filter(
+      (center) => normalizeCity(String(center.cityMunicipality ?? '')) === target
+    )
+  }, [healthCenters, cityFilter])
+
+  const healthCentersForDisplay = cityFilter ? filteredHealthCenters : healthCenters
+
+  useEffect(() => {
+    if (!cityFilter) return
+    if (
+      patientData.healthCenterId &&
+      !filteredHealthCenters.some((center) => center._id === patientData.healthCenterId)
+    ) {
+      setPatientData((prev) => ({ ...prev, healthCenterId: '' }))
+    }
+  }, [cityFilter, filteredHealthCenters, patientData.healthCenterId])
+
   const progressWidth = useMemo(() => `${(step / STEP_LABELS.length) * 100}%`, [step])
   const selectedHealthCenter = useMemo(
     () => healthCenters.find((center) => center._id === patientData.healthCenterId) ?? null,
@@ -203,6 +241,7 @@ export default function RegisterPage() {
   }
 
   const validateStep1 = (): string | null => {
+    if (!cityFilter) return 'Please select your city or municipality'
     if (!patientData.healthCenterId) return 'Please select a health center'
     if (!patientData.lastName.trim()) return 'Please enter your last name'
     if (!patientData.firstName.trim()) return 'Please enter your first name'
@@ -350,17 +389,52 @@ export default function RegisterPage() {
                   {step === 1 ? (
                     <>
                       <div className="space-y-2">
+                        <Label className="text-sm font-semibold text-[#163428]">City / Municipality *</Label>
+                        <Select
+                          value={cityFilter}
+                          onValueChange={(value) => setCityFilter(value)}
+                          disabled={loadingHealthCenters || cityOptions.length === 0}
+                        >
+                          <SelectTrigger className="h-11 rounded-xl border-[#cfe5d9] bg-white text-[#173328] focus:ring-2 focus:ring-[#12b76a]/30">
+                            <SelectValue
+                              placeholder={loadingHealthCenters ? 'Loading cities...' : 'Select your city/municipality'}
+                            />
+                          </SelectTrigger>
+                          <SelectContent className="z-[140] max-h-72">
+                            {cityOptions.map((city) => (
+                              <SelectItem key={city} value={city}>
+                                {city}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {!loadingHealthCenters && cityOptions.length === 0 ? (
+                          <p className="text-xs text-amber-700 mt-1 px-1">
+                            No cities are available yet. Ask your administrator to complete clinic profiles.
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-2">
                         <Label className="text-sm font-semibold text-[#163428]">Health Center *</Label>
                         <Select
                           value={patientData.healthCenterId}
                           onValueChange={(value) => setPatientData((prev) => ({ ...prev, healthCenterId: value }))}
-                          disabled={loadingHealthCenters}
+                          disabled={loadingHealthCenters || !cityFilter || healthCentersForDisplay.length === 0}
                         >
                           <SelectTrigger className="h-11 rounded-xl border-[#cfe5d9] bg-white text-[#173328] focus:ring-2 focus:ring-[#12b76a]/30">
-                            <SelectValue placeholder={loadingHealthCenters ? 'Loading health centers...' : 'Select your health center'} />
+                            <SelectValue
+                              placeholder={
+                                loadingHealthCenters
+                                  ? 'Loading health centers...'
+                                  : !cityFilter
+                                    ? 'Select your city first'
+                                    : 'Select your health center'
+                              }
+                            />
                           </SelectTrigger>
                           <SelectContent className="z-[140] max-h-72">
-                            {healthCenters.map((hc) => (
+                            {healthCentersForDisplay.map((hc) => (
                               <SelectItem key={hc._id} value={hc._id}>
                                 {buildHealthCenterPrimaryLabel(hc)}
                               </SelectItem>
@@ -370,6 +444,11 @@ export default function RegisterPage() {
                         {selectedHealthCenterDetails ? (
                           <p className="text-xs text-[#5b786d] mt-1 px-1 truncate">
                             {selectedHealthCenterDetails}
+                          </p>
+                        ) : null}
+                        {!loadingHealthCenters && cityFilter && healthCentersForDisplay.length === 0 ? (
+                          <p className="text-xs text-amber-700 mt-1 px-1">
+                            No active health centers found in {cityFilter}.
                           </p>
                         ) : null}
                         {!loadingHealthCenters && healthCentersLoadError ? (
