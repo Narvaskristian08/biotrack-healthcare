@@ -105,6 +105,27 @@ export default function AIConfigPage() {
           </Card>
         ) : null}
 
+        <Card className="border-slate-200">
+          <CardHeader>
+            <CardTitle>Enforcement Status</CardTitle>
+            <CardDescription>What the current RBAC implementation is actively protecting.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+              <p className="text-sm font-semibold text-emerald-900">Admin capabilities are enforced</p>
+              <p className="mt-1 text-sm text-emerald-800">
+                The admin routes use capability checks before allowing user management, system monitoring, blockchain supervision, policy updates, and backup actions.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+              <p className="text-sm font-semibold text-amber-900">Patient and provider toggles are configuration-only for now</p>
+              <p className="mt-1 text-sm text-amber-800">
+                Those switches are saved successfully, but the current codebase does not yet enforce them on patient/provider routes. They should be treated as planned policy controls, not active blocks.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         {loading ? <p className="text-sm text-muted-foreground">Loading RBAC settings...</p> : null}
         {!loading && rbac ? (
           <>

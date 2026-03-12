@@ -70,12 +70,7 @@ function isRoleAllowed(pathname: string, role: UserRole) {
     return PROVIDER_PATHS.has(pathname) || hasPrefix(pathname, PROVIDER_PREFIXES)
   }
 
-  return (
-    ADMIN_PATHS.has(pathname) ||
-    PROVIDER_PATHS.has(pathname) ||
-    hasPrefix(pathname, ADMIN_PREFIXES) ||
-    hasPrefix(pathname, PROVIDER_PREFIXES)
-  )
+  return ADMIN_PATHS.has(pathname) || hasPrefix(pathname, ADMIN_PREFIXES)
 }
 
 export default function RouteGuard({ children }: { children: ReactNode }) {

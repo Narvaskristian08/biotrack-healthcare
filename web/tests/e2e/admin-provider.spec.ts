@@ -22,6 +22,7 @@ test('admin creates provider and provider navigates allowed routes', async ({ pa
     '/admin/logs',
     '/admin/ai-configuration',
     '/admin/blockchain-management',
+    '/admin/system-monitoring',
     '/admin/backup-recovery',
   ];
 
@@ -35,7 +36,6 @@ test('admin creates provider and provider navigates allowed routes', async ({ pa
 
   const selects = page.locator('select');
   await selects.nth(0).selectOption('provider');
-  await selects.nth(1).selectOption('active');
 
   await page.getByPlaceholder('Email').fill(providerEmail);
   await page.getByPlaceholder('Password').fill(STRONG_PASSWORD);
@@ -52,7 +52,8 @@ test('admin creates provider and provider navigates allowed routes', async ({ pa
   await page.getByPlaceholder('Longitude').fill('120.9842');
 
   await page.getByRole('button', { name: /^Create$/i }).click();
-  await expect(page.getByText(/User created successfully/i)).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Healthcare provider account successfully created/i })).toBeVisible();
+  await page.getByRole('button', { name: /^Close$/i }).click();
 
   await page.evaluate(() => localStorage.clear());
   await page.goto('/login');
@@ -85,4 +86,12 @@ test('admin creates provider and provider navigates allowed routes', async ({ pa
   await page.goto('/admin-dashboard');
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: /Healthcare Provider Dashboard/i })).toBeVisible();
+
+  await page.evaluate(() => localStorage.clear());
+  await page.goto('/register');
+  await page.getByRole('button', { name: /select your city/i }).click();
+  await expect(page.getByRole('option', { name: cityMunicipality })).toBeVisible();
+  await page.getByRole('option', { name: cityMunicipality }).click();
+  await page.getByRole('button', { name: /select your health center/i }).click();
+  await expect(page.getByRole('option', { name: `${barangayName}, ${cityMunicipality}` })).toBeVisible();
 });

@@ -31,6 +31,9 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -52,39 +55,83 @@ import { useDashboardRole, type UserRole } from '@/hooks/use-dashboard-role'
 import LogoutConfirmDialog from '@/components/logout-confirm-dialog'
 
 type NavItem = { label: string; href: string; icon: React.ComponentType<{ className?: string }> }
+type NavGroup = { label: string; items: NavItem[] }
 
-const PATIENT_NAV: NavItem[] = [
-  { label: 'Dashboard', href: '/', icon: Home },
-  { label: 'Health Monitoring', href: '/health-monitoring', icon: Activity },
-  { label: 'Medical Records', href: '/medical-records', icon: FileText },
-  { label: 'Vitals History', href: '/vitals-history', icon: LineChart },
-  { label: 'AI Health Advisory', href: '/ai-health-advisory', icon: Bot },
-  { label: 'Blockchain', href: '/blockchain', icon: Lock },
-  { label: 'Reports & Downloads', href: '/reports-downloads', icon: FileDown },
+const PATIENT_NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Overview',
+    items: [{ label: 'Dashboard', href: '/', icon: Home }],
+  },
+  {
+    label: 'Care And Monitoring',
+    items: [
+      { label: 'Health Monitoring', href: '/health-monitoring', icon: Activity },
+      { label: 'Vitals History', href: '/vitals-history', icon: LineChart },
+      { label: 'AI Health Advisory', href: '/ai-health-advisory', icon: Bot },
+    ],
+  },
+  {
+    label: 'Records And Proofs',
+    items: [
+      { label: 'Medical Records', href: '/medical-records', icon: FileText },
+      { label: 'Blockchain', href: '/blockchain', icon: Lock },
+      { label: 'Reports & Downloads', href: '/reports-downloads', icon: FileDown },
+    ],
+  },
 ]
 
-const PROVIDER_NAV: NavItem[] = [
-  { label: 'Dashboard', href: '/', icon: Home },
-  { label: 'Users', href: '/users', icon: Users },
-  { label: 'Analytics', href: '/analytics', icon: BarChart3 },
-  { label: 'Records', href: '/records', icon: FileText },
-  { label: 'Blockchain', href: '/blockchain', icon: Lock },
+const PROVIDER_NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Overview',
+    items: [{ label: 'Dashboard', href: '/', icon: Home }],
+  },
+  {
+    label: 'Patient Operations',
+    items: [
+      { label: 'Users', href: '/users', icon: Users },
+      { label: 'Records', href: '/records', icon: FileText },
+    ],
+  },
+  {
+    label: 'Analytics',
+    items: [{ label: 'Analytics', href: '/analytics', icon: BarChart3 }],
+  },
+  {
+    label: 'Security',
+    items: [{ label: 'Blockchain', href: '/blockchain', icon: Lock }],
+  },
 ]
 
-const ADMIN_NAV: NavItem[] = [
-  { label: 'Admin Dashboard', href: '/admin-dashboard', icon: Home },
-  { label: 'User Management', href: '/admin/users', icon: Users },
-  { label: 'System Logs', href: '/admin/logs', icon: Activity },
-  { label: 'RBAC Policies', href: '/admin/ai-configuration', icon: Shield },
-  { label: 'Blockchain Mgmt', href: '/admin/blockchain-management', icon: Lock },
-  { label: 'Backup & Recovery', href: '/admin/backup-recovery', icon: Database },
-  { label: 'System Monitoring', href: '/analytics', icon: Cpu },
+const ADMIN_NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Overview',
+    items: [
+      { label: 'Admin Dashboard', href: '/admin-dashboard', icon: Home },
+      { label: 'System Monitoring', href: '/admin/system-monitoring', icon: Cpu },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [{ label: 'User Management', href: '/admin/users', icon: Users }],
+  },
+  {
+    label: 'Security And Compliance',
+    items: [
+      { label: 'System Logs', href: '/admin/logs', icon: Activity },
+      { label: 'RBAC Policies', href: '/admin/ai-configuration', icon: Shield },
+      { label: 'Blockchain Mgmt', href: '/admin/blockchain-management', icon: Lock },
+    ],
+  },
+  {
+    label: 'Resilience',
+    items: [{ label: 'Backup & Recovery', href: '/admin/backup-recovery', icon: Database }],
+  },
 ]
 
-function getNavigationItems(role: UserRole): NavItem[] {
-  if (role === 'patient') return PATIENT_NAV
-  if (role === 'admin') return ADMIN_NAV
-  return PROVIDER_NAV
+function getNavigationGroups(role: UserRole): NavGroup[] {
+  if (role === 'patient') return PATIENT_NAV_GROUPS
+  if (role === 'admin') return ADMIN_NAV_GROUPS
+  return PROVIDER_NAV_GROUPS
 }
 
 function getRoleLabel(role: UserRole): string {
@@ -183,7 +230,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { role, sessionUser, logout } = useDashboardRole()
   const [logoutDialogOpen, setLogoutDialogOpen] = React.useState(false)
   const [logoutPending, setLogoutPending] = React.useState(false)
-  const navigationItems = getNavigationItems(role)
+  const navigationGroups = getNavigationGroups(role)
+  const navigationItems = navigationGroups.flatMap((group) => group.items)
   const roleLabel = getRoleLabel(role)
   const profileHref = getProfileHref(role)
   const displayName = getDisplayName(sessionUser, role)
@@ -237,40 +285,49 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
           <SidebarContent className="px-3 py-4">
             <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">Navigation</p>
-            <SidebarMenu className="gap-1.5">
-              {navigationItems.map((item) => {
-                const Icon = item.icon
-                const isActive = pathname === item.href
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive}
-                      className={cn(
-                        'group h-11 rounded-xl px-3.5',
-                        isActive
-                          ? 'bg-primary/12 text-primary shadow-sm ring-1 ring-primary/20'
-                          : 'text-sidebar-foreground/85 hover:bg-sidebar-accent/10 hover:text-sidebar-foreground'
-                      )}
-                    >
-                      <Link href={item.href} className="flex items-center gap-3">
-                        <span
-                          className={cn(
-                            'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
-                            isActive
-                              ? 'bg-primary/15 text-primary'
-                              : 'text-sidebar-foreground/70 group-hover:bg-sidebar-accent/15 group-hover:text-sidebar-foreground'
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
-                        </span>
-                        <span className="font-medium tracking-tight">{item.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
+            {navigationGroups.map((group) => (
+              <SidebarGroup key={group.label}>
+                <SidebarGroupLabel className="px-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/50">
+                  {group.label}
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu className="gap-1.5">
+                    {group.items.map((item) => {
+                      const Icon = item.icon
+                      const isActive = pathname === item.href
+                      return (
+                        <SidebarMenuItem key={item.href}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={isActive}
+                            className={cn(
+                              'group h-11 rounded-xl px-3.5',
+                              isActive
+                                ? 'bg-primary/12 text-primary shadow-sm ring-1 ring-primary/20'
+                                : 'text-sidebar-foreground/85 hover:bg-sidebar-accent/10 hover:text-sidebar-foreground'
+                            )}
+                          >
+                            <Link href={item.href} className="flex items-center gap-3">
+                              <span
+                                className={cn(
+                                  'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
+                                  isActive
+                                    ? 'bg-white/20 text-white ring-1 ring-white/30'
+                                    : 'text-sidebar-foreground/70 group-hover:bg-sidebar-accent/15 group-hover:text-sidebar-foreground'
+                                )}
+                              >
+                                <Icon className="h-4 w-4" />
+                              </span>
+                              <span className="font-medium tracking-tight">{item.label}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))}
           </SidebarContent>
 
           <SidebarFooter className="border-t border-sidebar-border/80 px-3 py-4">

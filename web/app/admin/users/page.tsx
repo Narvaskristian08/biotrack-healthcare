@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Building2, CheckCircle2, Mail, MapPin, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -35,11 +36,13 @@ type NewUserForm = {
   middleInitial: string;
 };
 
+const DEFAULT_PROVIDER_STATUS = 'active';
+
 const emptyForm: NewUserForm = {
   role: 'provider',
   email: '',
   password: '',
-  status: 'pending',
+  status: DEFAULT_PROVIDER_STATUS,
   name: '',
   holderName: '',
   barangayName: '',
@@ -61,6 +64,32 @@ type StatusChangeConfirmation = {
   previousStatus: string;
   nextStatus: string;
 };
+
+type ProviderCreationConfirmation = {
+  email: string;
+  barangayName: string;
+  cityMunicipality: string;
+  healthCenterName: string;
+  status: string;
+  notificationMessage: string;
+};
+
+function formatStatusLabel(value: string): string {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) return 'Pending';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function getStatusBadgeClassName(status: string): string {
+  switch (String(status ?? '').trim().toLowerCase()) {
+    case 'active':
+      return 'border-emerald-200 bg-emerald-100 text-emerald-800';
+    case 'verified':
+      return 'border-sky-200 bg-sky-100 text-sky-800';
+    default:
+      return 'border-amber-200 bg-amber-100 text-amber-800';
+  }
+}
 
 function parseAssignedProvidersCsv(value: string): Array<{ name: string }> {
   return value
@@ -161,6 +190,8 @@ export default function AdminUsersPage() {
   const [updatingUserKey, setUpdatingUserKey] = useState<string | null>(null);
   const [statusChangeConfirmation, setStatusChangeConfirmation] = useState<StatusChangeConfirmation | null>(null);
   const [statusChangeDialogOpen, setStatusChangeDialogOpen] = useState(false);
+  const [providerCreationConfirmation, setProviderCreationConfirmation] = useState<ProviderCreationConfirmation | null>(null);
+  const [providerCreationDialogOpen, setProviderCreationDialogOpen] = useState(false);
 
   const mapCanvasRef = useRef<HTMLDivElement | null>(null);
   const mapSearchRef = useRef<HTMLInputElement | null>(null);
@@ -390,6 +421,16 @@ export default function AdminUsersPage() {
   const submitCreate = async () => {
     const submittingRole = form.role;
     const submittedStatus = form.status;
+    const providerCreationSnapshot =
+      form.role === 'provider'
+        ? {
+            email: form.email.trim(),
+            barangayName: form.barangayName.trim(),
+            cityMunicipality: form.cityMunicipality.trim(),
+            healthCenterName: form.healthCenterName.trim(),
+            status: form.status,
+          }
+        : null;
     setSaving(true);
     setError('');
     setMessage('');
@@ -433,13 +474,45 @@ export default function AdminUsersPage() {
     if (submittingRole === 'provider' && res.notification?.attempted) {
       if (res.notification.delivered) {
         const recipient = res.notification.recipientMasked ? ` to ${res.notification.recipientMasked}` : '';
-        setMessage(`User created successfully. Provider onboarding email sent${recipient}.${providerVisibilityNote}`);
+        const notificationMessage = `Provider onboarding email sent${recipient}.`;
+        setProviderCreationConfirmation({
+          email: providerCreationSnapshot?.email ?? '',
+          barangayName: providerCreationSnapshot?.barangayName ?? '',
+          cityMunicipality: providerCreationSnapshot?.cityMunicipality ?? '',
+          healthCenterName: providerCreationSnapshot?.healthCenterName ?? '',
+          status: providerCreationSnapshot?.status ?? submittedStatus,
+          notificationMessage: `${notificationMessage}${providerVisibilityNote}`.trim(),
+        });
+        setProviderCreationDialogOpen(true);
       } else {
         const detail = res.notification.message ? ` ${res.notification.message}` : '';
-        setMessage(`User created successfully, but provider email notification was not delivered.${detail}${providerVisibilityNote}`);
+        setProviderCreationConfirmation({
+          email: providerCreationSnapshot?.email ?? '',
+          barangayName: providerCreationSnapshot?.barangayName ?? '',
+          cityMunicipality: providerCreationSnapshot?.cityMunicipality ?? '',
+          healthCenterName: providerCreationSnapshot?.healthCenterName ?? '',
+          status: providerCreationSnapshot?.status ?? submittedStatus,
+          notificationMessage: `Provider account created, but onboarding email was not delivered.${detail}${providerVisibilityNote}`.trim(),
+        });
+        setProviderCreationDialogOpen(true);
       }
+      setMessage('');
     } else {
-      setMessage(`User created successfully.${providerVisibilityNote}`);
+      if (submittingRole === 'provider') {
+        const queuedMessage = String(res.notification?.message ?? '').trim();
+        setProviderCreationConfirmation({
+          email: providerCreationSnapshot?.email ?? '',
+          barangayName: providerCreationSnapshot?.barangayName ?? '',
+          cityMunicipality: providerCreationSnapshot?.cityMunicipality ?? '',
+          healthCenterName: providerCreationSnapshot?.healthCenterName ?? '',
+          status: providerCreationSnapshot?.status ?? submittedStatus,
+          notificationMessage: `${queuedMessage || 'Provider account successfully created.'}${providerVisibilityNote}`.trim(),
+        });
+        setProviderCreationDialogOpen(true);
+        setMessage('');
+      } else {
+        setMessage(`User created successfully.${providerVisibilityNote}`);
+      }
     }
 
     setForm(emptyForm);
@@ -518,9 +591,69 @@ export default function AdminUsersPage() {
     );
   };
 
+  const providerLocationLabel = providerCreationConfirmation
+    ? [providerCreationConfirmation.barangayName, providerCreationConfirmation.cityMunicipality].filter(Boolean).join(', ') || 'N/A'
+    : 'N/A';
+  const providerStatusLabel = formatStatusLabel(providerCreationConfirmation?.status ?? '');
+  const providerStatusClassName = getStatusBadgeClassName(providerCreationConfirmation?.status ?? '');
+  const providerAccessNote =
+    String(providerCreationConfirmation?.status ?? '').trim().toLowerCase() === 'active'
+      ? 'The account can sign in immediately and is already available in patient registration.'
+      : 'Activate this account before provider login and patient registration become available.';
+  const providerDescription = providerCreationConfirmation
+    ? `${providerCreationConfirmation.barangayName || 'Barangay unit'} is now onboarded in BioTrack.`
+    : 'The provider account was created successfully.';
+  const accountTotals = users.reduce(
+    (acc, user) => {
+      acc.total += 1;
+      if (user.role === 'provider') {
+        acc.providers += 1;
+        if (user.status === 'active') acc.activeProviders += 1;
+        if (user.status === 'pending' || user.status === 'verified') acc.providersInSetup += 1;
+      }
+      if (user.role === 'patient') acc.patients += 1;
+      if (user.role === 'admin') acc.admins += 1;
+      return acc;
+    },
+    {
+      total: 0,
+      providers: 0,
+      activeProviders: 0,
+      providersInSetup: 0,
+      patients: 0,
+      admins: 0,
+    }
+  );
+  const roleSetupSteps =
+    form.role === 'provider'
+      ? [
+          '1. Choose the barangay account type and lifecycle status.',
+          '2. Set the login credentials that will be sent to the provider.',
+          '3. Fill in facility identity, location, and staffing details.',
+          '4. Create the account, then verify whether it should already appear in patient registration.',
+        ]
+      : form.role === 'patient'
+        ? [
+            '1. Select the patient account type.',
+            '2. Enter login credentials and the linked health center.',
+            '3. Confirm the basic patient identity fields before creation.',
+          ]
+        : [
+            '1. Select the admin account type.',
+            '2. Enter secure login credentials.',
+            '3. Create the account only for trusted operators who need system governance access.',
+          ];
+  const providerSetupLocation = [form.barangayName.trim(), form.cityMunicipality.trim()].filter(Boolean).join(', ') || 'Not set yet';
+  const providerSetupStatus = formatStatusLabel(form.status);
+  const providerWillAppearInRegistration = form.role === 'provider' && form.status === 'active';
+  const accountScopeLabel =
+    roleFilter || statusFilter || query
+      ? `Filtered view: ${users.length} account${users.length === 1 ? '' : 's'}`
+      : `All accounts: ${users.length}`;
+
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-4">
         <Dialog open={statusChangeDialogOpen} onOpenChange={setStatusChangeDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
@@ -536,6 +669,124 @@ export default function AdminUsersPage() {
                 OK
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={providerCreationDialogOpen} onOpenChange={setProviderCreationDialogOpen}>
+          <DialogContent className="max-w-2xl overflow-hidden border-0 bg-white p-0 shadow-[0_36px_100px_rgba(15,23,42,0.22)]">
+            <div className="overflow-hidden rounded-[28px]">
+              <div className="relative border-b border-emerald-100 bg-[linear-gradient(135deg,#f0fdf4_0%,#ecfeff_52%,#ffffff_100%)] px-7 pb-7 pt-8 sm:px-8">
+                <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-emerald-300/30 blur-3xl" />
+                <div className="absolute left-6 top-0 h-px w-24 bg-white/80" />
+                <div className="relative flex flex-col gap-4 pr-10 sm:flex-row sm:items-start">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-[0_12px_30px_rgba(16,185,129,0.18)]">
+                    <CheckCircle2 className="h-8 w-8" />
+                  </div>
+                  <div className="space-y-3">
+                    <Badge className="rounded-full border border-emerald-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700 shadow-sm">
+                      Provider Onboarding
+                    </Badge>
+                    <DialogHeader className="space-y-2">
+                      <DialogTitle className="max-w-xl text-3xl font-semibold tracking-tight text-slate-900">
+                        Healthcare provider account successfully created
+                      </DialogTitle>
+                      <DialogDescription className="max-w-xl text-[1rem] leading-7 text-slate-600">
+                        {providerDescription}
+                      </DialogDescription>
+                    </DialogHeader>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6 px-7 py-7 sm:px-8">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                        <Mail className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Login Email</p>
+                        <p className="mt-1 break-all text-base font-semibold text-slate-900">
+                          {providerCreationConfirmation?.email || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                        <MapPin className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Location</p>
+                        <p className="mt-1 text-base font-semibold text-slate-900">{providerLocationLabel}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-100 text-teal-700">
+                        <Building2 className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Health Center</p>
+                        <p className="mt-1 text-base font-semibold text-slate-900">
+                          {providerCreationConfirmation?.healthCenterName || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                        <ShieldCheck className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Account Status</p>
+                        <Badge className={`mt-2 rounded-full border px-3 py-1 text-sm font-semibold ${providerStatusClassName}`}>
+                          {providerStatusLabel}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-[1.25fr_0.95fr]">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/90 p-5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Notification Status</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                      {providerCreationConfirmation?.notificationMessage || 'Provider account successfully created.'}
+                    </p>
+                  </div>
+
+                  <div
+                    className={`rounded-2xl border p-5 ${
+                      String(providerCreationConfirmation?.status ?? '').trim().toLowerCase() === 'active'
+                        ? 'border-emerald-200 bg-emerald-50/80'
+                        : 'border-amber-200 bg-amber-50/80'
+                    }`}
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">What Happens Next</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-700">{providerAccessNote}</p>
+                  </div>
+                </div>
+
+                <DialogFooter className="mt-0 border-t border-slate-200 pt-5">
+                  <p className="mr-auto text-xs text-slate-500">You can close this dialog and continue managing user onboarding.</p>
+                  <Button
+                    type="button"
+                    className="min-w-28 rounded-xl bg-emerald-600 px-6 text-white shadow-[0_12px_28px_rgba(22,163,74,0.28)] hover:bg-emerald-700"
+                    onClick={() => setProviderCreationDialogOpen(false)}
+                  >
+                    Close
+                  </Button>
+                </DialogFooter>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 
@@ -556,177 +807,338 @@ export default function AdminUsersPage() {
           </Card>
         ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Create Account / Barangay Unit</CardTitle>
-            <CardDescription>Barangay onboarding must be created by Admin and assigned an official lifecycle status.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <select
-                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                value={form.role}
-                onChange={(e) => {
-                  const nextRole = e.target.value as 'patient' | 'provider' | 'admin';
-                  setForm((prev) => ({
-                    ...prev,
-                    role: nextRole,
-                    status: nextRole === 'provider' ? 'pending' : 'active',
-                  }));
-                }}
-              >
-                <option value="patient">Patient</option>
-                <option value="provider">Barangay Unit (Provider)</option>
-                <option value="admin">Admin</option>
-              </select>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Card className="border-slate-200">
+            <CardContent className="pt-5">
+              <p className="text-sm text-muted-foreground">Total accounts</p>
+              <p className="mt-2 text-3xl font-bold">{accountTotals.total}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200">
+            <CardContent className="pt-5">
+              <p className="text-sm text-muted-foreground">Providers onboarded</p>
+              <p className="mt-2 text-3xl font-bold">{accountTotals.providers}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{accountTotals.activeProviders} active and visible in registration</p>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200">
+            <CardContent className="pt-5">
+              <p className="text-sm text-muted-foreground">Providers still in setup</p>
+              <p className="mt-2 text-3xl font-bold">{accountTotals.providersInSetup}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200">
+            <CardContent className="pt-5">
+              <p className="text-sm text-muted-foreground">Patients / Admins</p>
+              <p className="mt-2 text-3xl font-bold">
+                {accountTotals.patients} / {accountTotals.admins}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
 
-              <Input placeholder="Email" value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} />
+        <div className="grid gap-4">
+          <div className="order-1 grid gap-4 lg:grid-cols-2">
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle>Setup Guide</CardTitle>
+                <CardDescription>Keep the creation flow consistent so administrators do not miss activation details.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {roleSetupSteps.map((step) => (
+                  <div key={step} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-sm text-slate-700">
+                    {step}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
 
-              <Input
-                type="password"
-                placeholder="Password"
-                value={form.password}
-                onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-              />
-
-              <select
-                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                value={form.status}
-                onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
-              >
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle>Current Draft</CardTitle>
+                <CardDescription>Live summary of what will be created from the fields you entered.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 lg:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Role</p>
+                  <p className="mt-1 font-medium text-slate-900">{form.role === 'provider' ? 'Barangay Unit (Provider)' : form.role}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Login Email</p>
+                  <p className="mt-1 break-all font-medium text-slate-900">{form.email.trim() || 'Not entered yet'}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Status On Creation</p>
+                  <p className="mt-1 font-medium text-slate-900">{providerSetupStatus}</p>
+                </div>
                 {form.role === 'provider' ? (
-                  <>
-                    <option value="pending">Pending</option>
-                    <option value="verified">Verified</option>
-                    <option value="active">Active</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="active">Active</option>
-                    <option value="disabled">Disabled</option>
-                  </>
-                )}
-              </select>
-            </div>
-            {form.role === 'provider' ? (
-              <p className="text-xs text-muted-foreground">Provider onboarding notification will be sent to this email after account creation.</p>
-            ) : null}
-
-            {form.role === 'provider' ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input placeholder="Barangay Name" value={form.barangayName} onChange={(e) => setForm((prev) => ({ ...prev, barangayName: e.target.value }))} />
-                  <Input
-                    placeholder="City / Municipality"
-                    value={form.cityMunicipality}
-                    onChange={(e) => setForm((prev) => ({ ...prev, cityMunicipality: e.target.value }))}
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input
-                    placeholder="Health Center Name"
-                    value={form.healthCenterName}
-                    onChange={(e) => setForm((prev) => ({ ...prev, healthCenterName: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="Official Contact Info"
-                    value={form.officialContactInfo}
-                    onChange={(e) => setForm((prev) => ({ ...prev, officialContactInfo: e.target.value }))}
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input placeholder="Latitude" value={form.latitude} onChange={(e) => setForm((prev) => ({ ...prev, latitude: e.target.value }))} />
-                  <Input placeholder="Longitude" value={form.longitude} onChange={(e) => setForm((prev) => ({ ...prev, longitude: e.target.value }))} />
-                </div>
-                <div className="space-y-2 rounded-md border border-border p-3">
-                  <p className="text-sm font-medium">Google Maps Picker</p>
-                  <p className="text-xs text-muted-foreground">
-                    Click the map or search a place to auto-fill latitude/longitude. Valid range: latitude -90..90, longitude -180..180.
-                  </p>
-                  <Input ref={mapSearchRef} placeholder="Search in map (e.g., Longos Barangay, San Fabian)" />
-                  <div className="relative h-64 w-full overflow-hidden rounded-md border border-border bg-muted">
-                    <div ref={mapCanvasRef} className="absolute inset-0" />
-                    {!mapReady ? (
-                      <div className="absolute inset-0 flex items-center justify-center bg-muted/90 p-4 text-center">
-                        <div className="max-w-lg space-y-2">
-                          <p className="text-sm font-medium text-foreground">Map preview unavailable</p>
-                          <p className="text-xs leading-5 text-muted-foreground">
-                            {mapError || `Google Maps has not been initialized yet. ${GOOGLE_MAPS_SETUP_HINT}`}
-                          </p>
-                        </div>
-                      </div>
-                    ) : null}
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Coverage Area</p>
+                    <p className="mt-1 font-medium text-slate-900">{providerSetupLocation}</p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" onClick={useCurrentLocation}>
-                      Use Current Location
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => window.open('https://www.google.com/maps', '_blank', 'noopener,noreferrer')}
-                    >
-                      Open Google Maps
-                    </Button>
+                ) : null}
+                {form.role === 'provider' ? (
+                  <div
+                    className={`md:col-span-2 xl:col-span-4 lg:col-span-2 rounded-xl border p-3 text-sm ${
+                      providerWillAppearInRegistration ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'
+                    }`}
+                  >
+                    {providerWillAppearInRegistration
+                      ? 'Patient registration will be able to select this provider immediately.'
+                      : 'Patient registration will not show this provider until the account is set to active.'}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="order-2 border-slate-200 shadow-sm">
+            <CardHeader className="space-y-3 border-b border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)]">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">Account Setup Flow</Badge>
+                <Badge className="border-slate-200 bg-slate-100 text-slate-700">{form.role === 'provider' ? 'Healthcare account' : form.role}</Badge>
+              </div>
+              <div>
+                <CardTitle>Create Account / Barangay Unit</CardTitle>
+                <CardDescription>
+                  {form.role === 'provider'
+                    ? 'Follow the setup flow in order so the healthcare account is complete before activation.'
+                    : 'Fill in the required fields for the selected role, then create the account.'}
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-5">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Step 1</p>
+                  <select
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                    value={form.role}
+                    onChange={(e) => {
+                      const nextRole = e.target.value as 'patient' | 'provider' | 'admin';
+                      setForm((prev) => ({
+                        ...prev,
+                        role: nextRole,
+                        status: nextRole === 'provider' ? DEFAULT_PROVIDER_STATUS : 'active',
+                      }));
+                    }}
+                  >
+                    <option value="patient">Patient</option>
+                    <option value="provider">Barangay Unit (Provider)</option>
+                    <option value="admin">Admin</option>
+                  </select>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                  <div className="sm:col-span-3">
-                    <Input
-                      placeholder="Paste Google Maps link or 'lat,lng' then click Extract"
-                        value={mapsUrlInput}
-                        onChange={(e) => setMapsUrlInput(e.target.value)}
+
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Step 2</p>
+                  <Input placeholder="Email" value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} />
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Lifecycle</p>
+                  <select
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                    value={form.status}
+                    onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
+                  >
+                    {form.role === 'provider' ? (
+                      <>
+                        <option value="pending">Pending</option>
+                        <option value="verified">Verified</option>
+                        <option value="active">Active</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="active">Active</option>
+                        <option value="disabled">Disabled</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Secure Access</p>
+                <Input
+                  type="password"
+                  placeholder="Password"
+                  value={form.password}
+                  onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {form.role === 'provider'
+                    ? 'Provider onboarding email will be sent after creation. Active providers can sign in immediately and appear in patient registration.'
+                    : 'Use a strong password because this account becomes active immediately unless you choose disabled.'}
+                </p>
+              </div>
+
+              {form.role === 'provider' ? (
+                <>
+                  <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Step 3</p>
+                      <h3 className="mt-1 font-semibold text-slate-900">Facility Identity</h3>
+                      <p className="text-sm text-muted-foreground">Enter the barangay and health-center details exactly as they should appear to staff and patients.</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input placeholder="Barangay Name" value={form.barangayName} onChange={(e) => setForm((prev) => ({ ...prev, barangayName: e.target.value }))} />
+                      <Input
+                        placeholder="City / Municipality"
+                        value={form.cityMunicipality}
+                        onChange={(e) => setForm((prev) => ({ ...prev, cityMunicipality: e.target.value }))}
                       />
+                      <Input
+                        placeholder="Health Center Name"
+                        value={form.healthCenterName}
+                        onChange={(e) => setForm((prev) => ({ ...prev, healthCenterName: e.target.value }))}
+                      />
+                      <Input
+                        placeholder="Official Contact Info"
+                        value={form.officialContactInfo}
+                        onChange={(e) => setForm((prev) => ({ ...prev, officialContactInfo: e.target.value }))}
+                      />
+                    </div>
                   </div>
-                  <Button type="button" variant="outline" onClick={extractCoordinatesFromMapsUrl}>
-                    Extract
-                  </Button>
+
+                  <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Step 4</p>
+                      <h3 className="mt-1 font-semibold text-slate-900">Location And Coverage</h3>
+                      <p className="text-sm text-muted-foreground">Pin the official location so admins know exactly which healthcare unit is being activated.</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input placeholder="Latitude" value={form.latitude} onChange={(e) => setForm((prev) => ({ ...prev, latitude: e.target.value }))} />
+                      <Input placeholder="Longitude" value={form.longitude} onChange={(e) => setForm((prev) => ({ ...prev, longitude: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2 rounded-xl border border-border bg-slate-50/70 p-3">
+                      <p className="text-sm font-medium">Google Maps Picker</p>
+                      <p className="text-xs text-muted-foreground">
+                        Click the map or search a place to auto-fill latitude/longitude. Valid range: latitude -90..90, longitude -180..180.
+                      </p>
+                      <Input ref={mapSearchRef} placeholder="Search in map (e.g., Longos Barangay, San Fabian)" />
+                      <div className="relative h-52 w-full overflow-hidden rounded-md border border-border bg-muted">
+                        <div ref={mapCanvasRef} className="absolute inset-0" />
+                        {!mapReady ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-muted/90 p-4 text-center">
+                            <div className="max-w-lg space-y-2">
+                              <p className="text-sm font-medium text-foreground">Map preview unavailable</p>
+                              <p className="text-xs leading-5 text-muted-foreground">
+                                {mapError || `Google Maps has not been initialized yet. ${GOOGLE_MAPS_SETUP_HINT}`}
+                              </p>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" onClick={useCurrentLocation}>
+                          Use Current Location
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => window.open('https://www.google.com/maps', '_blank', 'noopener,noreferrer')}
+                        >
+                          Open Google Maps
+                        </Button>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-4">
+                        <div className="sm:col-span-3">
+                          <Input
+                            placeholder="Paste Google Maps link or 'lat,lng' then click Extract"
+                            value={mapsUrlInput}
+                            onChange={(e) => setMapsUrlInput(e.target.value)}
+                          />
+                        </div>
+                        <Button type="button" variant="outline" onClick={extractCoordinatesFromMapsUrl}>
+                          Extract
+                        </Button>
+                      </div>
+                      {mapError ? <p className="text-xs text-destructive">{mapError}</p> : null}
+                      {!mapError && mapNotice ? <p className="text-xs text-muted-foreground">{mapNotice}</p> : null}
+                      {!mapError && mapReady ? <p className="text-xs text-muted-foreground">Map picker is ready.</p> : null}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Step 5</p>
+                      <h3 className="mt-1 font-semibold text-slate-900">Staffing And Display</h3>
+                      <p className="text-sm text-muted-foreground">Optional fields help admins recognize the healthcare account after creation.</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input
+                        placeholder="Assigned Healthcare Providers (comma separated)"
+                        value={form.assignedProvidersCsv}
+                        onChange={(e) => setForm((prev) => ({ ...prev, assignedProvidersCsv: e.target.value }))}
+                      />
+                      <Input placeholder="Display Name (optional)" value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} />
+                    </div>
+                    <Input placeholder="Holder Name (optional)" value={form.holderName} onChange={(e) => setForm((prev) => ({ ...prev, holderName: e.target.value }))} />
+                  </div>
+                </>
+              ) : null}
+
+              {form.role === 'patient' ? (
+                <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Patient Details</p>
+                    <h3 className="mt-1 font-semibold text-slate-900">Linked Patient Identity</h3>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    <Input
+                      placeholder="Health Center ID"
+                      value={form.healthCenterId}
+                      onChange={(e) => setForm((prev) => ({ ...prev, healthCenterId: e.target.value }))}
+                    />
+                    <Input placeholder="First name" value={form.firstName} onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))} />
+                    <Input placeholder="Last name" value={form.lastName} onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))} />
+                    <Input
+                      placeholder="Middle initial"
+                      value={form.middleInitial}
+                      onChange={(e) => setForm((prev) => ({ ...prev, middleInitial: e.target.value }))}
+                    />
+                  </div>
                 </div>
-                {mapError ? <p className="text-xs text-destructive">{mapError}</p> : null}
-                {!mapError && mapNotice ? <p className="text-xs text-muted-foreground">{mapNotice}</p> : null}
-                {!mapError && mapReady ? <p className="text-xs text-muted-foreground">Map picker is ready.</p> : null}
-              </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input
-                    placeholder="Assigned Healthcare Providers (comma separated)"
-                    value={form.assignedProvidersCsv}
-                    onChange={(e) => setForm((prev) => ({ ...prev, assignedProvidersCsv: e.target.value }))}
-                  />
-                  <Input placeholder="Display Name (optional)" value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} />
+              ) : null}
+
+              {form.role === 'admin' ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
+                  Admin accounts inherit system-governance access. Use this only for trusted operators who need oversight of users, logs, policies, or backups.
                 </div>
-                <Input placeholder="Holder Name (optional)" value={form.holderName} onChange={(e) => setForm((prev) => ({ ...prev, holderName: e.target.value }))} />
+              ) : null}
+
+              <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  {form.role === 'provider'
+                    ? providerWillAppearInRegistration
+                      ? 'This provider will appear in patient registration immediately after creation.'
+                      : 'This provider will be created, but will not appear in patient registration until status becomes active.'
+                    : 'Review the required fields above, then create the account.'}
+                </p>
+                <Button onClick={submitCreate} disabled={saving} className="min-w-32">
+                  {saving ? 'Creating...' : 'Create Account'}
+                </Button>
               </div>
-            ) : null}
+            </CardContent>
+          </Card>
+        </div>
 
-            {form.role === 'patient' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <Input
-                  placeholder="Health Center ID"
-                  value={form.healthCenterId}
-                  onChange={(e) => setForm((prev) => ({ ...prev, healthCenterId: e.target.value }))}
-                />
-                <Input placeholder="First name" value={form.firstName} onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))} />
-                <Input placeholder="Last name" value={form.lastName} onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))} />
-                <Input
-                  placeholder="Middle initial"
-                  value={form.middleInitial}
-                  onChange={(e) => setForm((prev) => ({ ...prev, middleInitial: e.target.value }))}
-                />
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="space-y-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <CardTitle>Existing Accounts</CardTitle>
+                <CardDescription>{accountScopeLabel}. Manage lifecycle states for barangay units and account access for all users.</CardDescription>
               </div>
-            ) : null}
-
-            <Button onClick={submitCreate} disabled={saving}>
-              {saving ? 'Creating...' : 'Create'}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Existing Accounts</CardTitle>
-            <CardDescription>Manage lifecycle states for barangay units and account access for all users.</CardDescription>
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <span>Providers: {accountTotals.providers}</span>
+                <span>Patients: {accountTotals.patients}</span>
+                <span>Admins: {accountTotals.admins}</span>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
               <Input
                 placeholder="Search users by name/email..."
                 value={query}
@@ -737,7 +1149,7 @@ export default function AdminUsersPage() {
                 }}
               />
               <select
-                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm sm:w-48"
+                className="h-10 rounded-md border border-input bg-background px-3 py-1 text-sm"
                 value={roleFilter}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -751,7 +1163,7 @@ export default function AdminUsersPage() {
                 <option value="admin">Admin</option>
               </select>
               <select
-                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm sm:w-48"
+                className="h-10 rounded-md border border-input bg-background px-3 py-1 text-sm"
                 value={statusFilter}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -770,7 +1182,7 @@ export default function AdminUsersPage() {
             {loading ? (
               <p className="text-sm text-muted-foreground">Loading users...</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {users.map((user) => {
                   const meta = user.meta as Record<string, unknown>;
                   const barangayName = String(meta.barangayName ?? '');
@@ -778,27 +1190,28 @@ export default function AdminUsersPage() {
                   const healthCenterName = String(meta.healthCenterName ?? '');
                   const userKey = `${user.role}-${user.id}`;
                   const isUpdating = updatingUserKey === userKey;
+                  const updatedAtLabel = user.updatedAt ? new Date(user.updatedAt).toLocaleString() : 'Unknown';
 
                   return (
-                    <Card key={userKey}>
-                      <CardContent className="pt-4">
-                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                          <div>
-                            <p className="font-medium">{user.displayName}</p>
-                            <p className="text-sm text-muted-foreground">{user.email}</p>
-                            {user.role === 'provider' ? (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {barangayName || 'Barangay'} | {cityMunicipality || 'City/Municipality'} | {healthCenterName || 'Health Center'}
-                              </p>
-                            ) : null}
-                            <div className="flex items-center gap-2 mt-1">
+                    <Card key={userKey} className="border-slate-200">
+                      <CardContent className="space-y-4 pt-5">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold text-slate-900">{user.displayName}</p>
                               <Badge variant="outline">{user.role}</Badge>
-                              <Badge variant={user.status === 'active' ? 'secondary' : 'destructive'}>
-                                {user.status}
-                              </Badge>
+                              <Badge className={getStatusBadgeClassName(user.status)}>{formatStatusLabel(user.status)}</Badge>
                               {user.role === 'provider' ? <Badge variant="outline">barangay lifecycle</Badge> : null}
                             </div>
+                            <p className="text-sm text-muted-foreground">{user.email}</p>
+                            {user.role === 'provider' ? (
+                              <p className="text-sm text-slate-700">
+                                {[barangayName, cityMunicipality, healthCenterName].filter(Boolean).join(' • ') || 'Location details unavailable'}
+                              </p>
+                            ) : null}
+                            <p className="text-xs text-muted-foreground">Last updated: {updatedAtLabel}</p>
                           </div>
+
                           <div className="flex flex-wrap gap-2">
                             {user.role === 'provider' ? (
                               <>
