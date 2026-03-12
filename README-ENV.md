@@ -62,6 +62,7 @@ Notes:
   - `JWT_ISSUER=biotrack-healthcare`
   - `JWT_AUDIENCE=biotrack-app`
   - `MONGODB_REQUIRE_TLS=true` (set `false` only for local non-TLS MongoDB)
+  - `ENFORCE_HTTPS=true` (recommended in production behind TLS termination)
   - `ENFORCE_STRONG_SECRETS=false` (set `true` in production)
 
 Database security settings (recommended for production):
@@ -70,13 +71,14 @@ Database security settings (recommended for production):
 MONGODB_REQUIRE_TLS=true
 MONGODB_TLS_ENABLED=true
 ENFORCE_STRONG_SECRETS=true
+ENFORCE_HTTPS=true
 DATA_ENCRYPTION_ENABLED=true
 DATA_ENCRYPTION_KEY=<32-byte key>
 BACKUP_ENCRYPTION_KEY=<32-byte key>
 ```
 
 Notes:
-- `DATA_ENCRYPTION_KEY` encrypts sensitive patient record payloads at rest.
+- `DATA_ENCRYPTION_KEY` encrypts sensitive PII and patient record payloads at rest.
 - `BACKUP_ENCRYPTION_KEY` encrypts generated database backup files.
 - Both keys accept: 64-char hex, base64-encoded 32-byte key, or 32-char UTF-8 string.
 

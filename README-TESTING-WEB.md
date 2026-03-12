@@ -237,7 +237,59 @@ npm --workspace web run build
 Expected:
 - build succeeds
 
-## 10. Troubleshooting
+## 10. OWASP ZAP Baseline Scan (Unauthenticated)
+
+Prerequisites:
+- Docker installed
+- Backend and web running (see section 4)
+
+Run baseline scan against the web UI:
+
+```bash
+npm run zap:web
+```
+
+Run baseline scan against the API:
+
+```bash
+npm run zap:api
+```
+
+Reports are written to `docs/zap/` as HTML, JSON, and Markdown files.
+
+Notes:
+- Baseline scans are passive and mostly cover unauthenticated routes.
+- For authenticated scanning, create a ZAP context/user or provide an OpenAPI spec and run an API scan.
+
+## 11. End-to-End (Playwright)
+
+Prerequisites:
+- Backend + web running (section 4)
+- MongoDB running
+- If blockchain is not configured locally, set `BLOCKCHAIN_ENABLED=false` or `BLOCKCHAIN_STRICT_MODE=false` in `backend/.env` for test runs
+
+Install test deps (from repo root):
+
+```bash
+npm install
+npx playwright install
+```
+
+Run E2E tests:
+
+```bash
+npm --workspace web run test:e2e
+```
+
+Optional overrides:
+- `E2E_BASE_URL` (default `http://127.0.0.1:3001`)
+- `E2E_API_URL` (default `http://127.0.0.1:3000/api`)
+
+Notes:
+- Tests create admin/provider/patient records in MongoDB.
+- MFA/verification steps rely on dev preview codes returned by the API (non-production mode).
+
+## 12. Troubleshooting
 
 - `/register` or `/login` keeps loading:
   - confirm backend is running on `127.0.0.1:3000`
