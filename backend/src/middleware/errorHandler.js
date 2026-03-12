@@ -1,3 +1,5 @@
+import { env } from '../config/env.js';
+
 function mapDuplicateKeyError(err) {
   if (Number(err?.code) !== 11000) return null;
   const keyValue = err?.keyValue ?? {};
@@ -18,8 +20,17 @@ function mapDuplicateKeyError(err) {
 }
 
 export function errorHandler(err, req, res, next) {
-  // eslint-disable-next-line no-console
-  console.error(err);
+  if (env.NODE_ENV === 'production') {
+    // eslint-disable-next-line no-console
+    console.error({
+      name: err?.name,
+      code: err?.code,
+      statusCode: err?.statusCode,
+    });
+  } else {
+    // eslint-disable-next-line no-console
+    console.error(err);
+  }
   if (err?.type === 'entity.too.large') {
     return res.status(413).json({
       error: {
@@ -41,11 +52,13 @@ export function errorHandler(err, req, res, next) {
   }
 
   const status = err.statusCode ?? 500;
+  const isServerError = status >= 500;
+  const message = isServerError ? 'Internal Server Error' : (err.message ?? 'Request failed');
+  const code = err.code ?? (isServerError ? 'INTERNAL_ERROR' : 'REQUEST_FAILED');
   return res.status(status).json({
     error: {
-      message: err.message ?? 'Internal Server Error',
-      code: err.code ?? 'INTERNAL_ERROR',
+      message,
+      code,
     },
   });
 }
-

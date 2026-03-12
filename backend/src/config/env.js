@@ -80,6 +80,7 @@ export const env = {
   MONGODB_HEARTBEAT_FREQUENCY_MS: toNumber(process.env.MONGODB_HEARTBEAT_FREQUENCY_MS, 10000),
   MONGODB_AUTO_INDEX: toBool(process.env.MONGODB_AUTO_INDEX, process.env.NODE_ENV !== 'production'),
   TRUST_PROXY: toBool(process.env.TRUST_PROXY, false),
+  ENFORCE_HTTPS: toBool(process.env.ENFORCE_HTTPS, process.env.NODE_ENV === 'production'),
   ENFORCE_STRONG_SECRETS: toBool(process.env.ENFORCE_STRONG_SECRETS, process.env.NODE_ENV === 'production'),
 
   ADMIN_JWT_SECRET: process.env.ADMIN_JWT_SECRET ?? '',
