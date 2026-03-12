@@ -21,6 +21,8 @@ interface SessionUser {
   lastName?: string
   role?: UserRole
   id?: string
+  adminScope?: 'global' | 'municipal'
+  adminCityMunicipality?: string
 }
 
 interface DashboardRoleContextType {
@@ -69,6 +71,8 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
         lastName: session.lastName,
         role: mappedRole,
         id: session.id,
+        adminScope: session.adminScope,
+        adminCityMunicipality: session.adminCityMunicipality,
       })
       setIsAuthenticated(true)
     } else {

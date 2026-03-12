@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardLayout from '@/components/dashboard-layout';
+import { useDashboardRole } from '@/hooks/use-dashboard-role';
 import {
   createAdminUser,
   fetchAdminUsers,
@@ -21,6 +22,8 @@ type NewUserForm = {
   email: string;
   password: string;
   status: string;
+  adminScope: 'global' | 'municipal';
+  adminCityMunicipality: string;
   name: string;
   holderName: string;
   barangayName: string;
@@ -43,6 +46,8 @@ const emptyForm: NewUserForm = {
   email: '',
   password: '',
   status: DEFAULT_PROVIDER_STATUS,
+  adminScope: 'global',
+  adminCityMunicipality: '',
   name: '',
   holderName: '',
   barangayName: '',
@@ -174,6 +179,7 @@ const GOOGLE_MAPS_SETUP_HINT =
   'Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, enable Maps JavaScript API and Places API, attach billing, and allow http://127.0.0.1:3001/* and http://localhost:3001/* as referrers.';
 
 export default function AdminUsersPage() {
+  const { sessionUser } = useDashboardRole();
   const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -193,6 +199,10 @@ export default function AdminUsersPage() {
   const [providerCreationConfirmation, setProviderCreationConfirmation] = useState<ProviderCreationConfirmation | null>(null);
   const [providerCreationDialogOpen, setProviderCreationDialogOpen] = useState(false);
 
+  const adminScope = sessionUser?.adminScope ?? 'global';
+  const adminCityMunicipality = sessionUser?.adminCityMunicipality ?? '';
+  const isMunicipalAdmin = adminScope === 'municipal';
+
   const mapCanvasRef = useRef<HTMLDivElement | null>(null);
   const mapSearchRef = useRef<HTMLInputElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -202,6 +212,12 @@ export default function AdminUsersPage() {
   const dragListenerRef = useRef<any>(null);
   const geocoderRef = useRef<any>(null);
   const geocodeRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (isMunicipalAdmin && form.role === 'admin') {
+      setForm((prev) => ({ ...prev, role: 'provider' }));
+    }
+  }, [form.role, isMunicipalAdmin]);
 
   const reverseGeocodeCityMunicipality = (lat: number, lng: number) => {
     if (form.role !== 'provider') return;
@@ -421,12 +437,28 @@ export default function AdminUsersPage() {
   const submitCreate = async () => {
     const submittingRole = form.role;
     const submittedStatus = form.status;
+    const providerCityMunicipality = isMunicipalAdmin ? adminCityMunicipality.trim() : form.cityMunicipality.trim();
+    const municipalScopeLabel = adminCityMunicipality ? ` (${adminCityMunicipality})` : '';
+
+    if (submittingRole === 'admin' && isMunicipalAdmin) {
+      setError('Municipal admins cannot create other admin accounts.');
+      return;
+    }
+    if (submittingRole === 'admin' && form.adminScope === 'municipal' && !form.adminCityMunicipality.trim()) {
+      setError('City / Municipality is required for municipal admin accounts.');
+      return;
+    }
+    if (submittingRole === 'provider' && isMunicipalAdmin && !providerCityMunicipality) {
+      setError(`Municipal admin scope is missing a city/municipality${municipalScopeLabel}.`);
+      return;
+    }
+
     const providerCreationSnapshot =
       form.role === 'provider'
         ? {
             email: form.email.trim(),
             barangayName: form.barangayName.trim(),
-            cityMunicipality: form.cityMunicipality.trim(),
+            cityMunicipality: providerCityMunicipality,
             healthCenterName: form.healthCenterName.trim(),
             status: form.status,
           }
@@ -446,7 +478,7 @@ export default function AdminUsersPage() {
       payload.name = form.name.trim();
       payload.holderName = form.holderName.trim();
       payload.barangayName = form.barangayName.trim();
-      payload.cityMunicipality = form.cityMunicipality.trim();
+      payload.cityMunicipality = providerCityMunicipality;
       payload.healthCenterName = form.healthCenterName.trim();
       payload.officialContactInfo = form.officialContactInfo.trim();
       payload.latitude = form.latitude.trim() === '' ? null : Number(form.latitude);
@@ -457,6 +489,11 @@ export default function AdminUsersPage() {
       payload.firstName = form.firstName.trim();
       payload.lastName = form.lastName.trim();
       payload.middleInitial = form.middleInitial.trim();
+    } else if (form.role === 'admin') {
+      payload.adminScope = form.adminScope;
+      if (form.adminScope === 'municipal') {
+        payload.adminCityMunicipality = form.adminCityMunicipality.trim();
+      }
     }
 
     const res = await createAdminUser(payload);
@@ -643,7 +680,8 @@ export default function AdminUsersPage() {
             '2. Enter secure login credentials.',
             '3. Create the account only for trusted operators who need system governance access.',
           ];
-  const providerSetupLocation = [form.barangayName.trim(), form.cityMunicipality.trim()].filter(Boolean).join(', ') || 'Not set yet';
+  const providerScopeCity = isMunicipalAdmin ? adminCityMunicipality.trim() : form.cityMunicipality.trim();
+  const providerSetupLocation = [form.barangayName.trim(), providerScopeCity].filter(Boolean).join(', ') || 'Not set yet';
   const providerSetupStatus = formatStatusLabel(form.status);
   const providerWillAppearInRegistration = form.role === 'provider' && form.status === 'active';
   const accountScopeLabel =
@@ -795,6 +833,14 @@ export default function AdminUsersPage() {
           <p className="text-muted-foreground mt-1">Admin-controlled onboarding for users and barangay units</p>
         </div>
 
+        {isMunicipalAdmin ? (
+          <Card className="border-sky-200 bg-sky-50/70">
+            <CardContent className="pt-5 text-sm text-sky-800">
+              You are signed in as a municipal admin. Actions are limited to {adminCityMunicipality || 'your assigned city/municipality'}.
+            </CardContent>
+          </Card>
+        ) : null}
+
         {error ? (
           <Card className="border-destructive/30 bg-destructive/5">
             <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
@@ -920,12 +966,18 @@ export default function AdminUsersPage() {
                         ...prev,
                         role: nextRole,
                         status: nextRole === 'provider' ? DEFAULT_PROVIDER_STATUS : 'active',
+                        adminScope: nextRole === 'admin' ? prev.adminScope : 'global',
+                        adminCityMunicipality: nextRole === 'admin' ? prev.adminCityMunicipality : '',
+                        cityMunicipality:
+                          nextRole === 'provider' && isMunicipalAdmin ? adminCityMunicipality : prev.cityMunicipality,
                       }));
                     }}
                   >
                     <option value="patient">Patient</option>
                     <option value="provider">Barangay Unit (Provider)</option>
-                    <option value="admin">Admin</option>
+                    <option value="admin" disabled={isMunicipalAdmin}>
+                      Admin
+                    </option>
                   </select>
                 </div>
 
@@ -984,8 +1036,9 @@ export default function AdminUsersPage() {
                       <Input placeholder="Barangay Name" value={form.barangayName} onChange={(e) => setForm((prev) => ({ ...prev, barangayName: e.target.value }))} />
                       <Input
                         placeholder="City / Municipality"
-                        value={form.cityMunicipality}
+                        value={isMunicipalAdmin ? adminCityMunicipality : form.cityMunicipality}
                         onChange={(e) => setForm((prev) => ({ ...prev, cityMunicipality: e.target.value }))}
+                        disabled={isMunicipalAdmin}
                       />
                       <Input
                         placeholder="Health Center Name"
@@ -998,6 +1051,11 @@ export default function AdminUsersPage() {
                         onChange={(e) => setForm((prev) => ({ ...prev, officialContactInfo: e.target.value }))}
                       />
                     </div>
+                    {isMunicipalAdmin ? (
+                      <p className="text-xs text-muted-foreground">
+                        Your admin scope is locked to {adminCityMunicipality || 'the assigned city/municipality'}.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="space-y-3 rounded-xl border border-slate-200 p-4">
@@ -1102,8 +1160,40 @@ export default function AdminUsersPage() {
               ) : null}
 
               {form.role === 'admin' ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
-                  Admin accounts inherit system-governance access. Use this only for trusted operators who need oversight of users, logs, policies, or backups.
+                <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-800">Admin Scope</p>
+                    <p className="mt-2 text-sm">
+                      Admin accounts inherit governance access. Choose whether the admin is global or restricted to a single city/municipality.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <select
+                      className="h-10 w-full rounded-md border border-amber-200 bg-white px-3 py-1 text-sm text-amber-900"
+                      value={form.adminScope}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          adminScope: e.target.value as 'global' | 'municipal',
+                          adminCityMunicipality: e.target.value === 'municipal' ? prev.adminCityMunicipality : '',
+                        }))
+                      }
+                      disabled={isMunicipalAdmin}
+                    >
+                      <option value="global">Global Admin</option>
+                      <option value="municipal">Municipal Admin</option>
+                    </select>
+                    {form.adminScope === 'municipal' ? (
+                      <Input
+                        placeholder="City / Municipality"
+                        value={form.adminCityMunicipality}
+                        onChange={(e) => setForm((prev) => ({ ...prev, adminCityMunicipality: e.target.value }))}
+                      />
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-amber-800/80">
+                    Municipal admins can manage only their jurisdiction and cannot change global RBAC or backup settings.
+                  </p>
                 </div>
               ) : null}
 
@@ -1207,6 +1297,12 @@ export default function AdminUsersPage() {
                             {user.role === 'provider' ? (
                               <p className="text-sm text-slate-700">
                                 {[barangayName, cityMunicipality, healthCenterName].filter(Boolean).join(' • ') || 'Location details unavailable'}
+                              </p>
+                            ) : null}
+                            {user.role === 'admin' ? (
+                              <p className="text-sm text-slate-700">
+                                Scope: {String(meta.adminScope ?? 'global')}
+                                {meta.cityMunicipality ? ` • ${String(meta.cityMunicipality)}` : ''}
                               </p>
                             ) : null}
                             <p className="text-xs text-muted-foreground">Last updated: {updatedAtLabel}</p>

@@ -46,6 +46,7 @@ const PROVIDER_PATHS = new Set([
 ])
 
 const ADMIN_PATHS = new Set(['/admin-dashboard'])
+const ADMIN_GLOBAL_ONLY_PATHS = new Set(['/admin/ai-configuration', '/admin/backup-recovery'])
 
 const PATIENT_PREFIXES: string[] = []
 const PROVIDER_PREFIXES = ['/users/', '/patients/']
@@ -59,7 +60,7 @@ function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.has(pathname)
 }
 
-function isRoleAllowed(pathname: string, role: UserRole) {
+function isRoleAllowed(pathname: string, role: UserRole, adminScope: string = 'global') {
   if (COMMON_PROTECTED_PATHS.has(pathname)) return true
 
   if (role === 'patient') {
@@ -70,13 +71,18 @@ function isRoleAllowed(pathname: string, role: UserRole) {
     return PROVIDER_PATHS.has(pathname) || hasPrefix(pathname, PROVIDER_PREFIXES)
   }
 
+  if (adminScope === 'municipal' && ADMIN_GLOBAL_ONLY_PATHS.has(pathname)) {
+    return false
+  }
+
   return ADMIN_PATHS.has(pathname) || hasPrefix(pathname, ADMIN_PREFIXES)
 }
 
 export default function RouteGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { role, isAuthenticated, isReady } = useDashboardRole()
+  const { role, isAuthenticated, isReady, sessionUser } = useDashboardRole()
+  const adminScope = sessionUser?.adminScope ?? 'global'
   const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null)
   const [timeoutMessage, setTimeoutMessage] = useState('')
   const timeoutHandledRef = useRef(false)
@@ -248,13 +254,13 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
       return
     }
 
-    if (!isRoleAllowed(pathname, role)) {
+    if (!isRoleAllowed(pathname, role, adminScope)) {
       router.replace('/')
     }
-  }, [isReady, isAuthenticated, pathname, role, router])
+  }, [isReady, isAuthenticated, pathname, role, router, adminScope])
 
   const shouldBlockProtectedRender =
-    !isPublicPath(pathname) && (!isAuthenticated || !isRoleAllowed(pathname, role))
+    !isPublicPath(pathname) && (!isAuthenticated || !isRoleAllowed(pathname, role, adminScope))
   const shouldBlockAuthPageRender =
     isPublicPath(pathname) && isAuthenticated && AUTH_PAGES.has(pathname)
 

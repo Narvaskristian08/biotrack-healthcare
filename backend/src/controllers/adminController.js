@@ -39,6 +39,65 @@ function buildSafeRegex(value) {
   return new RegExp(escaped, 'i');
 }
 
+function buildExactMatchRegex(value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return null;
+  const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${escaped}$`, 'i');
+}
+
+function normalizeCityKey(value) {
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function resolveAdminScopeContext(req) {
+  const scope = String(req.context?.adminScope ?? 'global').trim().toLowerCase();
+  const cityMunicipality = String(req.context?.adminCityMunicipality ?? '').trim();
+  const cityKey = normalizeCityKey(cityMunicipality);
+  return {
+    scope: scope === 'municipal' ? 'municipal' : 'global',
+    cityMunicipality,
+    cityKey,
+  };
+}
+
+function ensureMunicipalScope(scopeContext, res) {
+  if (scopeContext.scope === 'municipal' && !scopeContext.cityKey) {
+    res.status(403).json({ error: { message: 'Municipal admin scope is missing city/municipality' } });
+    return false;
+  }
+  return true;
+}
+
+function isSameCity(left, right) {
+  const leftKey = normalizeCityKey(left);
+  const rightKey = normalizeCityKey(right);
+  return Boolean(leftKey && rightKey && leftKey === rightKey);
+}
+
+async function resolveScopeHealthCenters(scopeContext) {
+  if (scopeContext.scope !== 'municipal') {
+    return { cityRegex: null, healthCenterIds: null };
+  }
+  const cityRegex = buildExactMatchRegex(scopeContext.cityMunicipality);
+  if (!cityRegex) {
+    return { cityRegex: null, healthCenterIds: [] };
+  }
+  const centers = await HealthCenter.find({ cityMunicipality: cityRegex }).select('_id').lean();
+  return {
+    cityRegex,
+    healthCenterIds: centers.map((center) => center._id),
+  };
+}
+
+function applyScopeFilter(filter, scopeFilter) {
+  if (!scopeFilter) return filter;
+  return { $and: [filter, scopeFilter] };
+}
+
 function normalizeBarangayStatus(value, fallback = 'pending') {
   const normalized = String(value ?? fallback).trim().toLowerCase();
   return BARANGAY_STATUSES.includes(normalized) ? normalized : '';
@@ -174,13 +233,20 @@ export async function registerAdmin(req, res) {
     emailHash: emailFields.hash,
     emailEncrypted: emailFields.encrypted,
     passwordHash: await hashPassword(String(password)),
+    scope: 'global',
+    cityMunicipality: '',
   });
 
   const token = signAdminToken({ adminId: admin._id });
   await writeAuditLog({ req, action: 'ADMIN.REGISTER', entityType: 'Admin', entityId: admin._id });
   return res.status(201).json({
     accessToken: token,
-    admin: { id: admin._id, email: resolveEmail(admin) },
+    admin: {
+      id: admin._id,
+      email: resolveEmail(admin),
+      scope: admin.scope ?? 'global',
+      cityMunicipality: admin.cityMunicipality ?? '',
+    },
   });
 }
 
@@ -215,10 +281,21 @@ export async function loginAdmin(req, res) {
 
   const token = signAdminToken({ adminId: admin._id });
   await writeAuditLog({ req, action: 'ADMIN.LOGIN', entityType: 'Admin', entityId: admin._id });
-  return res.json({ accessToken: token, admin: { id: admin._id, email: resolveEmail(admin) } });
+  return res.json({
+    accessToken: token,
+    admin: {
+      id: admin._id,
+      email: resolveEmail(admin),
+      scope: admin.scope ?? 'global',
+      cityMunicipality: admin.cityMunicipality ?? '',
+    },
+  });
 }
 
 export async function adminCreateHealthCenter(req, res) {
+  const scopeContext = resolveAdminScopeContext(req);
+  if (!ensureMunicipalScope(scopeContext, res)) return;
+
   const {
     email,
     password,
@@ -246,6 +323,11 @@ export async function adminCreateHealthCenter(req, res) {
         message:
           'email, password, barangayName, cityMunicipality, healthCenterName, and officialContactInfo are required',
       },
+    });
+  }
+  if (scopeContext.scope === 'municipal' && !isSameCity(cityMunicipality, scopeContext.cityMunicipality)) {
+    return res.status(403).json({
+      error: { message: 'Municipal admins can only create providers within their city/municipality' },
     });
   }
   const passwordCheck = validatePasswordPolicy(password);
@@ -375,22 +457,43 @@ async function getOrCreateAdminConfig(adminId = null) {
 }
 
 export async function getAdminOverview(req, res) {
+  const scopeContext = resolveAdminScopeContext(req);
+  if (!ensureMunicipalScope(scopeContext, res)) return;
+
+  const { cityRegex, healthCenterIds } = await resolveScopeHealthCenters(scopeContext);
+  const healthCenterFilter =
+    scopeContext.scope === 'municipal' && cityRegex ? { cityMunicipality: cityRegex } : {};
+  const healthCenterIdFilter =
+    scopeContext.scope === 'municipal' ? { healthCenterId: { $in: healthCenterIds ?? [] } } : {};
+
   const now = new Date();
-  const activeSessionQuery = buildActiveSessionQuery(now);
+  const activeSessionQuery = {
+    ...buildActiveSessionQuery(now),
+    ...(scopeContext.scope === 'municipal' ? { healthCenterId: { $in: healthCenterIds ?? [] } } : {}),
+  };
   const [patients, providers, activeProviders, pendingProviders, admins, sessions, failedEvents, recentProofs] = await Promise.all([
-    Patient.countDocuments({}),
-    HealthCenter.countDocuments({}),
-    HealthCenter.countDocuments({ status: 'active' }),
-    HealthCenter.countDocuments({ status: { $in: ['pending', 'verified'] } }),
-    Admin.countDocuments({ status: 'active' }),
+    Patient.countDocuments(healthCenterIdFilter),
+    HealthCenter.countDocuments(healthCenterFilter),
+    HealthCenter.countDocuments({ ...healthCenterFilter, status: 'active' }),
+    HealthCenter.countDocuments({ ...healthCenterFilter, status: { $in: ['pending', 'verified'] } }),
+    scopeContext.scope === 'municipal'
+      ? Admin.countDocuments({ status: 'active', scope: 'municipal', cityMunicipality: cityRegex })
+      : Admin.countDocuments({ status: 'active' }),
     Session.countDocuments(activeSessionQuery),
-    AuditLog.countDocuments({
-      outcome: 'failure',
-      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-    }),
-    BlockchainProofLog.countDocuments({
-      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-    }),
+    AuditLog.countDocuments(
+      applyScopeFilter(
+        {
+          outcome: 'failure',
+          createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
+        scopeContext.scope === 'municipal' ? healthCenterIdFilter : null
+      )
+    ),
+    BlockchainProofLog.countDocuments(
+      scopeContext.scope === 'municipal'
+        ? { ...healthCenterIdFilter, createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
+        : { createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
+    ),
   ]);
 
   return res.json({
@@ -405,6 +508,10 @@ export async function getAdminOverview(req, res) {
 }
 
 export async function listAdminUsers(req, res) {
+  const scopeContext = resolveAdminScopeContext(req);
+  if (!ensureMunicipalScope(scopeContext, res)) return;
+  const { cityRegex, healthCenterIds } = await resolveScopeHealthCenters(scopeContext);
+
   const q = String(req.query.q ?? '').trim();
   const role = String(req.query.role ?? '').trim().toLowerCase();
   const status = String(req.query.status ?? '').trim().toLowerCase();
@@ -433,6 +540,14 @@ export async function listAdminUsers(req, res) {
     if (status === 'active' || status === 'archived') patientFilter.status = status;
   }
 
+  if (scopeContext.scope === 'municipal') {
+    if (cityRegex) {
+      providerFilter.cityMunicipality = cityRegex;
+    }
+    patientFilter.healthCenterId = { $in: healthCenterIds ?? [] };
+    adminFilter._id = req.context.adminId;
+  }
+
   const [patients, providers, admins] = await Promise.all([
     role && role !== 'patient'
       ? []
@@ -452,7 +567,11 @@ export async function listAdminUsers(req, res) {
           .lean(),
     role && role !== 'admin'
       ? []
-      : Admin.find(adminFilter).select('email emailEncrypted role status createdAt updatedAt').sort({ updatedAt: -1 }).limit(limit).lean(),
+      : Admin.find(adminFilter)
+          .select('email emailEncrypted role status scope cityMunicipality createdAt updatedAt')
+          .sort({ updatedAt: -1 })
+          .limit(limit)
+          .lean(),
   ]);
 
   const users = [
@@ -498,7 +617,10 @@ export async function listAdminUsers(req, res) {
       email: resolveEmail(a),
       status: a.status,
       credentialStatus: 'approved',
-      meta: {},
+      meta: {
+        adminScope: a.scope ?? 'global',
+        cityMunicipality: a.cityMunicipality ?? '',
+      },
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
     })),
@@ -509,6 +631,9 @@ export async function listAdminUsers(req, res) {
 
 export async function adminUpsertUser(req, res) {
   const actorId = req.context.adminId;
+  const scopeContext = resolveAdminScopeContext(req);
+  if (!ensureMunicipalScope(scopeContext, res)) return;
+
   const {
     role,
     email,
@@ -550,6 +675,11 @@ export async function adminUpsertUser(req, res) {
           message:
             'barangayName, cityMunicipality, healthCenterName, and officialContactInfo are required for provider',
         },
+      });
+    }
+    if (scopeContext.scope === 'municipal' && !isSameCity(cityMunicipality, scopeContext.cityMunicipality)) {
+      return res.status(403).json({
+        error: { message: 'Municipal admins can only create providers within their city/municipality' },
       });
     }
     const emailFields = buildEmailFields(email);
@@ -656,6 +786,15 @@ export async function adminUpsertUser(req, res) {
   }
 
   if (normalizedRole === 'patient') {
+    if (scopeContext.scope === 'municipal' && healthCenterId) {
+      const cityRegex = buildExactMatchRegex(scopeContext.cityMunicipality);
+      const allowedCenter = await HealthCenter.findOne({ _id: healthCenterId, cityMunicipality: cityRegex }).select('_id').lean();
+      if (!allowedCenter) {
+        return res.status(403).json({
+          error: { message: 'Municipal admins can only create patients within their city/municipality' },
+        });
+      }
+    }
     if (!healthCenterId || !firstName || !lastName || !middleInitial) {
       return res.status(400).json({ error: { message: 'healthCenterId, firstName, lastName, middleInitial are required for patient' } });
     }
@@ -743,6 +882,10 @@ export async function adminUpsertUser(req, res) {
     });
   }
 
+  if (scopeContext.scope === 'municipal') {
+    return res.status(403).json({ error: { message: 'Municipal admins cannot create other admin accounts' } });
+  }
+
   const emailFields = buildEmailFields(email);
   const normalizedEmail = emailFields.normalized;
   let existingAdmin = await Admin.findOne({ emailHash: emailFields.hash }).lean();
@@ -750,6 +893,14 @@ export async function adminUpsertUser(req, res) {
     existingAdmin = await Admin.findOne({ email: normalizedEmail }).lean();
   }
   if (existingAdmin) return res.status(409).json({ error: { message: 'Admin email already exists' } });
+  const requestedScope = String(req.body?.adminScope ?? req.body?.scope ?? 'global').trim().toLowerCase();
+  const adminScope = requestedScope === 'municipal' ? 'municipal' : 'global';
+  const adminCityMunicipality =
+    adminScope === 'municipal' ? String(req.body?.adminCityMunicipality ?? req.body?.cityMunicipality ?? '').trim() : '';
+  if (adminScope === 'municipal' && !adminCityMunicipality) {
+    return res.status(400).json({ error: { message: 'cityMunicipality is required for municipal admins' } });
+  }
+
   const admin = await Admin.create({
     email: '',
     emailHash: emailFields.hash,
@@ -757,27 +908,49 @@ export async function adminUpsertUser(req, res) {
     passwordHash: await hashPassword(String(password)),
     status: status === 'disabled' ? 'disabled' : 'active',
     role: 'admin',
+    scope: adminScope,
+    cityMunicipality: adminCityMunicipality,
   });
   await writeAuditLog({
     req,
     action: 'ADMIN.USER.CREATE',
     entityType: 'Admin',
     entityId: admin._id,
-    after: { email: normalizedEmail, status: admin.status },
+    after: { email: normalizedEmail, status: admin.status, scope: admin.scope, cityMunicipality: admin.cityMunicipality },
   });
-  return res.status(201).json({ user: { id: admin._id, role: 'admin', email: resolveEmail(admin) } });
+  return res.status(201).json({
+    user: {
+      id: admin._id,
+      role: 'admin',
+      email: resolveEmail(admin),
+      scope: admin.scope,
+      cityMunicipality: admin.cityMunicipality,
+    },
+  });
 }
 
 export async function adminUpdateUser(req, res) {
   const { userRole, userId } = req.params;
   const role = String(userRole ?? '').toLowerCase();
   const patch = req.body ?? {};
+  const scopeContext = resolveAdminScopeContext(req);
+  if (!ensureMunicipalScope(scopeContext, res)) return;
 
   if (!['patient', 'provider', 'admin'].includes(role)) {
     return res.status(400).json({ error: { message: 'userRole must be patient, provider, or admin' } });
   }
 
   if (role === 'provider') {
+    if (scopeContext.scope === 'municipal') {
+      const provider = await HealthCenter.findById(userId).select('cityMunicipality').lean();
+      if (!provider) return res.status(404).json({ error: { message: 'Provider not found' } });
+      if (!isSameCity(provider.cityMunicipality, scopeContext.cityMunicipality)) {
+        return res.status(403).json({ error: { message: 'Provider is outside your city/municipality scope' } });
+      }
+      if ('cityMunicipality' in patch && !isSameCity(patch.cityMunicipality, scopeContext.cityMunicipality)) {
+        return res.status(403).json({ error: { message: 'Providers cannot be reassigned outside your city/municipality scope' } });
+      }
+    }
     const allowed = [
       'name',
       'holderName',
@@ -860,6 +1033,15 @@ export async function adminUpdateUser(req, res) {
   }
 
   if (role === 'patient') {
+    if (scopeContext.scope === 'municipal') {
+      const patient = await Patient.findById(userId).select('healthCenterId').lean();
+      if (!patient) return res.status(404).json({ error: { message: 'Patient not found' } });
+      const cityRegex = buildExactMatchRegex(scopeContext.cityMunicipality);
+      const allowedCenter = await HealthCenter.findOne({ _id: patient.healthCenterId, cityMunicipality: cityRegex }).select('_id').lean();
+      if (!allowedCenter) {
+        return res.status(403).json({ error: { message: 'Patient is outside your city/municipality scope' } });
+      }
+    }
     const allowed = [
       'firstName',
       'lastName',
@@ -919,9 +1101,26 @@ export async function adminUpdateUser(req, res) {
     return res.json({ user: { id: doc._id, role: 'patient', email: resolveEmail(doc), status: doc.status } });
   }
 
+  if (scopeContext.scope === 'municipal') {
+    return res.status(403).json({ error: { message: 'Municipal admins cannot update other admin accounts' } });
+  }
+
   const allowed = ['email', 'status'];
   const update = {};
   for (const k of allowed) if (k in patch) update[k] = patch[k];
+  if ('scope' in patch || 'adminScope' in patch || 'cityMunicipality' in patch || 'adminCityMunicipality' in patch) {
+    const requestedScope = String(patch.adminScope ?? patch.scope ?? '').trim().toLowerCase();
+    if (requestedScope) {
+      update.scope = requestedScope === 'municipal' ? 'municipal' : 'global';
+      update.cityMunicipality =
+        update.scope === 'municipal'
+          ? String(patch.adminCityMunicipality ?? patch.cityMunicipality ?? '').trim()
+          : '';
+      if (update.scope === 'municipal' && !update.cityMunicipality) {
+        return res.status(400).json({ error: { message: 'cityMunicipality is required for municipal admins' } });
+      }
+    }
+  }
   if ('email' in update) {
     const emailFields = buildEmailFields(update.email);
     update.email = '';
@@ -936,6 +1135,9 @@ export async function adminUpdateUser(req, res) {
 
 export async function approveProviderCredentials(req, res) {
   const { providerId } = req.params;
+  const scopeContext = resolveAdminScopeContext(req);
+  if (!ensureMunicipalScope(scopeContext, res)) return;
+
   const requested =
     req.body?.status ??
     req.body?.onboardingStatus ??
@@ -949,6 +1151,13 @@ export async function approveProviderCredentials(req, res) {
   const status = normalizeBarangayStatus(requested);
   if (!status) {
     return res.status(400).json({ error: { message: 'status must be pending, verified, or active' } });
+  }
+  if (scopeContext.scope === 'municipal') {
+    const providerSnapshot = await HealthCenter.findById(providerId).select('cityMunicipality').lean();
+    if (!providerSnapshot) return res.status(404).json({ error: { message: 'Provider not found' } });
+    if (!isSameCity(providerSnapshot.cityMunicipality, scopeContext.cityMunicipality)) {
+      return res.status(403).json({ error: { message: 'Provider is outside your city/municipality scope' } });
+    }
   }
   const provider = await HealthCenter.findByIdAndUpdate(
     providerId,
@@ -1012,6 +1221,10 @@ export async function updateRbacSettings(req, res) {
 }
 
 export async function listSystemLogs(req, res) {
+  const scopeContext = resolveAdminScopeContext(req);
+  if (!ensureMunicipalScope(scopeContext, res)) return;
+  const { healthCenterIds } = await resolveScopeHealthCenters(scopeContext);
+
   const q = String(req.query.q ?? '').trim();
   const action = String(req.query.action ?? '').trim();
   const outcome = String(req.query.outcome ?? '').trim();
@@ -1026,16 +1239,27 @@ export async function listSystemLogs(req, res) {
     filter.$or = [{ action: re }, { reason: re }, { actorName: re }, { userAgent: re }];
   }
 
-  const total = await AuditLog.countDocuments(filter);
+  const scopeFilter =
+    scopeContext.scope === 'municipal'
+      ? {
+          $or: [
+            { healthCenterId: { $in: healthCenterIds ?? [] } },
+            { actorType: 'admin', actorId: req.context.adminId },
+          ],
+        }
+      : null;
+  const scopedFilter = applyScopeFilter(filter, scopeFilter);
+
+  const total = await AuditLog.countDocuments(scopedFilter);
   const totalPages = Math.max(Math.ceil(total / limit), 1);
   const safePage = Math.min(page, totalPages);
   const skip = (safePage - 1) * limit;
 
   const [logs, suspiciousCount] = await Promise.all([
-    AuditLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    AuditLog.find(scopedFilter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
     AuditLog.countDocuments({
       $and: [
-        filter,
+        scopedFilter,
         {
           $or: [{ outcome: 'failure' }, { action: /SECURITY/i }],
         },
@@ -1058,14 +1282,44 @@ export async function listSystemLogs(req, res) {
 }
 
 export async function getSystemMonitoring(req, res) {
+  const scopeContext = resolveAdminScopeContext(req);
+  if (!ensureMunicipalScope(scopeContext, res)) return;
+  const { healthCenterIds } = await resolveScopeHealthCenters(scopeContext);
+
   const now = new Date();
-  const activeSessionQuery = buildActiveSessionQuery(now);
+  const activeSessionQuery = {
+    ...buildActiveSessionQuery(now),
+    ...(scopeContext.scope === 'municipal' ? { healthCenterId: { $in: healthCenterIds ?? [] } } : {}),
+  };
+  const auditScopeFilter =
+    scopeContext.scope === 'municipal'
+      ? {
+          $or: [
+            { healthCenterId: { $in: healthCenterIds ?? [] } },
+            { actorType: 'admin', actorId: req.context.adminId },
+          ],
+        }
+      : null;
   const [activeSessions, totalSessions24h, failed24h, alerts24h, recentAudit, cfg] = await Promise.all([
     Session.countDocuments(activeSessionQuery),
-    Session.countDocuments({ startedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
-    AuditLog.countDocuments({ outcome: 'failure', createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
-    AuditLog.countDocuments({ action: { $in: ['ALERT.GENERATED', 'RECORD.VERIFY'] }, createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
-    AuditLog.find({}).sort({ createdAt: -1 }).limit(20).lean(),
+    Session.countDocuments(
+      scopeContext.scope === 'municipal'
+        ? { startedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, healthCenterId: { $in: healthCenterIds ?? [] } }
+        : { startedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
+    ),
+    AuditLog.countDocuments(
+      applyScopeFilter(
+        { outcome: 'failure', createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+        auditScopeFilter
+      )
+    ),
+    AuditLog.countDocuments(
+      applyScopeFilter(
+        { action: { $in: ['ALERT.GENERATED', 'RECORD.VERIFY'] }, createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+        auditScopeFilter
+      )
+    ),
+    AuditLog.find(applyScopeFilter({}, auditScopeFilter)).sort({ createdAt: -1 }).limit(20).lean(),
     getOrCreateAdminConfig(req.context.adminId),
   ]);
 
@@ -1084,25 +1338,31 @@ export async function getSystemMonitoring(req, res) {
 }
 
 export async function getBlockchainOverview(req, res) {
+  const scopeContext = resolveAdminScopeContext(req);
+  if (!ensureMunicipalScope(scopeContext, res)) return;
+  const { healthCenterIds } = await resolveScopeHealthCenters(scopeContext);
+
   const scope = String(req.query?.scope ?? 'active').trim().toLowerCase() || 'active';
   const limit = Math.min(Math.max(Number(req.query?.limit ?? 50), 1), 200);
   const archiveFilter = buildBlockchainArchiveFilter(scope);
+  const healthCenterFilter =
+    scopeContext.scope === 'municipal' ? { healthCenterId: { $in: healthCenterIds ?? [] } } : {};
   const recentWindow = { createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } };
 
   const [proofs24h, failed24h, byKind, byStatus, recent, activeLogCount, archivedLogCount] = await Promise.all([
-    BlockchainProofLog.countDocuments({ ...archiveFilter, ...recentWindow }),
-    BlockchainProofLog.countDocuments({ ...archiveFilter, status: 'failed', ...recentWindow }),
+    BlockchainProofLog.countDocuments({ ...archiveFilter, ...healthCenterFilter, ...recentWindow }),
+    BlockchainProofLog.countDocuments({ ...archiveFilter, ...healthCenterFilter, status: 'failed', ...recentWindow }),
     BlockchainProofLog.aggregate([
-      { $match: archiveFilter },
+      { $match: { ...archiveFilter, ...healthCenterFilter } },
       { $group: { _id: '$kind', count: { $sum: 1 } } },
     ]),
     BlockchainProofLog.aggregate([
-      { $match: archiveFilter },
+      { $match: { ...archiveFilter, ...healthCenterFilter } },
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]),
-    BlockchainProofLog.find(archiveFilter).sort({ createdAt: -1 }).limit(limit).lean(),
-    BlockchainProofLog.countDocuments({ archivedAt: null }),
-    BlockchainProofLog.countDocuments({ archivedAt: { $ne: null } }),
+    BlockchainProofLog.find({ ...archiveFilter, ...healthCenterFilter }).sort({ createdAt: -1 }).limit(limit).lean(),
+    BlockchainProofLog.countDocuments({ ...healthCenterFilter, archivedAt: null }),
+    BlockchainProofLog.countDocuments({ ...healthCenterFilter, archivedAt: { $ne: null } }),
   ]);
 
   return res.json({
@@ -1120,22 +1380,28 @@ export async function getBlockchainOverview(req, res) {
 }
 
 export async function getBlockchainMetrics(req, res) {
+  const scopeContext = resolveAdminScopeContext(req);
+  if (!ensureMunicipalScope(scopeContext, res)) return;
+  const { healthCenterIds } = await resolveScopeHealthCenters(scopeContext);
+
   const days = Math.min(Math.max(Number(req.query?.days ?? 7), 1), 30);
   const scope = String(req.query?.scope ?? 'active').trim().toLowerCase() || 'active';
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const archiveFilter = buildBlockchainArchiveFilter(scope);
+  const healthCenterFilter =
+    scopeContext.scope === 'municipal' ? { healthCenterId: { $in: healthCenterIds ?? [] } } : {};
 
   const [byStatus, byKind, dailyRaw] = await Promise.all([
     BlockchainProofLog.aggregate([
-      { $match: { ...archiveFilter, createdAt: { $gte: since } } },
+      { $match: { ...archiveFilter, ...healthCenterFilter, createdAt: { $gte: since } } },
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]),
     BlockchainProofLog.aggregate([
-      { $match: { ...archiveFilter, createdAt: { $gte: since } } },
+      { $match: { ...archiveFilter, ...healthCenterFilter, createdAt: { $gte: since } } },
       { $group: { _id: '$kind', count: { $sum: 1 } } },
     ]),
     BlockchainProofLog.aggregate([
-      { $match: { ...archiveFilter, createdAt: { $gte: since } } },
+      { $match: { ...archiveFilter, ...healthCenterFilter, createdAt: { $gte: since } } },
       {
         $group: {
           _id: {
@@ -1214,9 +1480,23 @@ export async function getBlockchainMetrics(req, res) {
 }
 
 export async function archiveBlockchainLogs(req, res) {
+  const scopeContext = resolveAdminScopeContext(req);
+  if (!ensureMunicipalScope(scopeContext, res)) return;
+  const { healthCenterIds } = await resolveScopeHealthCenters(scopeContext);
+
   const requestedIds = Array.from(new Set((req.body?.logIds ?? []).map((value) => String(value).trim()).filter(Boolean)));
   if (requestedIds.length === 0) {
     return res.status(400).json({ error: { message: 'At least one blockchain log is required' } });
+  }
+
+  if (scopeContext.scope === 'municipal') {
+    const allowedCount = await BlockchainProofLog.countDocuments({
+      _id: { $in: requestedIds },
+      healthCenterId: { $in: healthCenterIds ?? [] },
+    });
+    if (allowedCount !== requestedIds.length) {
+      return res.status(403).json({ error: { message: 'Some blockchain logs are outside your city/municipality scope' } });
+    }
   }
 
   const archivableLogs = await BlockchainProofLog.find({

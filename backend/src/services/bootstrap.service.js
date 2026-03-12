@@ -35,6 +35,8 @@ export async function bootstrapDefaultAdmin() {
     passwordHash: await hashPassword(password),
     role: 'admin',
     status: 'active',
+    scope: 'global',
+    cityMunicipality: '',
   });
 
   console.log(`[bootstrap] Default admin created for ${email}`);

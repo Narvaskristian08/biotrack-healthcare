@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { requireAdminAuth } from '../middleware/auth.js';
+import { requireAdminAuth, requireGlobalAdmin } from '../middleware/auth.js';
 import { requireAdminCapability } from '../middleware/rbac.js';
 import { validateBody, validateParams, validateQuery } from '../middleware/validate.js';
 import { authLoginLimiter } from '../middleware/rateLimit.js';
@@ -78,8 +78,15 @@ adminRoutes.post(
   asyncHandler(approveProviderCredentials)
 );
 
-adminRoutes.get('/rbac', requireAdminAuth, requireAdminCapability('canManagePolicies'), asyncHandler(getRbacSettings));
-adminRoutes.patch('/rbac', requireAdminAuth, requireAdminCapability('canManagePolicies'), validateBody(adminRbacUpdateSchema), asyncHandler(updateRbacSettings));
+adminRoutes.get('/rbac', requireAdminAuth, requireGlobalAdmin, requireAdminCapability('canManagePolicies'), asyncHandler(getRbacSettings));
+adminRoutes.patch(
+  '/rbac',
+  requireAdminAuth,
+  requireGlobalAdmin,
+  requireAdminCapability('canManagePolicies'),
+  validateBody(adminRbacUpdateSchema),
+  asyncHandler(updateRbacSettings)
+);
 
 adminRoutes.get('/logs', requireAdminAuth, requireAdminCapability('canMonitorSystem'), validateQuery(adminLogsQuerySchema), asyncHandler(listSystemLogs));
 adminRoutes.get('/monitoring', requireAdminAuth, requireAdminCapability('canMonitorSystem'), asyncHandler(getSystemMonitoring));
@@ -106,7 +113,28 @@ adminRoutes.post(
   asyncHandler(archiveBlockchainLogs)
 );
 
-adminRoutes.get('/governance', requireAdminAuth, requireAdminCapability('canManagePolicies'), asyncHandler(getDataGovernanceSettings));
-adminRoutes.patch('/governance', requireAdminAuth, requireAdminCapability('canManagePolicies'), validateBody(adminGovernanceUpdateSchema), asyncHandler(updateDataGovernanceSettings));
-adminRoutes.post('/governance/backup', requireAdminAuth, requireAdminCapability('canManageBackups'), validateBody(emptyBodySchema), asyncHandler(runDatabaseBackup));
-adminRoutes.post('/governance/restore', requireAdminAuth, requireAdminCapability('canManageBackups'), validateBody(emptyBodySchema), asyncHandler(markRestoreOperation));
+adminRoutes.get('/governance', requireAdminAuth, requireGlobalAdmin, requireAdminCapability('canManagePolicies'), asyncHandler(getDataGovernanceSettings));
+adminRoutes.patch(
+  '/governance',
+  requireAdminAuth,
+  requireGlobalAdmin,
+  requireAdminCapability('canManagePolicies'),
+  validateBody(adminGovernanceUpdateSchema),
+  asyncHandler(updateDataGovernanceSettings)
+);
+adminRoutes.post(
+  '/governance/backup',
+  requireAdminAuth,
+  requireGlobalAdmin,
+  requireAdminCapability('canManageBackups'),
+  validateBody(emptyBodySchema),
+  asyncHandler(runDatabaseBackup)
+);
+adminRoutes.post(
+  '/governance/restore',
+  requireAdminAuth,
+  requireGlobalAdmin,
+  requireAdminCapability('canManageBackups'),
+  validateBody(emptyBodySchema),
+  asyncHandler(markRestoreOperation)
+);

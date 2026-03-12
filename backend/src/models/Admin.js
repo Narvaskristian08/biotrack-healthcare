@@ -8,6 +8,8 @@ const AdminSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true },
     role: { type: String, default: 'admin' },
     status: { type: String, enum: ['active', 'disabled'], default: 'active', index: true },
+    scope: { type: String, enum: ['global', 'municipal'], default: 'global', index: true },
+    cityMunicipality: { type: String, default: '', trim: true, index: true },
   },
   { timestamps: true }
 );

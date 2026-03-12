@@ -231,7 +231,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [logoutDialogOpen, setLogoutDialogOpen] = React.useState(false)
   const [logoutPending, setLogoutPending] = React.useState(false)
   const navigationGroups = getNavigationGroups(role)
-  const navigationItems = navigationGroups.flatMap((group) => group.items)
+  const isMunicipalAdmin = role === 'admin' && sessionUser?.adminScope === 'municipal'
+  const filteredNavigationGroups = isMunicipalAdmin
+    ? navigationGroups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter(
+            (item) => !['/admin/ai-configuration', '/admin/backup-recovery'].includes(item.href)
+          ),
+        }))
+        .filter((group) => group.items.length > 0)
+    : navigationGroups
+  const navigationItems = filteredNavigationGroups.flatMap((group) => group.items)
   const roleLabel = getRoleLabel(role)
   const profileHref = getProfileHref(role)
   const displayName = getDisplayName(sessionUser, role)
@@ -285,7 +296,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
           <SidebarContent className="px-3 py-4">
             <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">Navigation</p>
-            {navigationGroups.map((group) => (
+            {filteredNavigationGroups.map((group) => (
               <SidebarGroup key={group.label}>
                 <SidebarGroupLabel className="px-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/50">
                   {group.label}

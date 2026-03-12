@@ -73,4 +73,6 @@ export const adminUpsertSchema = z.object({
   role: z.enum(['patient', 'provider', 'admin']),
   email: z.string().trim().email('email must be a valid email address'),
   password: z.string().min(1, 'password is required'),
+  adminScope: z.enum(['global', 'municipal']).optional(),
+  adminCityMunicipality: z.string().trim().min(1).max(140).optional(),
 }).passthrough();

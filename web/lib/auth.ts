@@ -75,6 +75,8 @@ export interface UserSession {
     lastName?: string;
     id: string;
     healthCenterId?: string;
+    adminScope?: 'global' | 'municipal';
+    adminCityMunicipality?: string;
     loginTime: string;
 }
 
@@ -473,7 +475,7 @@ export async function loginHealthCenter(data: LoginData): Promise<LoginOutcome> 
 export async function registerAdmin(data: AdminRegisterData): Promise<{ success: boolean; session?: UserSession; error?: string }> {
     const result = await apiPost<{
         accessToken: string;
-        admin: { id: string; email: string };
+        admin: { id: string; email: string; scope?: 'global' | 'municipal'; cityMunicipality?: string };
     }>('/admin/register', data);
 
     if (result.error) {
@@ -487,6 +489,8 @@ export async function registerAdmin(data: AdminRegisterData): Promise<{ success:
         email: admin.email,
         name: 'Admin',
         id: admin.id,
+        adminScope: admin.scope,
+        adminCityMunicipality: admin.cityMunicipality,
         loginTime: new Date().toISOString(),
     };
 
@@ -497,7 +501,7 @@ export async function registerAdmin(data: AdminRegisterData): Promise<{ success:
 export async function loginAdmin(data: LoginData): Promise<LoginOutcome> {
     const result = await apiPost<{
         accessToken: string;
-        admin: { id: string; email: string };
+        admin: { id: string; email: string; scope?: 'global' | 'municipal'; cityMunicipality?: string };
     }>('/admin/login', data);
 
     if (result.error) {
@@ -511,6 +515,8 @@ export async function loginAdmin(data: LoginData): Promise<LoginOutcome> {
         email: admin.email,
         name: 'Admin',
         id: admin.id,
+        adminScope: admin.scope,
+        adminCityMunicipality: admin.cityMunicipality,
         loginTime: new Date().toISOString(),
     };
 

@@ -1,6 +1,7 @@
 import { Session } from '../models/Session.js';
 import { HealthCenter } from '../models/HealthCenter.js';
 import { PatientLoginHistory } from '../models/PatientLoginHistory.js';
+import { Admin } from '../models/Admin.js';
 import { env } from '../config/env.js';
 import { sha256Hex } from '../utils/crypto.js';
 import { isTokenRevoked } from '../services/tokenRevocation.service.js';
@@ -96,10 +97,17 @@ export async function requireAdminAuth(req, res, next) {
     }
     const payload = verifyAdminToken(token);
     if (payload?.tokenType !== 'admin') return res.status(401).json({ error: { message: 'Invalid token type' } });
+    const admin = await Admin.findById(payload.adminId).select('status scope cityMunicipality').lean();
+    if (!admin) return res.status(401).json({ error: { message: 'Admin account not found' } });
+    if (admin.status !== 'active') {
+      return res.status(403).json({ error: { message: 'Admin account is disabled' } });
+    }
     req.context = {
       ...(req.context ?? {}),
       adminId: payload.adminId,
       role: 'admin',
+      adminScope: admin.scope ?? 'global',
+      adminCityMunicipality: admin.cityMunicipality ?? '',
     };
   } catch (err) {
     return res.status(401).json({
@@ -110,6 +118,17 @@ export async function requireAdminAuth(req, res, next) {
     });
   }
 
+  return next();
+}
+
+export function requireGlobalAdmin(req, res, next) {
+  if (req.context?.role !== 'admin') {
+    return res.status(403).json({ error: { message: 'Admin role is required' } });
+  }
+  const scope = String(req.context?.adminScope ?? 'global').trim().toLowerCase();
+  if (scope !== 'global') {
+    return res.status(403).json({ error: { message: 'Global admin scope is required' } });
+  }
   return next();
 }
 

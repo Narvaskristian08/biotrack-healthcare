@@ -345,6 +345,8 @@ export const adminUserUpdateSchema = z
     emergencyContactPhone: z.string().trim().max(40).optional(),
     sex: patientSexSchema.optional(),
     birthDate: optionalDateStringSchema.optional(),
+    adminScope: z.enum(['global', 'municipal']).optional(),
+    adminCityMunicipality: z.string().trim().min(1).max(140).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: 'At least one field is required for update',
