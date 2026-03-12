@@ -19,6 +19,8 @@ const BlockchainProofLogSchema = new mongoose.Schema(
     blockNumber: { type: Number, default: null },
     proofId: { type: String, default: '' },
     anchoredAt: { type: Date, default: null, index: true },
+    archivedAt: { type: Date, default: null, index: true },
+    archivedByAdminId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null, index: true },
 
     reason: { type: String, default: '' },
     details: { type: mongoose.Schema.Types.Mixed, default: null },

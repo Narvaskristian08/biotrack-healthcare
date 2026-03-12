@@ -4,6 +4,7 @@ import { PatientLoginHistory } from '../models/PatientLoginHistory.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { hashPassword } from '../services/authService.js';
 import { ensureBlockchainIdentityForDocument } from '../services/blockchain/identity.service.js';
+import { runDetachedTask } from '../utils/backgroundTask.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
 import {
   buildEmailFields,
@@ -38,6 +39,14 @@ function buildHealthCenterSummary(center) {
       fallback: center.officialContactInfo,
       field: 'officialContactInfo',
     }),
+  };
+}
+
+function buildQueuedBlockchainIdentityPayload() {
+  return {
+    identityId: '',
+    verificationStatus: 'pending',
+    txId: '',
   };
 }
 
@@ -157,14 +166,6 @@ export async function createPatient(req, res) {
     updatedByActorType: actorType,
     updatedByActorId: actorId,
   });
-  const { identity } = await ensureBlockchainIdentityForDocument({
-    doc,
-    subjectType: 'patient',
-    uniqueSeed: emailFields.normalized,
-    walletAddress,
-    healthCenterId,
-  });
-
   await writeAuditLog({
     req,
     action: 'PATIENT.CREATE',
@@ -175,13 +176,39 @@ export async function createPatient(req, res) {
       lastName: doc.lastName,
       firstName: doc.firstName,
       email: emailFields.normalized,
-      blockchainIdentityId: identity.identityId,
+      blockchainIdentityQueued: true,
     },
+  });
+
+  runDetachedTask(`patient-create:blockchain:${doc._id}`, async () => {
+    const { identity } = await ensureBlockchainIdentityForDocument({
+      doc,
+      subjectType: 'patient',
+      uniqueSeed: emailFields.normalized,
+      walletAddress,
+      healthCenterId,
+    });
+    await writeAuditLog({
+      req,
+      action: 'PATIENT.IDENTITY.PROVISION',
+      entityType: 'Patient',
+      entityId: doc._id,
+      after: {
+        blockchainIdentityId: identity.identityId,
+        verificationStatus: identity.verificationStatus,
+        txId: identity.txId,
+      },
+    });
   });
 
   // Don't return passwordHash
   const { passwordHash: _, ...patientData } = doc.toObject();
-  return res.status(201).json({ patient: buildPatientResponse(patientData) });
+  return res.status(201).json({
+    patient: {
+      ...buildPatientResponse(patientData),
+      blockchainIdentity: buildQueuedBlockchainIdentityPayload(),
+    },
+  });
 }
 
 export async function listPatients(req, res) {

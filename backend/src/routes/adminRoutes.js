@@ -7,8 +7,10 @@ import { authLoginLimiter } from '../middleware/rateLimit.js';
 import { adminRegisterSchema, adminUpsertSchema, loginSchema, providerCreateSchema } from '../validation/authSchemas.js';
 import {
   emptyBodySchema,
+  adminBlockchainArchiveSchema,
   adminGovernanceUpdateSchema,
   blockchainMetricsQuerySchema,
+  blockchainOverviewQuerySchema,
   adminLogsQuerySchema,
   adminRbacUpdateSchema,
   adminUserUpdateParamsSchema,
@@ -22,6 +24,7 @@ import {
   adminUpdateUser,
   adminUpsertUser,
   approveProviderCredentials,
+  archiveBlockchainLogs,
   getAdminOverview,
   getBlockchainOverview,
   getDataGovernanceSettings,
@@ -81,13 +84,26 @@ adminRoutes.patch('/rbac', requireAdminAuth, requireAdminCapability('canManagePo
 adminRoutes.get('/logs', requireAdminAuth, requireAdminCapability('canMonitorSystem'), validateQuery(adminLogsQuerySchema), asyncHandler(listSystemLogs));
 adminRoutes.get('/monitoring', requireAdminAuth, requireAdminCapability('canMonitorSystem'), asyncHandler(getSystemMonitoring));
 
-adminRoutes.get('/blockchain/overview', requireAdminAuth, requireAdminCapability('canMonitorBlockchain'), asyncHandler(getBlockchainOverview));
+adminRoutes.get(
+  '/blockchain/overview',
+  requireAdminAuth,
+  requireAdminCapability('canMonitorBlockchain'),
+  validateQuery(blockchainOverviewQuerySchema),
+  asyncHandler(getBlockchainOverview)
+);
 adminRoutes.get(
   '/blockchain/metrics',
   requireAdminAuth,
   requireAdminCapability('canMonitorBlockchain'),
   validateQuery(blockchainMetricsQuerySchema),
   asyncHandler(getBlockchainMetrics)
+);
+adminRoutes.post(
+  '/blockchain/archive',
+  requireAdminAuth,
+  requireAdminCapability('canMonitorBlockchain'),
+  validateBody(adminBlockchainArchiveSchema),
+  asyncHandler(archiveBlockchainLogs)
 );
 
 adminRoutes.get('/governance', requireAdminAuth, requireAdminCapability('canManagePolicies'), asyncHandler(getDataGovernanceSettings));

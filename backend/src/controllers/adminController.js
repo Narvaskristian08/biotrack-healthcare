@@ -13,6 +13,7 @@ import { deliverProviderOnboardingNotification } from '../services/verificationD
 import { invalidateAdminRbacCache } from '../middleware/rbac.js';
 import { createEncryptedDatabaseBackup } from '../services/databaseBackup.service.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
+import { runDetachedTask } from '../utils/backgroundTask.js';
 import { resolveSessionIdleTimeoutMs } from '../utils/sessionIdleTimeout.js';
 import {
   buildEmailFields,
@@ -24,6 +25,12 @@ import {
 } from '../services/pii.service.js';
 
 const GENERIC_LOGIN_ERROR = 'Invalid credentials';
+const QUEUED_PROVIDER_NOTIFICATION = Object.freeze({
+  attempted: false,
+  delivered: false,
+  channel: 'queued',
+  message: 'Provider onboarding tasks are processing in the background.',
+});
 
 const BARANGAY_STATUSES = ['pending', 'verified', 'active'];
 
@@ -55,6 +62,17 @@ function buildActiveSessionQuery(now = new Date()) {
       { lastActivityAt: null, startedAt: { $gte: idleCutoff } },
     ],
   };
+}
+
+function buildBlockchainArchiveFilter(scope = 'active') {
+  const normalized = String(scope ?? 'active').trim().toLowerCase();
+  if (normalized === 'archived') {
+    return { archivedAt: { $ne: null } };
+  }
+  if (normalized === 'all') {
+    return {};
+  }
+  return { archivedAt: null };
 }
 
 function sanitizeAssignedProviders(value) {
@@ -127,6 +145,14 @@ async function notifyProviderOnboarding({ req, provider, temporaryPassword = '' 
   });
 
   return notification;
+}
+
+function buildQueuedBlockchainIdentityPayload() {
+  return {
+    identityId: '',
+    verificationStatus: 'pending',
+    txId: '',
+  };
 }
 
 export async function registerAdmin(req, res) {
@@ -206,14 +232,14 @@ export async function adminCreateHealthCenter(req, res) {
     latitude = null,
     longitude = null,
     assignedHealthcareProviders = [],
-    status = 'pending',
+    status = 'active',
     // Backward-compatible fields
     name = '',
     holderName = '',
     address = '',
   } = req.body ?? {};
 
-  const onboardingStatus = normalizeBarangayStatus(status, 'pending');
+  const onboardingStatus = normalizeBarangayStatus(status, 'active');
   if (!email || !password || !barangayName || !cityMunicipality || !healthCenterName || !officialContactInfo) {
     return res.status(400).json({
       error: {
@@ -279,13 +305,6 @@ export async function adminCreateHealthCenter(req, res) {
     status: onboardingStatus,
   });
 
-  const { identity } = await ensureBlockchainIdentityForDocument({
-    doc: hc,
-    subjectType: 'healthcenter',
-    uniqueSeed: normalizedEmail,
-    walletAddress,
-  });
-
   await writeAuditLog({
     req,
     action: 'HEALTHCENTER.CREATE',
@@ -299,11 +318,34 @@ export async function adminCreateHealthCenter(req, res) {
       healthCenterName: hc.healthCenterName,
       status: hc.status,
       assignedHealthcareProvidersCount: hc.assignedHealthcareProviders?.length ?? 0,
-      blockchainIdentityId: identity.identityId,
+      blockchainIdentityQueued: true,
+      onboardingNotificationQueued: true,
     },
   });
 
-  const notification = await notifyProviderOnboarding({ req, provider: hc, temporaryPassword: String(password) });
+  runDetachedTask(`healthcenter-create:blockchain:${hc._id}`, async () => {
+    const { identity } = await ensureBlockchainIdentityForDocument({
+      doc: hc,
+      subjectType: 'healthcenter',
+      uniqueSeed: normalizedEmail,
+      walletAddress,
+    });
+    await writeAuditLog({
+      req,
+      action: 'HEALTHCENTER.IDENTITY.PROVISION',
+      entityType: 'HealthCenter',
+      entityId: hc._id,
+      after: {
+        blockchainIdentityId: identity.identityId,
+        verificationStatus: identity.verificationStatus,
+        txId: identity.txId,
+      },
+    });
+  });
+
+  runDetachedTask(`healthcenter-create:notify:${hc._id}`, async () => {
+    await notifyProviderOnboarding({ req, provider: hc, temporaryPassword: String(password) });
+  });
 
   return res.status(201).json({
     healthCenter: {
@@ -318,13 +360,9 @@ export async function adminCreateHealthCenter(req, res) {
       assignedHealthcareProviders: hc.assignedHealthcareProviders,
       status: hc.status,
       holderName: resolveHolderName(hc),
-      blockchainIdentity: {
-        identityId: identity.identityId,
-        verificationStatus: identity.verificationStatus,
-        txId: identity.txId,
-      },
+      blockchainIdentity: buildQueuedBlockchainIdentityPayload(),
     },
-    notification,
+    notification: QUEUED_PROVIDER_NOTIFICATION,
   });
 }
 
@@ -475,7 +513,7 @@ export async function adminUpsertUser(req, res) {
     role,
     email,
     password,
-    status = 'pending',
+    status = 'active',
     walletAddress = '',
     // provider fields
     name = '',
@@ -522,7 +560,7 @@ export async function adminUpsertUser(req, res) {
     }
     if (existing) return res.status(409).json({ error: { message: 'Provider email already exists' } });
 
-    const onboardingStatus = normalizeBarangayStatus(status, 'pending');
+    const onboardingStatus = normalizeBarangayStatus(status, 'active');
     if (!onboardingStatus) {
       return res.status(400).json({ error: { message: "status must be one of: pending, verified, active" } });
     }
@@ -568,12 +606,6 @@ export async function adminUpsertUser(req, res) {
       status: onboardingStatus,
       role: 'staff',
     });
-    const { identity } = await ensureBlockchainIdentityForDocument({
-      doc: provider,
-      subjectType: 'healthcenter',
-      uniqueSeed: normalizedEmail,
-      walletAddress,
-    });
     await writeAuditLog({
       req,
       action: 'ADMIN.USER.CREATE',
@@ -583,22 +615,43 @@ export async function adminUpsertUser(req, res) {
         email: normalizedEmail,
         status: provider.status,
         barangayName: provider.barangayName,
-        blockchainIdentityId: identity.identityId,
+        blockchainIdentityQueued: true,
+        onboardingNotificationQueued: true,
       },
     });
-    const notification = await notifyProviderOnboarding({ req, provider, temporaryPassword: String(password) });
+
+    runDetachedTask(`admin-provider-create:blockchain:${provider._id}`, async () => {
+      const { identity } = await ensureBlockchainIdentityForDocument({
+        doc: provider,
+        subjectType: 'healthcenter',
+        uniqueSeed: normalizedEmail,
+        walletAddress,
+      });
+      await writeAuditLog({
+        req,
+        action: 'ADMIN.USER.IDENTITY.PROVISION',
+        entityType: 'HealthCenter',
+        entityId: provider._id,
+        after: {
+          blockchainIdentityId: identity.identityId,
+          verificationStatus: identity.verificationStatus,
+          txId: identity.txId,
+        },
+      });
+    });
+
+    runDetachedTask(`admin-provider-create:notify:${provider._id}`, async () => {
+      await notifyProviderOnboarding({ req, provider, temporaryPassword: String(password) });
+    });
+
     return res.status(201).json({
       user: {
         id: provider._id,
         role: 'provider',
         email: resolveEmail(provider),
-        blockchainIdentity: {
-          identityId: identity.identityId,
-          verificationStatus: identity.verificationStatus,
-          txId: identity.txId,
-        },
+        blockchainIdentity: buildQueuedBlockchainIdentityPayload(),
       },
-      notification,
+      notification: QUEUED_PROVIDER_NOTIFICATION,
     });
   }
 
@@ -648,13 +701,6 @@ export async function adminUpsertUser(req, res) {
       updatedByActorType: 'admin',
       updatedByActorId: actorId,
     });
-    const { identity } = await ensureBlockchainIdentityForDocument({
-      doc: patient,
-      subjectType: 'patient',
-      uniqueSeed: normalizedEmail,
-      walletAddress,
-      healthCenterId: patient.healthCenterId,
-    });
     await writeAuditLog({
       req,
       action: 'ADMIN.USER.CREATE',
@@ -664,19 +710,35 @@ export async function adminUpsertUser(req, res) {
         email: normalizedEmail,
         healthCenterId: patient.healthCenterId,
         status: patient.status,
-        blockchainIdentityId: identity.identityId,
+        blockchainIdentityQueued: true,
       },
+    });
+    runDetachedTask(`admin-patient-create:blockchain:${patient._id}`, async () => {
+      const { identity } = await ensureBlockchainIdentityForDocument({
+        doc: patient,
+        subjectType: 'patient',
+        uniqueSeed: normalizedEmail,
+        walletAddress,
+        healthCenterId: patient.healthCenterId,
+      });
+      await writeAuditLog({
+        req,
+        action: 'ADMIN.USER.IDENTITY.PROVISION',
+        entityType: 'Patient',
+        entityId: patient._id,
+        after: {
+          blockchainIdentityId: identity.identityId,
+          verificationStatus: identity.verificationStatus,
+          txId: identity.txId,
+        },
+      });
     });
     return res.status(201).json({
       user: {
         id: patient._id,
         role: 'patient',
         email: resolveEmail(patient),
-        blockchainIdentity: {
-          identityId: identity.identityId,
-          verificationStatus: identity.verificationStatus,
-          txId: identity.txId,
-        },
+        blockchainIdentity: buildQueuedBlockchainIdentityPayload(),
       },
     });
   }
@@ -1022,22 +1084,34 @@ export async function getSystemMonitoring(req, res) {
 }
 
 export async function getBlockchainOverview(req, res) {
-  const [proofs24h, failed24h, byKind, byStatus, recent] = await Promise.all([
-    BlockchainProofLog.countDocuments({ createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
-    BlockchainProofLog.countDocuments({ status: 'failed', createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
+  const scope = String(req.query?.scope ?? 'active').trim().toLowerCase() || 'active';
+  const limit = Math.min(Math.max(Number(req.query?.limit ?? 50), 1), 200);
+  const archiveFilter = buildBlockchainArchiveFilter(scope);
+  const recentWindow = { createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } };
+
+  const [proofs24h, failed24h, byKind, byStatus, recent, activeLogCount, archivedLogCount] = await Promise.all([
+    BlockchainProofLog.countDocuments({ ...archiveFilter, ...recentWindow }),
+    BlockchainProofLog.countDocuments({ ...archiveFilter, status: 'failed', ...recentWindow }),
     BlockchainProofLog.aggregate([
+      { $match: archiveFilter },
       { $group: { _id: '$kind', count: { $sum: 1 } } },
     ]),
     BlockchainProofLog.aggregate([
+      { $match: archiveFilter },
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]),
-    BlockchainProofLog.find({}).sort({ createdAt: -1 }).limit(50).lean(),
+    BlockchainProofLog.find(archiveFilter).sort({ createdAt: -1 }).limit(limit).lean(),
+    BlockchainProofLog.countDocuments({ archivedAt: null }),
+    BlockchainProofLog.countDocuments({ archivedAt: { $ne: null } }),
   ]);
 
   return res.json({
     overview: {
+      scope,
       proofs24h,
       failed24h,
+      activeLogCount,
+      archivedLogCount,
       byKind,
       byStatus,
     },
@@ -1047,19 +1121,21 @@ export async function getBlockchainOverview(req, res) {
 
 export async function getBlockchainMetrics(req, res) {
   const days = Math.min(Math.max(Number(req.query?.days ?? 7), 1), 30);
+  const scope = String(req.query?.scope ?? 'active').trim().toLowerCase() || 'active';
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const archiveFilter = buildBlockchainArchiveFilter(scope);
 
   const [byStatus, byKind, dailyRaw] = await Promise.all([
     BlockchainProofLog.aggregate([
-      { $match: { createdAt: { $gte: since } } },
+      { $match: { ...archiveFilter, createdAt: { $gte: since } } },
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]),
     BlockchainProofLog.aggregate([
-      { $match: { createdAt: { $gte: since } } },
+      { $match: { ...archiveFilter, createdAt: { $gte: since } } },
       { $group: { _id: '$kind', count: { $sum: 1 } } },
     ]),
     BlockchainProofLog.aggregate([
-      { $match: { createdAt: { $gte: since } } },
+      { $match: { ...archiveFilter, createdAt: { $gte: since } } },
       {
         $group: {
           _id: {
@@ -1124,6 +1200,7 @@ export async function getBlockchainMetrics(req, res) {
   return res.json({
     metrics: {
       days,
+      scope,
       totals: {
         proofs: totalProofs,
         byStatus: statusCounts,
@@ -1133,6 +1210,52 @@ export async function getBlockchainMetrics(req, res) {
       daily,
       avgProofsPerDay,
     },
+  });
+}
+
+export async function archiveBlockchainLogs(req, res) {
+  const requestedIds = Array.from(new Set((req.body?.logIds ?? []).map((value) => String(value).trim()).filter(Boolean)));
+  if (requestedIds.length === 0) {
+    return res.status(400).json({ error: { message: 'At least one blockchain log is required' } });
+  }
+
+  const archivableLogs = await BlockchainProofLog.find({
+    _id: { $in: requestedIds },
+    archivedAt: null,
+  })
+    .select('_id')
+    .lean();
+
+  if (archivableLogs.length === 0) {
+    return res.json({ archivedCount: 0 });
+  }
+
+  const archiveIds = archivableLogs.map((entry) => entry._id);
+  const archivedAt = new Date();
+  await BlockchainProofLog.updateMany(
+    { _id: { $in: archiveIds }, archivedAt: null },
+    {
+      $set: {
+        archivedAt,
+        archivedByAdminId: req.context.adminId,
+      },
+    }
+  );
+
+  await writeAuditLog({
+    req,
+    action: 'ADMIN.BLOCKCHAIN.LOGS.ARCHIVE',
+    entityType: 'BlockchainProofLog',
+    entityId: null,
+    after: {
+      count: archiveIds.length,
+      archivedAt,
+    },
+  });
+
+  return res.json({
+    archivedCount: archiveIds.length,
+    archivedAt,
   });
 }
 

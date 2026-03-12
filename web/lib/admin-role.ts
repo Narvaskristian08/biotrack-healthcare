@@ -86,10 +86,15 @@ export interface AuditLogPagination {
   hasNext: boolean;
 }
 
+export type BlockchainHistoryScope = 'active' | 'archived' | 'all';
+
 export interface BlockchainOverviewResponse {
   overview: {
+    scope: BlockchainHistoryScope;
     proofs24h: number;
     failed24h: number;
+    activeLogCount: number;
+    archivedLogCount: number;
     byKind: Array<{ _id: string; count: number }>;
     byStatus: Array<{ _id: string; count: number }>;
   };
@@ -101,12 +106,14 @@ export interface BlockchainOverviewResponse {
     blockNumber?: number;
     identityId?: string;
     createdAt: string;
+    archivedAt?: string | null;
   }>;
 }
 
 export interface BlockchainMetricsResponse {
   metrics: {
     days: number;
+    scope: BlockchainHistoryScope;
     totals: {
       proofs: number;
       byStatus: {
@@ -248,16 +255,25 @@ export async function fetchSystemMonitoring(): Promise<{
   return { monitoring: result.data?.monitoring };
 }
 
-export async function fetchBlockchainOverview(): Promise<{ data?: BlockchainOverviewResponse; error?: string }> {
-  const result = await apiGet<BlockchainOverviewResponse>('/admin/blockchain/overview');
+export async function fetchBlockchainOverview(scope: BlockchainHistoryScope = 'active'): Promise<{ data?: BlockchainOverviewResponse; error?: string }> {
+  const result = await apiGet<BlockchainOverviewResponse>(`/admin/blockchain/overview?scope=${encodeURIComponent(scope)}`);
   if (result.error) return { error: result.error.message };
   return { data: result.data };
 }
 
-export async function fetchBlockchainMetrics(days = 7): Promise<{ data?: BlockchainMetricsResponse; error?: string }> {
-  const result = await apiGet<BlockchainMetricsResponse>(`/admin/blockchain/metrics?days=${days}`);
+export async function fetchBlockchainMetrics(days = 7, scope: BlockchainHistoryScope = 'active'): Promise<{ data?: BlockchainMetricsResponse; error?: string }> {
+  const result = await apiGet<BlockchainMetricsResponse>(`/admin/blockchain/metrics?days=${days}&scope=${encodeURIComponent(scope)}`);
   if (result.error) return { error: result.error.message };
   return { data: result.data };
+}
+
+export async function archiveBlockchainLogs(logIds: string[]): Promise<{ archivedCount?: number; archivedAt?: string; error?: string }> {
+  const result = await apiPost<{ archivedCount: number; archivedAt?: string }>('/admin/blockchain/archive', { logIds });
+  if (result.error) return { error: result.error.message };
+  return {
+    archivedCount: result.data?.archivedCount ?? 0,
+    archivedAt: result.data?.archivedAt,
+  };
 }
 
 export async function fetchGovernanceSettings(): Promise<{

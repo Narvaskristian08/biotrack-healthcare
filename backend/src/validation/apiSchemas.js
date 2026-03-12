@@ -220,6 +220,16 @@ export const adminLogsQuerySchema = z.object({
 
 export const blockchainMetricsQuerySchema = z.object({
   days: z.coerce.number().int().min(1, 'days must be at least 1').max(30, 'days must be at most 30').optional(),
+  scope: z.preprocess(emptyStringToUndefined, z.enum(['active', 'archived', 'all']).optional()),
+});
+
+export const blockchainOverviewQuerySchema = z.object({
+  scope: z.preprocess(emptyStringToUndefined, z.enum(['active', 'archived', 'all']).optional()),
+  limit: z.coerce.number().int().min(1, 'limit must be at least 1').max(200, 'limit must be at most 200').optional(),
+});
+
+export const adminBlockchainArchiveSchema = z.object({
+  logIds: z.array(objectIdSchema).min(1, 'At least one blockchain log is required').max(200, 'Too many blockchain logs selected'),
 });
 
 export const adminUserUpdateParamsSchema = z.object({

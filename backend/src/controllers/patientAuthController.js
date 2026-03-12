@@ -11,6 +11,7 @@ import { hashPassword, hashPin, signPatientToken, verifyPassword, verifyPin } fr
 import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
 import { deliverPatientVerificationCode, maskContactNumber, maskEmailAddress } from '../services/verificationDelivery.service.js';
 import { sha256Hex } from '../utils/crypto.js';
+import { runDetachedTask } from '../utils/backgroundTask.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
 import {
   buildEmailFields,
@@ -25,6 +26,14 @@ const OTP_REGEX = /^\d{6}$/;
 const GENERIC_LOGIN_ERROR = 'Invalid credentials';
 const GENERIC_PASSWORD_RESET_REQUEST_MESSAGE = 'If an active patient account with that email exists, a reset code has been sent.';
 const GENERIC_PASSWORD_RESET_ERROR = 'Invalid or expired reset code';
+
+function buildQueuedBlockchainIdentityPayload() {
+  return {
+    identityId: '',
+    verificationStatus: 'pending',
+    txId: '',
+  };
+}
 
 function normalizeVerificationMethod(value) {
   const method = String(value ?? '').trim().toLowerCase();
@@ -388,20 +397,33 @@ export async function registerPatientPublic(req, res) {
     throw error;
   }
 
-  const { identity } = await ensureBlockchainIdentityForDocument({
-    doc: patient,
-    subjectType: 'patient',
-    uniqueSeed: normalizedEmail,
-    walletAddress,
-    healthCenterId: patient.healthCenterId,
-  });
-
   await writeAuditLog({
     req,
     action: 'PATIENT.REGISTER_SELF',
     entityType: 'Patient',
     entityId: patient._id,
-    after: { email: normalizedEmail, verificationStatus: 'pending' },
+    after: { email: normalizedEmail, verificationStatus: 'pending', blockchainIdentityQueued: true },
+  });
+
+  runDetachedTask(`patient-register:blockchain:${patient._id}`, async () => {
+    const { identity } = await ensureBlockchainIdentityForDocument({
+      doc: patient,
+      subjectType: 'patient',
+      uniqueSeed: normalizedEmail,
+      walletAddress,
+      healthCenterId: patient.healthCenterId,
+    });
+    await writeAuditLog({
+      req,
+      action: 'PATIENT.IDENTITY.PROVISION',
+      entityType: 'Patient',
+      entityId: patient._id,
+      after: {
+        blockchainIdentityId: identity.identityId,
+        verificationStatus: identity.verificationStatus,
+        txId: identity.txId,
+      },
+    });
   });
 
   return res.status(201).json({
@@ -414,11 +436,7 @@ export async function registerPatientPublic(req, res) {
       healthCenterId: patient.healthCenterId,
       assignedHealthCenter: buildHealthCenterSummary(hc),
       verification: buildVerificationSummary(patient),
-      blockchainIdentity: {
-        identityId: identity.identityId,
-        verificationStatus: identity.verificationStatus,
-        txId: identity.txId,
-      },
+      blockchainIdentity: buildQueuedBlockchainIdentityPayload(),
     },
   });
 }
