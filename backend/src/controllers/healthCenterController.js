@@ -3,36 +3,72 @@ import { signHealthCenterToken, verifyPassword } from '../services/authService.j
 import { writeAuditLog } from '../services/auditService.js';
 import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
 import { blockchainEnabled, blockchainStrictMode } from '../services/blockchain/client.js';
+import {
+  buildEmailFields,
+  buildPhoneFields,
+  encryptPiiValue,
+  normalizeText,
+  resolvePiiField,
+} from '../services/pii.service.js';
 
 const GENERIC_LOGIN_ERROR = 'Invalid credentials';
 const PROVIDER_PROFILE_SELECT = [
   'email',
+  'emailEncrypted',
   'name',
   'holderName',
+  'holderNameEncrypted',
   'status',
   'barangayName',
   'cityMunicipality',
   'healthCenterName',
   'officialContactInfo',
+  'officialContactInfoEncrypted',
   'address',
+  'addressEncrypted',
   'contactNumber',
+  'contactNumberEncrypted',
   'updatedAt',
 ].join(' ');
+
+function resolveEmail(doc) {
+  return resolvePiiField({ encrypted: doc?.emailEncrypted, fallback: doc?.email, field: 'email' });
+}
+
+function resolveHolderName(doc) {
+  return resolvePiiField({ encrypted: doc?.holderNameEncrypted, fallback: doc?.holderName, field: 'holderName' });
+}
+
+function resolveOfficialContact(doc) {
+  return resolvePiiField({
+    encrypted: doc?.officialContactInfoEncrypted,
+    fallback: doc?.officialContactInfo,
+    field: 'officialContactInfo',
+  });
+}
+
+function resolveAddress(doc) {
+  return resolvePiiField({ encrypted: doc?.addressEncrypted, fallback: doc?.address, field: 'address' });
+}
+
+function resolveContactNumber(doc) {
+  return resolvePiiField({ encrypted: doc?.contactNumberEncrypted, fallback: doc?.contactNumber, field: 'contactNumber' });
+}
 
 function buildProviderProfilePayload(doc) {
   if (!doc) return null;
   return {
     id: doc._id,
-    email: String(doc.email ?? '').trim(),
+    email: resolveEmail(doc),
     name: String(doc.name ?? '').trim(),
-    holderName: String(doc.holderName ?? '').trim(),
+    holderName: resolveHolderName(doc),
     status: String(doc.status ?? '').trim(),
     barangayName: String(doc.barangayName ?? '').trim(),
     cityMunicipality: String(doc.cityMunicipality ?? '').trim(),
     healthCenterName: String(doc.healthCenterName ?? '').trim(),
-    officialContactInfo: String(doc.officialContactInfo ?? '').trim(),
-    address: String(doc.address ?? '').trim(),
-    contactNumber: String(doc.contactNumber ?? '').trim(),
+    officialContactInfo: resolveOfficialContact(doc),
+    address: resolveAddress(doc),
+    contactNumber: resolveContactNumber(doc),
     updatedAt: doc.updatedAt ?? null,
   };
 }
@@ -58,7 +94,12 @@ export async function loginHealthCenter(req, res) {
   const { email, password } = req.body ?? {};
   if (!email || !password) return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
 
-  const hc = await HealthCenter.findOne({ email: String(email).toLowerCase().trim() });
+  const emailFields = buildEmailFields(email);
+  const normalizedEmail = emailFields.normalized;
+  let hc = await HealthCenter.findOne({ emailHash: emailFields.hash });
+  if (!hc && normalizedEmail) {
+    hc = await HealthCenter.findOne({ email: normalizedEmail });
+  }
   if (!hc) return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
 
   const ok = await verifyPassword(String(password), hc.passwordHash);
@@ -86,10 +127,19 @@ export async function loginHealthCenter(req, res) {
     return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
+  if (!hc.emailHash || !hc.emailEncrypted) {
+    hc.emailHash = emailFields.hash;
+    hc.emailEncrypted = emailFields.encrypted;
+    hc.email = '';
+    await hc.save();
+  }
+
+  const resolvedEmail = resolveEmail(hc) || normalizedEmail;
+
   const { identity } = await ensureBlockchainIdentityForDocument({
     doc: hc,
     subjectType: 'healthcenter',
-    uniqueSeed: hc.email,
+    uniqueSeed: resolvedEmail,
   });
   const identityVerification = await verifyBlockchainIdentity(identity, {
     subjectType: 'healthcenter',
@@ -130,14 +180,14 @@ export async function loginHealthCenter(req, res) {
     accessToken: token,
     healthCenter: {
       id: hc._id,
-      email: hc.email,
+      email: resolvedEmail,
       name: hc.name,
       barangayName: hc.barangayName,
       cityMunicipality: hc.cityMunicipality,
       healthCenterName: hc.healthCenterName,
-      officialContactInfo: hc.officialContactInfo,
+      officialContactInfo: resolveOfficialContact(hc),
       status: hc.status,
-      holderName: hc.holderName,
+      holderName: resolveHolderName(hc),
       blockchainIdentity: {
         identityId: identity.identityId,
         verificationStatus: identity.verificationStatus,
@@ -183,6 +233,27 @@ export async function updateMyHealthCenterProfile(req, res) {
     return res.status(400).json({ error: { message: 'At least one profile field is required' } });
   }
 
+  if ('holderName' in update) {
+    const normalized = normalizeText(update.holderName);
+    update.holderName = '';
+    update.holderNameEncrypted = encryptPiiValue(normalized, 'holderName');
+  }
+  if ('officialContactInfo' in update) {
+    const normalized = normalizeText(update.officialContactInfo);
+    update.officialContactInfo = '';
+    update.officialContactInfoEncrypted = encryptPiiValue(normalized, 'officialContactInfo');
+  }
+  if ('address' in update) {
+    const normalized = normalizeText(update.address);
+    update.address = '';
+    update.addressEncrypted = encryptPiiValue(normalized, 'address');
+  }
+  if ('contactNumber' in update) {
+    const contactFields = buildPhoneFields(update.contactNumber);
+    update.contactNumber = '';
+    update.contactNumberEncrypted = contactFields.encrypted;
+  }
+
   const doc = await HealthCenter.findByIdAndUpdate(
     healthCenterId,
     { $set: update },
@@ -212,7 +283,7 @@ export async function listHealthCentersPublic(req, res) {
   console.log('listHealthCentersPublic controller executing');
   const hcs = await HealthCenter.find({ status: 'active' })
     .select(
-      'name barangayName cityMunicipality healthCenterName officialContactInfo geoLocation address contactNumber assignedHealthcareProviders'
+      'name barangayName cityMunicipality healthCenterName officialContactInfo officialContactInfoEncrypted geoLocation address addressEncrypted contactNumber contactNumberEncrypted assignedHealthcareProviders'
     )
     .sort({ name: 1 })
     .lean();
@@ -230,17 +301,27 @@ export async function listHealthCentersPublic(req, res) {
         (fallbackLocation ? `Barangay Unit - ${fallbackLocation}` : '')
     ).trim();
 
+    const resolvedAddress = resolveAddress(center);
+    const resolvedContact = resolveContactNumber(center) || resolveOfficialContact(center);
+    const resolvedOfficial = resolveOfficialContact(center);
+
     const normalizedAddress = String(
-      center.address || center.healthCenterName || fallbackLocation
+      resolvedAddress || center.healthCenterName || fallbackLocation
     ).trim();
 
     const normalizedContact = String(
-      center.contactNumber || center.officialContactInfo || ''
+      resolvedContact || resolvedOfficial || ''
     ).trim();
 
     return {
-      ...center,
+      _id: center._id,
       name: normalizedName,
+      barangayName: center.barangayName ?? '',
+      cityMunicipality: center.cityMunicipality ?? '',
+      healthCenterName: center.healthCenterName ?? '',
+      officialContactInfo: resolvedOfficial,
+      geoLocation: center.geoLocation ?? null,
+      assignedHealthcareProviders: center.assignedHealthcareProviders ?? [],
       address: normalizedAddress,
       contactNumber: normalizedContact,
     };

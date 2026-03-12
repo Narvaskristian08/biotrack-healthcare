@@ -12,6 +12,14 @@ import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '.
 import { deliverPatientVerificationCode, maskContactNumber, maskEmailAddress } from '../services/verificationDelivery.service.js';
 import { sha256Hex } from '../utils/crypto.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
+import {
+  buildEmailFields,
+  buildMrnFields,
+  buildPhoneFields,
+  encryptPiiValue,
+  normalizeText,
+  resolvePiiField,
+} from '../services/pii.service.js';
 
 const OTP_REGEX = /^\d{6}$/;
 const GENERIC_LOGIN_ERROR = 'Invalid credentials';
@@ -41,10 +49,16 @@ function resendCooldownRemainingSeconds(lastSentAt) {
 }
 
 function buildVerificationSummary(patient) {
+  const email = resolvePiiField({ encrypted: patient?.emailEncrypted, fallback: patient?.email, field: 'email' });
+  const contactNumber = resolvePiiField({
+    encrypted: patient?.contactNumberEncrypted,
+    fallback: patient?.contactNumber,
+    field: 'contactNumber',
+  });
   return {
     status: getVerificationStatus(patient) === 'verified' ? 'verified' : 'pending',
-    emailMasked: maskEmailAddress(patient.email),
-    contactNumberMasked: maskContactNumber(patient.contactNumber),
+    emailMasked: maskEmailAddress(email),
+    contactNumberMasked: maskContactNumber(contactNumber),
   };
 }
 
@@ -56,10 +70,30 @@ function buildHealthCenterSummary(center) {
     barangayName: String(center.barangayName ?? '').trim(),
     cityMunicipality: String(center.cityMunicipality ?? '').trim(),
     healthCenterName: String(center.healthCenterName ?? '').trim(),
-    address: String(center.address ?? '').trim(),
-    contactNumber: String(center.contactNumber ?? center.officialContactInfo ?? '').trim(),
-    officialContactInfo: String(center.officialContactInfo ?? '').trim(),
+    address: resolvePiiField({ encrypted: center.addressEncrypted, fallback: center.address, field: 'address' }),
+    contactNumber: resolvePiiField({
+      encrypted: center.contactNumberEncrypted,
+      fallback: center.contactNumber || center.officialContactInfo,
+      field: 'contactNumber',
+    }),
+    officialContactInfo: resolvePiiField({
+      encrypted: center.officialContactInfoEncrypted,
+      fallback: center.officialContactInfo,
+      field: 'officialContactInfo',
+    }),
   };
+}
+
+function resolvePatientEmail(patient) {
+  return resolvePiiField({ encrypted: patient?.emailEncrypted, fallback: patient?.email, field: 'email' });
+}
+
+function resolvePatientContact(patient) {
+  return resolvePiiField({
+    encrypted: patient?.contactNumberEncrypted,
+    fallback: patient?.contactNumber,
+    field: 'contactNumber',
+  });
 }
 
 function getPatientHealthCenterAccessError(healthCenter) {
@@ -107,10 +141,10 @@ function exactCaseInsensitiveRegex(value) {
 function mapPatientDuplicateKeyError(error) {
   if (Number(error?.code) !== 11000) return null;
   const keyValue = error?.keyValue ?? {};
-  if (Object.prototype.hasOwnProperty.call(keyValue, 'email')) {
+  if (Object.prototype.hasOwnProperty.call(keyValue, 'email') || Object.prototype.hasOwnProperty.call(keyValue, 'emailHash')) {
     return { message: 'Email already taken in this center', code: 'PATIENT_EMAIL_TAKEN' };
   }
-  if (Object.prototype.hasOwnProperty.call(keyValue, 'contactNumber')) {
+  if (Object.prototype.hasOwnProperty.call(keyValue, 'contactNumber') || Object.prototype.hasOwnProperty.call(keyValue, 'contactNumberHash')) {
     return { message: 'Contact number already taken in this center', code: 'PATIENT_CONTACT_TAKEN' };
   }
   if (Object.prototype.hasOwnProperty.call(keyValue, 'blockchainIdentity.walletAddress')) {
@@ -175,7 +209,7 @@ function buildPatientLoginPayload({
       id: patient._id,
       firstName: patient.firstName,
       lastName: patient.lastName,
-      email: patient.email,
+      email: resolvePatientEmail(patient),
       healthCenterId: patient.healthCenterId,
       assignedHealthCenter: healthCenterSummary,
       role: 'patient',
@@ -274,11 +308,17 @@ export async function registerPatientPublic(req, res) {
   const normalizedFirstName = String(firstName).trim();
   const normalizedMiddleInitial = String(middleInitial ?? '').trim().slice(0, 1);
   const normalizedNameExtension = nameExtension ? String(nameExtension).trim() : '';
-  const normalizedAddress = String(address ?? '').trim();
-  const normalizedContactNumber = String(contactNumber ?? '').trim();
+  const emailFields = buildEmailFields(normalizedEmail);
+  const contactFields = buildPhoneFields(contactNumber);
+  const mrnFields = buildMrnFields(mrn);
+  const normalizedAddress = normalizeText(address);
+  const normalizedContactNumber = contactFields.normalized;
+  const normalizedGuardianName = normalizeText(guardianName);
+  const normalizedEmergencyName = normalizeText(emergencyContactName);
+  const normalizedEmergencyPhone = normalizeText(emergencyContactPhone);
 
   const [existingEmail, existingName, existingContact] = await Promise.all([
-    Patient.findOne({ healthCenterId, email: normalizedEmail }).select('_id').lean(),
+    Patient.findOne({ healthCenterId, emailHash: emailFields.hash }).select('_id').lean(),
     Patient.findOne({
       healthCenterId,
       lastName: exactCaseInsensitiveRegex(normalizedLastName),
@@ -286,7 +326,7 @@ export async function registerPatientPublic(req, res) {
       middleInitial: exactCaseInsensitiveRegex(normalizedMiddleInitial),
       nameExtension: exactCaseInsensitiveRegex(normalizedNameExtension),
     }).select('_id').lean(),
-    Patient.findOne({ healthCenterId, contactNumber: normalizedContactNumber }).select('_id').lean(),
+    Patient.findOne({ healthCenterId, contactNumberHash: contactFields.hash }).select('_id').lean(),
   ]);
 
   if (existingEmail) {
@@ -304,27 +344,36 @@ export async function registerPatientPublic(req, res) {
     });
   }
 
-  const finalMrn = mrn ? String(mrn).trim() : undefined;
   const passwordHash = await hashPassword(String(password));
 
   let patient;
   try {
     patient = await Patient.create({
       healthCenterId,
-      mrn: finalMrn,
+      mrn: '',
+      mrnHash: mrnFields.hash,
+      mrnEncrypted: mrnFields.encrypted,
       lastName: normalizedLastName,
       firstName: normalizedFirstName,
       middleInitial: normalizedMiddleInitial,
       nameExtension: normalizedNameExtension,
-      email: normalizedEmail,
+      email: '',
+      emailHash: emailFields.hash,
+      emailEncrypted: emailFields.encrypted,
       passwordHash,
       birthDate: normalizedBirthDate,
       sex: normalizedSex,
-      address: normalizedAddress,
-      contactNumber: normalizedContactNumber,
-      guardianName: String(guardianName ?? '').trim(),
-      emergencyContactName: String(emergencyContactName ?? '').trim(),
-      emergencyContactPhone: String(emergencyContactPhone ?? '').trim(),
+      address: '',
+      addressEncrypted: encryptPiiValue(normalizedAddress, 'address'),
+      contactNumber: '',
+      contactNumberHash: contactFields.hash,
+      contactNumberEncrypted: contactFields.encrypted,
+      guardianName: '',
+      guardianNameEncrypted: encryptPiiValue(normalizedGuardianName, 'guardianName'),
+      emergencyContactName: '',
+      emergencyContactNameEncrypted: encryptPiiValue(normalizedEmergencyName, 'emergencyContactName'),
+      emergencyContactPhone: '',
+      emergencyContactPhoneEncrypted: encryptPiiValue(normalizedEmergencyPhone, 'emergencyContactPhone'),
       role: 'patient',
       accountVerification: {
         status: 'pending',
@@ -342,7 +391,7 @@ export async function registerPatientPublic(req, res) {
   const { identity } = await ensureBlockchainIdentityForDocument({
     doc: patient,
     subjectType: 'patient',
-    uniqueSeed: patient.email,
+    uniqueSeed: normalizedEmail,
     walletAddress,
     healthCenterId: patient.healthCenterId,
   });
@@ -352,7 +401,7 @@ export async function registerPatientPublic(req, res) {
     action: 'PATIENT.REGISTER_SELF',
     entityType: 'Patient',
     entityId: patient._id,
-    after: { email: patient.email, verificationStatus: 'pending' },
+    after: { email: normalizedEmail, verificationStatus: 'pending' },
   });
 
   return res.status(201).json({
@@ -360,8 +409,8 @@ export async function registerPatientPublic(req, res) {
     verificationRequired: true,
     patient: {
       id: patient._id,
-      email: patient.email,
-      contactNumber: patient.contactNumber,
+      email: normalizedEmail,
+      contactNumber: normalizedContactNumber,
       healthCenterId: patient.healthCenterId,
       assignedHealthCenter: buildHealthCenterSummary(hc),
       verification: buildVerificationSummary(patient),
@@ -390,12 +439,15 @@ export async function sendPatientVerificationCode(req, res) {
     return res.status(404).json({ error: { message: 'Patient not found' } });
   }
 
+  const patientEmail = resolvePatientEmail(patient);
+  const patientContact = resolvePatientContact(patient);
+
   if (getVerificationStatus(patient) === 'verified') {
     return res.json({
       message: 'Account already verified',
       verificationStatus: 'verified',
       method,
-      recipientMasked: method === 'email' ? maskEmailAddress(patient.email) : maskContactNumber(patient.contactNumber),
+      recipientMasked: method === 'email' ? maskEmailAddress(patientEmail) : maskContactNumber(patientContact),
     });
   }
 
@@ -423,8 +475,8 @@ export async function sendPatientVerificationCode(req, res) {
   const delivery = await deliverPatientVerificationCode({
     method,
     code,
-    email: patient.email,
-    contactNumber: patient.contactNumber,
+    email: patientEmail,
+    contactNumber: patientContact,
   });
 
   await writeAuditLog({
@@ -471,7 +523,7 @@ export async function verifyPatientRegistrationCode(req, res) {
       verificationStatus: 'verified',
       patient: {
         id: patient._id,
-        email: patient.email,
+        email: resolvePatientEmail(patient),
       },
     });
   }
@@ -537,7 +589,7 @@ export async function verifyPatientRegistrationCode(req, res) {
     verificationStatus: 'verified',
     patient: {
       id: patient._id,
-      email: patient.email,
+      email: resolvePatientEmail(patient),
     },
   });
 }
@@ -548,11 +600,19 @@ export async function requestPatientPasswordResetCode(req, res) {
     return res.status(400).json({ error: { message: 'email is required' } });
   }
 
-  const patients = await Patient.find({
-    email,
+  const emailFields = buildEmailFields(email);
+  let patients = await Patient.find({
+    emailHash: emailFields.hash,
     status: 'active',
     'accountVerification.status': 'verified',
   });
+  if (!patients.length && emailFields.normalized) {
+    patients = await Patient.find({
+      email: emailFields.normalized,
+      status: 'active',
+      'accountVerification.status': 'verified',
+    });
+  }
 
   if (!patients.length) {
     await writeAuditLog({
@@ -567,6 +627,17 @@ export async function requestPatientPasswordResetCode(req, res) {
       message: GENERIC_PASSWORD_RESET_REQUEST_MESSAGE,
     });
   }
+
+  await Promise.all(
+    patients.map(async (patient) => {
+      if (!patient.emailHash || !patient.emailEncrypted) {
+        patient.emailHash = emailFields.hash;
+        patient.emailEncrypted = emailFields.encrypted;
+        patient.email = '';
+        await patient.save();
+      }
+    })
+  );
 
   const retryAfterSeconds = resendCooldownRemainingSeconds(patients[0]?.passwordReset?.lastSentAt);
   if (retryAfterSeconds > 0) {
@@ -592,11 +663,15 @@ export async function requestPatientPasswordResetCode(req, res) {
     })
   );
 
+  const primaryPatient = patients[0];
+  const patientEmail = resolvePatientEmail(primaryPatient) || email;
+  const patientContact = resolvePatientContact(primaryPatient);
+
   const delivery = await deliverPatientVerificationCode({
     method: 'email',
     code,
-    email,
-    contactNumber: patients[0]?.contactNumber ?? '',
+    email: patientEmail,
+    contactNumber: patientContact,
   });
 
   await Promise.all(
@@ -636,11 +711,29 @@ export async function resetPatientPasswordWithCode(req, res) {
     return res.status(400).json({ error: { message: passwordCheck.message } });
   }
 
-  const patients = await Patient.find({
-    email,
+  const emailFields = buildEmailFields(email);
+  let patients = await Patient.find({
+    emailHash: emailFields.hash,
     status: 'active',
     'accountVerification.status': 'verified',
   });
+  if (!patients.length && emailFields.normalized) {
+    patients = await Patient.find({
+      email: emailFields.normalized,
+      status: 'active',
+      'accountVerification.status': 'verified',
+    });
+  }
+  await Promise.all(
+    patients.map(async (patient) => {
+      if (!patient.emailHash || !patient.emailEncrypted) {
+        patient.emailHash = emailFields.hash;
+        patient.emailEncrypted = emailFields.encrypted;
+        patient.email = '';
+        await patient.save();
+      }
+    })
+  );
 
   const now = Date.now();
   const activeChallenges = patients.filter((patient) => {
@@ -712,8 +805,12 @@ export async function loginPatient(req, res) {
     return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
-  const normalizedEmail = String(email).toLowerCase().trim();
-  const patients = await Patient.find({ email: normalizedEmail });
+  const emailFields = buildEmailFields(email);
+  const normalizedEmail = emailFields.normalized;
+  let patients = await Patient.find({ emailHash: emailFields.hash });
+  if (!patients.length && normalizedEmail) {
+    patients = await Patient.find({ email: normalizedEmail });
+  }
 
   if (patients.length === 0) {
     return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
@@ -735,8 +832,15 @@ export async function loginPatient(req, res) {
     return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
+  if (!match.emailHash || !match.emailEncrypted) {
+    match.emailHash = emailFields.hash;
+    match.emailEncrypted = emailFields.encrypted;
+    match.email = '';
+    await match.save();
+  }
+
   const owningHealthCenter = await HealthCenter.findById(match.healthCenterId)
-    .select('status name barangayName cityMunicipality healthCenterName address contactNumber officialContactInfo')
+    .select('status name barangayName cityMunicipality healthCenterName address addressEncrypted contactNumber contactNumberEncrypted officialContactInfo officialContactInfoEncrypted')
     .lean();
   if (!owningHealthCenter || String(owningHealthCenter.status) !== 'active') {
     const healthCenterError = getPatientHealthCenterAccessError(owningHealthCenter);
@@ -748,7 +852,7 @@ export async function loginPatient(req, res) {
       outcome: 'failure',
       reason: healthCenterError.reason,
       after: {
-        patientEmail: match.email,
+        patientEmail: resolvePatientEmail(match) || normalizedEmail,
         healthCenterId: match.healthCenterId,
       },
     });
@@ -768,7 +872,7 @@ export async function loginPatient(req, res) {
     const { identity } = await ensureBlockchainIdentityForDocument({
       doc: match,
       subjectType: 'patient',
-      uniqueSeed: match.email,
+      uniqueSeed: resolvePatientEmail(match) || normalizedEmail,
       healthCenterId: match.healthCenterId,
     });
     const identityVerification = await verifyBlockchainIdentity(identity, {
@@ -815,8 +919,8 @@ export async function loginPatient(req, res) {
   const delivery = await deliverPatientVerificationCode({
     method,
     code,
-    email: match.email,
-    contactNumber: match.contactNumber,
+    email: resolvePatientEmail(match) || normalizedEmail,
+    contactNumber: resolvePatientContact(match),
   });
 
   await writeAuditLog({
@@ -938,7 +1042,7 @@ export async function verifyPatientLoginMfa(req, res) {
   await patient.save();
 
   const owningHealthCenter = await HealthCenter.findById(patient.healthCenterId)
-    .select('status name barangayName cityMunicipality healthCenterName address contactNumber officialContactInfo')
+    .select('status name barangayName cityMunicipality healthCenterName address addressEncrypted contactNumber contactNumberEncrypted officialContactInfo officialContactInfoEncrypted')
     .lean();
   if (!owningHealthCenter || String(owningHealthCenter.status) !== 'active') {
     const healthCenterError = getPatientHealthCenterAccessError(owningHealthCenter);
@@ -950,7 +1054,7 @@ export async function verifyPatientLoginMfa(req, res) {
       outcome: 'failure',
       reason: healthCenterError.reason,
       after: {
-        patientEmail: patient.email,
+        patientEmail: resolvePatientEmail(patient),
         healthCenterId: patient.healthCenterId,
       },
     });
@@ -965,7 +1069,7 @@ export async function verifyPatientLoginMfa(req, res) {
   const { identity } = await ensureBlockchainIdentityForDocument({
     doc: patient,
     subjectType: 'patient',
-    uniqueSeed: patient.email,
+    uniqueSeed: resolvePatientEmail(patient),
     healthCenterId: patient.healthCenterId,
   });
   const identityVerification = await verifyBlockchainIdentity(identity, {

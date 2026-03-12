@@ -2,10 +2,7 @@ import { env } from '../config/env.js';
 import { Admin } from '../models/Admin.js';
 import { hashPassword } from './authService.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
-
-function normalizeEmail(value) {
-  return String(value ?? '').trim().toLowerCase();
-}
+import { buildEmailFields, normalizeEmail } from './pii.service.js';
 
 export async function bootstrapDefaultAdmin() {
   if (!env.DEFAULT_ADMIN_BOOTSTRAP_ENABLED) return;
@@ -21,14 +18,20 @@ export async function bootstrapDefaultAdmin() {
     throw new Error(`DEFAULT_ADMIN_PASSWORD does not satisfy policy: ${passwordCheck.message}`);
   }
 
-  const existing = await Admin.findOne({ email }).lean();
+  const emailFields = buildEmailFields(email);
+  let existing = await Admin.findOne({ emailHash: emailFields.hash }).lean();
+  if (!existing && emailFields.normalized) {
+    existing = await Admin.findOne({ email: emailFields.normalized }).lean();
+  }
   if (existing) {
     console.log(`[bootstrap] Default admin already exists for ${email}`);
     return;
   }
 
   await Admin.create({
-    email,
+    email: '',
+    emailHash: emailFields.hash,
+    emailEncrypted: emailFields.encrypted,
     passwordHash: await hashPassword(password),
     role: 'admin',
     status: 'active',

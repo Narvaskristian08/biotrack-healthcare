@@ -5,6 +5,8 @@ const PatientSchema = new mongoose.Schema(
     healthCenterId: { type: mongoose.Schema.Types.ObjectId, ref: 'HealthCenter', required: true, index: true },
     // medical record number, unique per health center (Optional now as per diagram)
     mrn: { type: String, trim: true },
+    mrnHash: { type: String, default: '', index: true },
+    mrnEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },
 
     // Split name fields
     lastName: { type: String, required: true, trim: true },
@@ -12,7 +14,9 @@ const PatientSchema = new mongoose.Schema(
     middleInitial: { type: String, required: true, trim: true, maxLength: 1 },
     nameExtension: { type: String, default: '', trim: true },
 
-    email: { type: String, required: true, trim: true, lowercase: true },
+    email: { type: String, default: '', trim: true, lowercase: true },
+    emailHash: { type: String, required: true, index: true },
+    emailEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },
     passwordHash: { type: String, required: true },
     token: { type: String, default: '' }, // For log times
     role: { type: String, default: 'patient' },
@@ -21,12 +25,18 @@ const PatientSchema = new mongoose.Schema(
     birthDate: { type: Date, default: null },
     sex: { type: String, enum: ['male', 'female', 'other', 'unknown'], default: 'unknown' },
 
-    address: { type: String, required: true, default: '', trim: true },
-    contactNumber: { type: String, required: true, default: '', trim: true },
+    address: { type: String, default: '', trim: true },
+    addressEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },
+    contactNumber: { type: String, default: '', trim: true },
+    contactNumberHash: { type: String, default: '', index: true },
+    contactNumberEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },
 
     guardianName: { type: String, default: '', trim: true },
+    guardianNameEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },
     emergencyContactName: { type: String, default: '', trim: true },
+    emergencyContactNameEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },
     emergencyContactPhone: { type: String, default: '', trim: true },
+    emergencyContactPhoneEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },
     tags: { type: [String], default: [] },
     status: { type: String, enum: ['active', 'archived'], default: 'active', index: true },
     accountVerification: {
@@ -88,7 +98,7 @@ const PatientSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-PatientSchema.index({ healthCenterId: 1, email: 1 }, { unique: true });
+PatientSchema.index({ healthCenterId: 1, emailHash: 1 }, { unique: true });
 PatientSchema.index({ healthCenterId: 1, lastName: 1, firstName: 1 });
 
 PatientSchema.index(

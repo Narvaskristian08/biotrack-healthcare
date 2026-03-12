@@ -2,7 +2,9 @@ import mongoose from 'mongoose';
 
 const HealthCenterSchema = new mongoose.Schema(
   {
-    email: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
+    email: { type: String, default: '', lowercase: true, trim: true },
+    emailHash: { type: String, required: true, unique: true, index: true },
+    emailEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },
     passwordHash: { type: String, required: true },
     // Legacy display name retained for backward-compatible UI rendering.
     name: { type: String, required: true, trim: true },
@@ -10,6 +12,7 @@ const HealthCenterSchema = new mongoose.Schema(
     cityMunicipality: { type: String, default: '', trim: true, index: true },
     healthCenterName: { type: String, default: '', trim: true },
     officialContactInfo: { type: String, default: '', trim: true },
+    officialContactInfoEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },
     geoLocation: {
       latitude: { type: Number, default: null },
       longitude: { type: Number, default: null },
@@ -22,7 +25,9 @@ const HealthCenterSchema = new mongoose.Schema(
       },
     ],
     address: { type: String, default: '', trim: true },
-    holderName: { type: String, required: true, trim: true }, // "Holder" in diagram
+    addressEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },
+    holderName: { type: String, default: '', trim: true }, // "Holder" in diagram
+    holderNameEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },
     role: { type: String, default: 'staff' }, // "Role: staff" in diagram
     credentialStatus: {
       type: String,
@@ -31,6 +36,7 @@ const HealthCenterSchema = new mongoose.Schema(
       index: true,
     },
     contactNumber: { type: String, default: '', trim: true },
+    contactNumberEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },
     status: {
       type: String,
       enum: ['pending', 'verified', 'active', 'disabled'],

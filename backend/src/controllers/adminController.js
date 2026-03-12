@@ -14,6 +14,14 @@ import { invalidateAdminRbacCache } from '../middleware/rbac.js';
 import { createEncryptedDatabaseBackup } from '../services/databaseBackup.service.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
 import { resolveSessionIdleTimeoutMs } from '../utils/sessionIdleTimeout.js';
+import {
+  buildEmailFields,
+  buildMrnFields,
+  buildPhoneFields,
+  encryptPiiValue,
+  normalizeText,
+  resolvePiiField,
+} from '../services/pii.service.js';
 
 const GENERIC_LOGIN_ERROR = 'Invalid credentials';
 
@@ -66,14 +74,39 @@ function sanitizeAssignedProviders(value) {
     .filter((entry) => entry.name || entry.email || entry.contactNumber);
 }
 
+function resolveEmail(doc) {
+  return resolvePiiField({ encrypted: doc?.emailEncrypted, fallback: doc?.email, field: 'email' });
+}
+
+function resolveContactNumber(doc) {
+  return resolvePiiField({ encrypted: doc?.contactNumberEncrypted, fallback: doc?.contactNumber, field: 'contactNumber' });
+}
+
+function resolveAddress(doc) {
+  return resolvePiiField({ encrypted: doc?.addressEncrypted, fallback: doc?.address, field: 'address' });
+}
+
+function resolveOfficialContact(doc) {
+  return resolvePiiField({
+    encrypted: doc?.officialContactInfoEncrypted,
+    fallback: doc?.officialContactInfo,
+    field: 'officialContactInfo',
+  });
+}
+
+function resolveHolderName(doc) {
+  return resolvePiiField({ encrypted: doc?.holderNameEncrypted, fallback: doc?.holderName, field: 'holderName' });
+}
+
 async function notifyProviderOnboarding({ req, provider, temporaryPassword = '' }) {
+  const providerEmail = resolveEmail(provider);
   const notification = await deliverProviderOnboardingNotification({
-    email: provider.email,
+    email: providerEmail,
     barangayName: provider.barangayName,
     cityMunicipality: provider.cityMunicipality,
     healthCenterName: provider.healthCenterName,
     status: provider.status,
-    loginEmail: provider.email,
+    loginEmail: providerEmail,
     temporaryPassword,
   });
 
@@ -102,24 +135,39 @@ export async function registerAdmin(req, res) {
   const passwordCheck = validatePasswordPolicy(password);
   if (!passwordCheck.ok) return res.status(400).json({ error: { message: passwordCheck.message } });
 
-  const existing = await Admin.findOne({ email: String(email).toLowerCase().trim() }).lean();
+  const emailFields = buildEmailFields(email);
+  const normalizedEmail = emailFields.normalized;
+  let existing = await Admin.findOne({ emailHash: emailFields.hash }).lean();
+  if (!existing && normalizedEmail) {
+    existing = await Admin.findOne({ email: normalizedEmail }).lean();
+  }
   if (existing) return res.status(409).json({ error: { message: 'Admin email already exists' } });
 
   const admin = await Admin.create({
-    email: String(email).toLowerCase().trim(),
+    email: '',
+    emailHash: emailFields.hash,
+    emailEncrypted: emailFields.encrypted,
     passwordHash: await hashPassword(String(password)),
   });
 
   const token = signAdminToken({ adminId: admin._id });
   await writeAuditLog({ req, action: 'ADMIN.REGISTER', entityType: 'Admin', entityId: admin._id });
-  return res.status(201).json({ accessToken: token, admin: { id: admin._id, email: admin.email } });
+  return res.status(201).json({
+    accessToken: token,
+    admin: { id: admin._id, email: resolveEmail(admin) },
+  });
 }
 
 export async function loginAdmin(req, res) {
   const { email, password } = req.body ?? {};
   if (!email || !password) return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
 
-  const admin = await Admin.findOne({ email: String(email).toLowerCase().trim() });
+  const emailFields = buildEmailFields(email);
+  const normalizedEmail = emailFields.normalized;
+  let admin = await Admin.findOne({ emailHash: emailFields.hash });
+  if (!admin && normalizedEmail) {
+    admin = await Admin.findOne({ email: normalizedEmail });
+  }
   if (!admin) return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
 
   const ok = await verifyPassword(String(password), admin.passwordHash);
@@ -132,9 +180,16 @@ export async function loginAdmin(req, res) {
     return res.status(401).json({ error: { message: GENERIC_LOGIN_ERROR } });
   }
 
+  if (!admin.emailHash || !admin.emailEncrypted) {
+    admin.emailHash = emailFields.hash;
+    admin.emailEncrypted = emailFields.encrypted;
+    admin.email = '';
+    await admin.save();
+  }
+
   const token = signAdminToken({ adminId: admin._id });
   await writeAuditLog({ req, action: 'ADMIN.LOGIN', entityType: 'Admin', entityId: admin._id });
-  return res.json({ accessToken: token, admin: { id: admin._id, email: admin.email } });
+  return res.json({ accessToken: token, admin: { id: admin._id, email: resolveEmail(admin) } });
 }
 
 export async function adminCreateHealthCenter(req, res) {
@@ -182,37 +237,52 @@ export async function adminCreateHealthCenter(req, res) {
     return res.status(400).json({ error: { message: 'latitude/longitude are out of valid range' } });
   }
 
-  const existing = await HealthCenter.findOne({ email: String(email).toLowerCase().trim() }).lean();
+  const emailFields = buildEmailFields(email);
+  const normalizedEmail = emailFields.normalized;
+  let existing = await HealthCenter.findOne({ emailHash: emailFields.hash }).lean();
+  if (!existing && normalizedEmail) {
+    existing = await HealthCenter.findOne({ email: normalizedEmail }).lean();
+  }
   if (existing) return res.status(409).json({ error: { message: 'Health center email already exists' } });
 
   const assignedProviders = sanitizeAssignedProviders(assignedHealthcareProviders);
   const normalizedBarangayName = String(barangayName).trim();
   const normalizedHealthCenterName = String(healthCenterName).trim();
   const displayName = String(name || `${normalizedBarangayName} - ${normalizedHealthCenterName}`).trim();
+  const contactFields = buildPhoneFields(contactNumber);
+  const normalizedAddress = normalizeText(address || cityMunicipality);
+  const normalizedOfficialContact = normalizeText(officialContactInfo);
+  const normalizedHolderName = normalizeText(holderName || normalizedBarangayName);
 
   const hc = await HealthCenter.create({
-    email: String(email).toLowerCase().trim(),
+    email: '',
+    emailHash: emailFields.hash,
+    emailEncrypted: emailFields.encrypted,
     passwordHash: await hashPassword(String(password)),
     name: displayName,
     barangayName: normalizedBarangayName,
     cityMunicipality: String(cityMunicipality).trim(),
     healthCenterName: normalizedHealthCenterName,
-    officialContactInfo: String(officialContactInfo).trim(),
+    officialContactInfo: '',
+    officialContactInfoEncrypted: encryptPiiValue(normalizedOfficialContact, 'officialContactInfo'),
     geoLocation: {
       latitude: lat,
       longitude: lng,
     },
     assignedHealthcareProviders: assignedProviders,
-    holderName: String(holderName || normalizedBarangayName).trim(),
-    address: String(address || cityMunicipality).trim(),
-    contactNumber: String(contactNumber ?? '').trim(),
+    holderName: '',
+    holderNameEncrypted: encryptPiiValue(normalizedHolderName, 'holderName'),
+    address: '',
+    addressEncrypted: encryptPiiValue(normalizedAddress, 'address'),
+    contactNumber: '',
+    contactNumberEncrypted: contactFields.encrypted,
     status: onboardingStatus,
   });
 
   const { identity } = await ensureBlockchainIdentityForDocument({
     doc: hc,
     subjectType: 'healthcenter',
-    uniqueSeed: hc.email,
+    uniqueSeed: normalizedEmail,
     walletAddress,
   });
 
@@ -222,7 +292,7 @@ export async function adminCreateHealthCenter(req, res) {
     entityType: 'HealthCenter',
     entityId: hc._id,
     after: {
-      email: hc.email,
+      email: normalizedEmail,
       name: hc.name,
       barangayName: hc.barangayName,
       cityMunicipality: hc.cityMunicipality,
@@ -238,16 +308,16 @@ export async function adminCreateHealthCenter(req, res) {
   return res.status(201).json({
     healthCenter: {
       id: hc._id,
-      email: hc.email,
+      email: resolveEmail(hc),
       name: hc.name,
       barangayName: hc.barangayName,
       cityMunicipality: hc.cityMunicipality,
       healthCenterName: hc.healthCenterName,
-      officialContactInfo: hc.officialContactInfo,
+      officialContactInfo: resolveOfficialContact(hc),
       geoLocation: hc.geoLocation,
       assignedHealthcareProviders: hc.assignedHealthcareProviders,
       status: hc.status,
-      holderName: hc.holderName,
+      holderName: resolveHolderName(hc),
       blockchainIdentity: {
         identityId: identity.identityId,
         verificationStatus: identity.verificationStatus,
@@ -308,9 +378,16 @@ export async function listAdminUsers(req, res) {
 
   if (q) {
     const re = buildSafeRegex(q);
-    patientFilter.$or = [{ firstName: re }, { lastName: re }, { email: re }, { mrn: re }];
-    providerFilter.$or = [{ name: re }, { holderName: re }, { email: re }];
-    adminFilter.$or = [{ email: re }];
+    const emailFields = buildEmailFields(q);
+    const mrnFields = buildMrnFields(q);
+    patientFilter.$or = [
+      { firstName: re },
+      { lastName: re },
+      { emailHash: emailFields.hash },
+      { mrnHash: mrnFields.hash },
+    ];
+    providerFilter.$or = [{ name: re }, { holderName: re }, { emailHash: emailFields.hash }];
+    adminFilter.$or = [{ emailHash: emailFields.hash }];
   }
 
   if (status) {
@@ -321,19 +398,23 @@ export async function listAdminUsers(req, res) {
   const [patients, providers, admins] = await Promise.all([
     role && role !== 'patient'
       ? []
-      : Patient.find(patientFilter).select('firstName lastName email mrn status healthCenterId role createdAt updatedAt').sort({ updatedAt: -1 }).limit(limit).lean(),
+      : Patient.find(patientFilter)
+          .select('firstName lastName email emailEncrypted mrn mrnEncrypted status healthCenterId role createdAt updatedAt')
+          .sort({ updatedAt: -1 })
+          .limit(limit)
+          .lean(),
     role && role !== 'provider'
       ? []
       : HealthCenter.find(providerFilter)
           .select(
-            'name holderName email role status barangayName cityMunicipality healthCenterName officialContactInfo geoLocation assignedHealthcareProviders createdAt updatedAt'
+            'name holderName holderNameEncrypted email emailEncrypted role status barangayName cityMunicipality healthCenterName officialContactInfo officialContactInfoEncrypted geoLocation assignedHealthcareProviders createdAt updatedAt'
           )
           .sort({ updatedAt: -1 })
           .limit(limit)
           .lean(),
     role && role !== 'admin'
       ? []
-      : Admin.find(adminFilter).select('email role status createdAt updatedAt').sort({ updatedAt: -1 }).limit(limit).lean(),
+      : Admin.find(adminFilter).select('email emailEncrypted role status createdAt updatedAt').sort({ updatedAt: -1 }).limit(limit).lean(),
   ]);
 
   const users = [
@@ -341,10 +422,13 @@ export async function listAdminUsers(req, res) {
       id: p._id,
       role: 'patient',
       displayName: `${p.firstName} ${p.lastName}`.trim(),
-      email: p.email,
+      email: resolveEmail(p),
       status: p.status ?? 'active',
       credentialStatus: 'approved',
-      meta: { mrn: p.mrn ?? '', healthCenterId: p.healthCenterId },
+      meta: {
+        mrn: resolvePiiField({ encrypted: p.mrnEncrypted, fallback: p.mrn, field: 'mrn' }) || '',
+        healthCenterId: p.healthCenterId,
+      },
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
     })),
@@ -352,17 +436,17 @@ export async function listAdminUsers(req, res) {
       id: p._id,
       role: 'provider',
       displayName: p.barangayName || p.name,
-      email: p.email,
+      email: resolveEmail(p),
       status: p.status,
       // Kept for UI compatibility; values now mirror barangay onboarding status.
       credentialStatus: p.status,
       meta: {
-        holderName: p.holderName,
+        holderName: resolveHolderName(p),
         providerRole: p.role,
         barangayName: p.barangayName ?? '',
         cityMunicipality: p.cityMunicipality ?? '',
         healthCenterName: p.healthCenterName ?? '',
-        officialContactInfo: p.officialContactInfo ?? '',
+        officialContactInfo: resolveOfficialContact(p) ?? '',
         geoLocation: p.geoLocation ?? null,
         assignedHealthcareProviders: p.assignedHealthcareProviders ?? [],
       },
@@ -373,7 +457,7 @@ export async function listAdminUsers(req, res) {
       id: a._id,
       role: 'admin',
       displayName: 'Admin',
-      email: a.email,
+      email: resolveEmail(a),
       status: a.status,
       credentialStatus: 'approved',
       meta: {},
@@ -430,7 +514,12 @@ export async function adminUpsertUser(req, res) {
         },
       });
     }
-    const existing = await HealthCenter.findOne({ email: String(email).toLowerCase().trim() }).lean();
+    const emailFields = buildEmailFields(email);
+    const normalizedEmail = emailFields.normalized;
+    let existing = await HealthCenter.findOne({ emailHash: emailFields.hash }).lean();
+    if (!existing && normalizedEmail) {
+      existing = await HealthCenter.findOne({ email: normalizedEmail }).lean();
+    }
     if (existing) return res.status(409).json({ error: { message: 'Provider email already exists' } });
 
     const onboardingStatus = normalizeBarangayStatus(status, 'pending');
@@ -452,26 +541,37 @@ export async function adminUpsertUser(req, res) {
     const normalizedHealthCenterName = String(healthCenterName).trim();
     const displayName = String(name || `${normalizedBarangayName} - ${normalizedHealthCenterName}`).trim();
 
+    const contactFields = buildPhoneFields(contactNumber);
+    const normalizedAddress = normalizeText(address || cityMunicipality);
+    const normalizedOfficialContact = normalizeText(officialContactInfo);
+    const normalizedHolderName = normalizeText(holderName || normalizedBarangayName);
+
     const provider = await HealthCenter.create({
-      email: String(email).toLowerCase().trim(),
+      email: '',
+      emailHash: emailFields.hash,
+      emailEncrypted: emailFields.encrypted,
       passwordHash: await hashPassword(String(password)),
       name: displayName,
-      holderName: String(holderName || normalizedBarangayName).trim(),
+      holderName: '',
+      holderNameEncrypted: encryptPiiValue(normalizedHolderName, 'holderName'),
       barangayName: normalizedBarangayName,
       cityMunicipality: String(cityMunicipality).trim(),
       healthCenterName: normalizedHealthCenterName,
-      officialContactInfo: String(officialContactInfo).trim(),
+      officialContactInfo: '',
+      officialContactInfoEncrypted: encryptPiiValue(normalizedOfficialContact, 'officialContactInfo'),
       geoLocation: { latitude: lat, longitude: lng },
       assignedHealthcareProviders: assignedProviders,
-      address: String(address || cityMunicipality).trim(),
-      contactNumber: String(contactNumber ?? '').trim(),
+      address: '',
+      addressEncrypted: encryptPiiValue(normalizedAddress, 'address'),
+      contactNumber: '',
+      contactNumberEncrypted: contactFields.encrypted,
       status: onboardingStatus,
       role: 'staff',
     });
     const { identity } = await ensureBlockchainIdentityForDocument({
       doc: provider,
       subjectType: 'healthcenter',
-      uniqueSeed: provider.email,
+      uniqueSeed: normalizedEmail,
       walletAddress,
     });
     await writeAuditLog({
@@ -480,7 +580,7 @@ export async function adminUpsertUser(req, res) {
       entityType: 'HealthCenter',
       entityId: provider._id,
       after: {
-        email: provider.email,
+        email: normalizedEmail,
         status: provider.status,
         barangayName: provider.barangayName,
         blockchainIdentityId: identity.identityId,
@@ -491,7 +591,7 @@ export async function adminUpsertUser(req, res) {
       user: {
         id: provider._id,
         role: 'provider',
-        email: provider.email,
+        email: resolveEmail(provider),
         blockchainIdentity: {
           identityId: identity.identityId,
           verificationStatus: identity.verificationStatus,
@@ -509,19 +609,35 @@ export async function adminUpsertUser(req, res) {
     const hc = await HealthCenter.findById(healthCenterId).lean();
     if (!hc) return res.status(404).json({ error: { message: 'Health center not found' } });
 
-    const existing = await Patient.findOne({ healthCenterId, email: String(email).toLowerCase().trim() }).lean();
+    const emailFields = buildEmailFields(email);
+    const normalizedEmail = emailFields.normalized;
+    let existing = await Patient.findOne({ healthCenterId, emailHash: emailFields.hash }).lean();
+    if (!existing && normalizedEmail) {
+      existing = await Patient.findOne({ healthCenterId, email: normalizedEmail }).lean();
+    }
     if (existing) return res.status(409).json({ error: { message: 'Patient email already exists in this health center' } });
+
+    const contactFields = buildPhoneFields(contactNumber);
+    const mrnFields = buildMrnFields(mrn);
+    const normalizedAddress = normalizeText(address);
 
     const patient = await Patient.create({
       healthCenterId,
-      mrn: String(mrn ?? '').trim() || undefined,
+      mrn: '',
+      mrnHash: mrnFields.hash,
+      mrnEncrypted: mrnFields.encrypted,
       firstName: String(firstName).trim(),
       lastName: String(lastName).trim(),
       middleInitial: String(middleInitial).trim().slice(0, 1),
-      email: String(email).toLowerCase().trim(),
+      email: '',
+      emailHash: emailFields.hash,
+      emailEncrypted: emailFields.encrypted,
       passwordHash: await hashPassword(String(password)),
-      address: String(address ?? '').trim(),
-      contactNumber: String(contactNumber ?? '').trim(),
+      address: '',
+      addressEncrypted: encryptPiiValue(normalizedAddress, 'address'),
+      contactNumber: '',
+      contactNumberHash: contactFields.hash,
+      contactNumberEncrypted: contactFields.encrypted,
       status: status === 'archived' ? 'archived' : 'active',
       accountVerification: {
         status: 'verified',
@@ -535,7 +651,7 @@ export async function adminUpsertUser(req, res) {
     const { identity } = await ensureBlockchainIdentityForDocument({
       doc: patient,
       subjectType: 'patient',
-      uniqueSeed: patient.email,
+      uniqueSeed: normalizedEmail,
       walletAddress,
       healthCenterId: patient.healthCenterId,
     });
@@ -545,7 +661,7 @@ export async function adminUpsertUser(req, res) {
       entityType: 'Patient',
       entityId: patient._id,
       after: {
-        email: patient.email,
+        email: normalizedEmail,
         healthCenterId: patient.healthCenterId,
         status: patient.status,
         blockchainIdentityId: identity.identityId,
@@ -555,7 +671,7 @@ export async function adminUpsertUser(req, res) {
       user: {
         id: patient._id,
         role: 'patient',
-        email: patient.email,
+        email: resolveEmail(patient),
         blockchainIdentity: {
           identityId: identity.identityId,
           verificationStatus: identity.verificationStatus,
@@ -565,10 +681,17 @@ export async function adminUpsertUser(req, res) {
     });
   }
 
-  const existingAdmin = await Admin.findOne({ email: String(email).toLowerCase().trim() }).lean();
+  const emailFields = buildEmailFields(email);
+  const normalizedEmail = emailFields.normalized;
+  let existingAdmin = await Admin.findOne({ emailHash: emailFields.hash }).lean();
+  if (!existingAdmin && normalizedEmail) {
+    existingAdmin = await Admin.findOne({ email: normalizedEmail }).lean();
+  }
   if (existingAdmin) return res.status(409).json({ error: { message: 'Admin email already exists' } });
   const admin = await Admin.create({
-    email: String(email).toLowerCase().trim(),
+    email: '',
+    emailHash: emailFields.hash,
+    emailEncrypted: emailFields.encrypted,
     passwordHash: await hashPassword(String(password)),
     status: status === 'disabled' ? 'disabled' : 'active',
     role: 'admin',
@@ -578,9 +701,9 @@ export async function adminUpsertUser(req, res) {
     action: 'ADMIN.USER.CREATE',
     entityType: 'Admin',
     entityId: admin._id,
-    after: { email: admin.email, status: admin.status },
+    after: { email: normalizedEmail, status: admin.status },
   });
-  return res.status(201).json({ user: { id: admin._id, role: 'admin', email: admin.email } });
+  return res.status(201).json({ user: { id: admin._id, role: 'admin', email: resolveEmail(admin) } });
 }
 
 export async function adminUpdateUser(req, res) {
@@ -611,7 +734,32 @@ export async function adminUpdateUser(req, res) {
     ];
     const update = {};
     for (const k of allowed) if (k in patch) update[k] = patch[k];
-    if ('email' in update) update.email = String(update.email).toLowerCase().trim();
+    if ('email' in update) {
+      const emailFields = buildEmailFields(update.email);
+      update.email = '';
+      update.emailHash = emailFields.hash;
+      update.emailEncrypted = emailFields.encrypted;
+    }
+    if ('contactNumber' in update) {
+      const contactFields = buildPhoneFields(update.contactNumber);
+      update.contactNumber = '';
+      update.contactNumberEncrypted = contactFields.encrypted;
+    }
+    if ('address' in update) {
+      const normalized = normalizeText(update.address);
+      update.address = '';
+      update.addressEncrypted = encryptPiiValue(normalized, 'address');
+    }
+    if ('holderName' in update) {
+      const normalized = normalizeText(update.holderName);
+      update.holderName = '';
+      update.holderNameEncrypted = encryptPiiValue(normalized, 'holderName');
+    }
+    if ('officialContactInfo' in update) {
+      const normalized = normalizeText(update.officialContactInfo);
+      update.officialContactInfo = '';
+      update.officialContactInfoEncrypted = encryptPiiValue(normalized, 'officialContactInfo');
+    }
     if ('status' in update) {
       const normalizedStatus = normalizeBarangayStatus(update.status);
       if (!normalizedStatus) {
@@ -638,7 +786,15 @@ export async function adminUpdateUser(req, res) {
     const doc = await HealthCenter.findByIdAndUpdate(userId, { $set: update }, { new: true, runValidators: true }).lean();
     if (!doc) return res.status(404).json({ error: { message: 'Provider not found' } });
     await writeAuditLog({ req, action: 'ADMIN.USER.UPDATE', entityType: 'HealthCenter', entityId: doc._id, after: update });
-    return res.json({ user: { id: doc._id, role: 'provider', email: doc.email, status: doc.status, credentialStatus: doc.status } });
+    return res.json({
+      user: {
+        id: doc._id,
+        role: 'provider',
+        email: resolveEmail(doc),
+        status: doc.status,
+        credentialStatus: doc.status,
+      },
+    });
   }
 
   if (role === 'patient') {
@@ -659,7 +815,38 @@ export async function adminUpdateUser(req, res) {
     ];
     const update = {};
     for (const k of allowed) if (k in patch) update[k] = patch[k];
-    if ('email' in update) update.email = String(update.email).toLowerCase().trim();
+    if ('email' in update) {
+      const emailFields = buildEmailFields(update.email);
+      update.email = '';
+      update.emailHash = emailFields.hash;
+      update.emailEncrypted = emailFields.encrypted;
+    }
+    if ('contactNumber' in update) {
+      const contactFields = buildPhoneFields(update.contactNumber);
+      update.contactNumber = '';
+      update.contactNumberHash = contactFields.hash;
+      update.contactNumberEncrypted = contactFields.encrypted;
+    }
+    if ('address' in update) {
+      const normalized = normalizeText(update.address);
+      update.address = '';
+      update.addressEncrypted = encryptPiiValue(normalized, 'address');
+    }
+    if ('guardianName' in update) {
+      const normalized = normalizeText(update.guardianName);
+      update.guardianName = '';
+      update.guardianNameEncrypted = encryptPiiValue(normalized, 'guardianName');
+    }
+    if ('emergencyContactName' in update) {
+      const normalized = normalizeText(update.emergencyContactName);
+      update.emergencyContactName = '';
+      update.emergencyContactNameEncrypted = encryptPiiValue(normalized, 'emergencyContactName');
+    }
+    if ('emergencyContactPhone' in update) {
+      const normalized = normalizeText(update.emergencyContactPhone);
+      update.emergencyContactPhone = '';
+      update.emergencyContactPhoneEncrypted = encryptPiiValue(normalized, 'emergencyContactPhone');
+    }
     const doc = await Patient.findByIdAndUpdate(
       userId,
       { $set: { ...update, updatedByActorType: 'admin', updatedByActorId: req.context.adminId } },
@@ -667,17 +854,22 @@ export async function adminUpdateUser(req, res) {
     ).lean();
     if (!doc) return res.status(404).json({ error: { message: 'Patient not found' } });
     await writeAuditLog({ req, action: 'ADMIN.USER.UPDATE', entityType: 'Patient', entityId: doc._id, after: update });
-    return res.json({ user: { id: doc._id, role: 'patient', email: doc.email, status: doc.status } });
+    return res.json({ user: { id: doc._id, role: 'patient', email: resolveEmail(doc), status: doc.status } });
   }
 
   const allowed = ['email', 'status'];
   const update = {};
   for (const k of allowed) if (k in patch) update[k] = patch[k];
-  if ('email' in update) update.email = String(update.email).toLowerCase().trim();
+  if ('email' in update) {
+    const emailFields = buildEmailFields(update.email);
+    update.email = '';
+    update.emailHash = emailFields.hash;
+    update.emailEncrypted = emailFields.encrypted;
+  }
   const doc = await Admin.findByIdAndUpdate(userId, { $set: update }, { new: true, runValidators: true }).lean();
   if (!doc) return res.status(404).json({ error: { message: 'Admin not found' } });
   await writeAuditLog({ req, action: 'ADMIN.USER.UPDATE', entityType: 'Admin', entityId: doc._id, after: update });
-  return res.json({ user: { id: doc._id, role: 'admin', email: doc.email, status: doc.status } });
+  return res.json({ user: { id: doc._id, role: 'admin', email: resolveEmail(doc), status: doc.status } });
 }
 
 export async function approveProviderCredentials(req, res) {
@@ -714,7 +906,7 @@ export async function approveProviderCredentials(req, res) {
   return res.json({
     provider: {
       id: provider._id,
-      email: provider.email,
+      email: resolveEmail(provider),
       onboardingStatus: provider.status,
       credentialStatus: provider.status,
       status: provider.status,

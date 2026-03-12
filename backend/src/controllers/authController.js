@@ -9,6 +9,7 @@ import { revokeToken } from '../services/tokenRevocation.service.js';
 import { signPatientToken, verifyJwtToken } from '../services/authService.js';
 import { sha256Hex } from '../utils/crypto.js';
 import { writeAuditLog } from '../services/auditService.js';
+import { buildEmailFields, resolvePiiField } from '../services/pii.service.js';
 
 const googleClient = new OAuth2Client();
 
@@ -108,7 +109,11 @@ export async function loginWithGoogle(req, res) {
       return res.status(401).json({ error: { message: 'Unable to sign in with Google' } });
     }
 
-    const patients = await Patient.find({ email, status: 'active' }).lean();
+    const emailFields = buildEmailFields(email);
+    let patients = await Patient.find({ emailHash: emailFields.hash, status: 'active' }).lean();
+    if (!patients.length && emailFields.normalized) {
+      patients = await Patient.find({ email: emailFields.normalized, status: 'active' }).lean();
+    }
     if (!patients.length) {
       return res.status(401).json({ error: { message: 'Unable to sign in with Google' } });
     }
@@ -116,6 +121,13 @@ export async function loginWithGoogle(req, res) {
     const activePatient = patients.find((p) => String(p?.accountVerification?.status ?? '').toLowerCase() === 'verified');
     if (!activePatient) {
       return res.status(401).json({ error: { message: 'Unable to sign in with Google' } });
+    }
+
+    if (!activePatient.emailHash || !activePatient.emailEncrypted) {
+      await Patient.updateOne(
+        { _id: activePatient._id },
+        { $set: { emailHash: emailFields.hash, emailEncrypted: emailFields.encrypted, email: '' } }
+      );
     }
 
     const healthCenter = await HealthCenter.findById(activePatient.healthCenterId).select('status').lean();
@@ -152,7 +164,7 @@ export async function loginWithGoogle(req, res) {
         id: activePatient._id,
         firstName: activePatient.firstName,
         lastName: activePatient.lastName,
-        email: activePatient.email,
+        email: resolvePiiField({ encrypted: activePatient.emailEncrypted, fallback: activePatient.email, field: 'email' }),
         role: 'patient',
       },
     });
