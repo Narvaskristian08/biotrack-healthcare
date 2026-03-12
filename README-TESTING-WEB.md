@@ -241,6 +241,7 @@ Expected:
 
 Prerequisites:
 - Docker installed
+- Docker daemon running
 - Backend and web running (see section 4)
 
 Run baseline scan against the web UI:
@@ -255,7 +256,22 @@ Run baseline scan against the API:
 npm run zap:api
 ```
 
-Reports are written to `docs/zap/` as HTML, JSON, and Markdown files.
+Run both scans and refresh the HTML dashboard:
+
+```bash
+npm run zap:report
+```
+
+Reports are written to `docs/zap/` as HTML, JSON, and Markdown files. The automated entrypoint refreshes:
+- `docs/zap/index.html`
+- `docs/zap/zap-web-baseline-latest.html`
+- `docs/zap/zap-api-baseline-latest.html`
+
+Each run also keeps a timestamped copy under `docs/zap/<run-id>/`.
+The default container image is `ghcr.io/zaproxy/zaproxy:stable`. Override it with `ZAP_IMAGE=...` if needed.
+If you need to force a container user on Linux, set `ZAP_DOCKER_USER=<uid>:<gid>`. The default leaves the image user unchanged.
+Local targets such as `127.0.0.1` and `localhost` are rewritten to `host.docker.internal` inside the container.
+`docs/zap/index.html` is rendered as a color-coded dashboard with intensity scoring, severity counts, and top findings per scan.
 
 Notes:
 - Baseline scans are passive and mostly cover unauthenticated routes.

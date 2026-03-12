@@ -31,6 +31,7 @@ dist-desktop/
 dist-installer/
 playwright-report/
 test-results/
+docs/zap/
 
 # Desktop build temp/generated assets
 desktop/assets/icon.iconset/
