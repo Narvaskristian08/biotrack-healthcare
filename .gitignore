@@ -29,6 +29,8 @@ out/
 coverage/
 dist-desktop/
 dist-installer/
+playwright-report/
+test-results/
 
 # Desktop build temp/generated assets
 desktop/assets/icon.iconset/

@@ -6,7 +6,9 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint .",
-    "start": "next start"
+    "start": "next start",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -63,6 +65,7 @@
   "devDependencies": {
     "@next/swc-wasm-nodejs": "^16.0.10",
     "@tailwindcss/postcss": "^4.1.9",
+    "@playwright/test": "^1.51.1",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
