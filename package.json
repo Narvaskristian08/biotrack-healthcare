@@ -23,7 +23,9 @@
                     "desktop:icons":  "npm run desktop:icon && npm run desktop:icon:mac",
                     "desktop:installer":  "npm run desktop:icons && node desktop/scripts/build-installer.cjs",
                     "desktop:installer:win":  "npm run desktop:icons && node desktop/scripts/build-installer.cjs win",
-                    "desktop:installer:mac":  "npm run desktop:icons && node desktop/scripts/build-installer.cjs mac"
+                    "desktop:installer:mac":  "npm run desktop:icons && node desktop/scripts/build-installer.cjs mac",
+                    "zap:web":  "bash scripts/zap-baseline.sh http://127.0.0.1:3001 docs/zap zap-web-baseline",
+                    "zap:api":  "bash scripts/zap-baseline.sh http://127.0.0.1:3000/api docs/zap zap-api-baseline"
                 },
     "devDependencies":  {
                             "@electron/get":  "^2.0.3",
