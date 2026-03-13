@@ -148,6 +148,23 @@ const CITY_COMPONENT_PRIORITY = [
   'neighborhood',
 ];
 
+function normalizeCityKey(value: string): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/^(city|municipality)\s+of\s+/i, '')
+    .replace(/\s+(city|municipality)$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isSameCity(left: string, right: string): boolean {
+  const leftKey = normalizeCityKey(left);
+  const rightKey = normalizeCityKey(right);
+  return Boolean(leftKey && rightKey && leftKey === rightKey);
+}
+
 function extractCityMunicipalityFromComponents(
   components: Array<{ long_name?: string; types?: string[] }> = []
 ): string {
@@ -212,6 +229,7 @@ export default function AdminUsersPage() {
   const dragListenerRef = useRef<any>(null);
   const geocoderRef = useRef<any>(null);
   const geocodeRequestRef = useRef(0);
+  const lastValidCoordinatesRef = useRef<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (isMunicipalAdmin && form.role === 'admin') {
@@ -221,6 +239,7 @@ export default function AdminUsersPage() {
 
   const reverseGeocodeCityMunicipality = (lat: number, lng: number) => {
     if (form.role !== 'provider') return;
+    if (isMunicipalAdmin) return;
     const googleObj = (window as any).google;
     if (!googleObj?.maps?.Geocoder) return;
     if (!geocoderRef.current) {
@@ -244,7 +263,7 @@ export default function AdminUsersPage() {
     });
   };
 
-  const applyCoordinates = (lat: number, lng: number, pan = true, resolveCity = true) => {
+  const applyCoordinatesInternal = (lat: number, lng: number, pan = true, resolveCity = true) => {
     setForm((prev) => ({
       ...prev,
       latitude: lat.toFixed(6),
@@ -258,9 +277,119 @@ export default function AdminUsersPage() {
       mapInstanceRef.current.setZoom(15);
     }
 
+    if (mapInstanceRef.current && markerRef.current && !pan) {
+      markerRef.current.setPosition({ lat, lng });
+    }
+
+    lastValidCoordinatesRef.current = { lat, lng };
+
     if (resolveCity) {
       reverseGeocodeCityMunicipality(lat, lng);
     }
+  };
+
+  const validateMunicipalCoordinates = (lat: number, lng: number, pan = true) => {
+    const scopeCity = String(adminCityMunicipality || '').trim();
+    if (!scopeCity) {
+      setMapError('Municipal scope is missing a city/municipality. Contact a global admin to correct the account.');
+      setMapNotice('');
+      return;
+    }
+
+    const googleObj = (window as any).google;
+    if (!googleObj?.maps?.Geocoder) {
+      setMapError('City validation is unavailable. Please reload the page or check Google Maps configuration.');
+      setMapNotice('');
+      return;
+    }
+
+    if (!geocoderRef.current) {
+      geocoderRef.current = new googleObj.maps.Geocoder();
+    }
+
+    const requestId = ++geocodeRequestRef.current;
+    geocoderRef.current.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+      if (requestId !== geocodeRequestRef.current) return;
+      if (status !== 'OK' || !Array.isArray(results)) {
+        setMapError(`Unable to verify the city/municipality for this location. Please choose a point within ${scopeCity}.`);
+        setMapNotice('');
+        return;
+      }
+      const city = extractCityMunicipality(results);
+      if (!city) {
+        setMapError(`City / Municipality could not be detected. Please choose a point within ${scopeCity}.`);
+        setMapNotice('');
+        return;
+      }
+      if (!isSameCity(city, scopeCity)) {
+        setMapError(`Selected location is in ${city}. Municipal admins can only set locations in ${scopeCity}.`);
+        setMapNotice('');
+        const last = lastValidCoordinatesRef.current;
+        if (last && markerRef.current) {
+          markerRef.current.setPosition(last);
+        }
+        if (last && mapInstanceRef.current && pan) {
+          mapInstanceRef.current.panTo(last);
+          mapInstanceRef.current.setZoom(15);
+        }
+        return;
+      }
+
+      setMapError('');
+      setMapNotice(`City / Municipality validated: ${city}.`);
+      applyCoordinatesInternal(lat, lng, pan, false);
+    });
+  };
+
+  const applyCoordinates = (lat: number, lng: number, pan = true, resolveCity = true) => {
+    if (isMunicipalAdmin) {
+      validateMunicipalCoordinates(lat, lng, pan);
+      return;
+    }
+    applyCoordinatesInternal(lat, lng, pan, resolveCity);
+  };
+
+  const verifyMunicipalCoordinates = async (lat: number, lng: number): Promise<boolean> => {
+    const scopeCity = String(adminCityMunicipality || '').trim();
+    if (!scopeCity) {
+      setError('Municipal scope is missing a city/municipality. Contact a global admin to correct the account.');
+      return false;
+    }
+    const googleObj = (window as any).google;
+    if (!googleObj?.maps?.Geocoder) {
+      setError('City validation is unavailable. Please reload the page or check Google Maps configuration.');
+      return false;
+    }
+    if (!geocoderRef.current) {
+      geocoderRef.current = new googleObj.maps.Geocoder();
+    }
+
+    const requestId = ++geocodeRequestRef.current;
+    return new Promise((resolve) => {
+      geocoderRef.current.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+        if (requestId !== geocodeRequestRef.current) {
+          resolve(false);
+          return;
+        }
+        if (status !== 'OK' || !Array.isArray(results)) {
+          setError(`Unable to verify the city/municipality for this location. Please choose a point within ${scopeCity}.`);
+          resolve(false);
+          return;
+        }
+        const city = extractCityMunicipality(results);
+        if (!city) {
+          setError(`City / Municipality could not be detected. Please choose a point within ${scopeCity}.`);
+          resolve(false);
+          return;
+        }
+        if (!isSameCity(city, scopeCity)) {
+          setError(`Selected location is in ${city}. Municipal admins can only set locations in ${scopeCity}.`);
+          resolve(false);
+          return;
+        }
+        resolve(true);
+      });
+    });
   };
 
   const initGoogleMap = () => {
@@ -292,13 +421,15 @@ export default function AdminUsersPage() {
       title: 'Barangay/Clinic Location',
     });
 
+    if (isValidCoordinate(startLat, startLng)) {
+      lastValidCoordinatesRef.current = { lat: startLat, lng: startLng };
+    }
+
     clickListenerRef.current = map.addListener('click', (event: any) => {
       if (!event?.latLng) return;
       const lat = Number(event.latLng.lat());
       const lng = Number(event.latLng.lng());
-      applyCoordinates(lat, lng, false);
-      marker.setPosition({ lat, lng });
-      map.panTo({ lat, lng });
+      applyCoordinates(lat, lng, true);
     });
 
     dragListenerRef.current = marker.addListener('dragend', (event: any) => {
@@ -323,11 +454,16 @@ export default function AdminUsersPage() {
         }
         setMapError('');
         const cityFromPlace = extractCityMunicipalityFromComponents(place?.address_components ?? []);
-        if (cityFromPlace) {
+        if (isMunicipalAdmin && cityFromPlace && !isSameCity(cityFromPlace, adminCityMunicipality)) {
+          setMapError(`Selected location is in ${cityFromPlace}. Municipal admins can only set locations in ${adminCityMunicipality}.`);
+          setMapNotice('');
+          return;
+        }
+        if (cityFromPlace && !isMunicipalAdmin) {
           setForm((prev) => ({ ...prev, cityMunicipality: cityFromPlace }));
           setMapNotice(`City / Municipality set to ${cityFromPlace}.`);
         }
-        applyCoordinates(Number(lat), Number(lng), true, !cityFromPlace);
+        applyCoordinates(Number(lat), Number(lng), true, !cityFromPlace || isMunicipalAdmin);
       });
 
       placeAutocompleteRef.current = autocomplete;
@@ -451,6 +587,16 @@ export default function AdminUsersPage() {
     if (submittingRole === 'provider' && isMunicipalAdmin && !providerCityMunicipality) {
       setError(`Municipal admin scope is missing a city/municipality${municipalScopeLabel}.`);
       return;
+    }
+    if (submittingRole === 'provider' && isMunicipalAdmin) {
+      const lat = Number(form.latitude);
+      const lng = Number(form.longitude);
+      if (!isValidCoordinate(lat, lng)) {
+        setError(`Please provide a valid location within ${adminCityMunicipality || 'your assigned city/municipality'}.`);
+        return;
+      }
+      const ok = await verifyMunicipalCoordinates(lat, lng);
+      if (!ok) return;
     }
 
     const providerCreationSnapshot =

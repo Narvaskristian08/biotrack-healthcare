@@ -11,6 +11,12 @@ export type VerificationMethod = 'email' | 'sms';
 export const USER_SESSION_STORAGE_KEY = 'userSession';
 export const USER_SESSION_CHANGED_EVENT = 'biotrack:user-session-changed';
 
+export function resolveAuthenticatedHomePath(role?: AuthRole | string, _adminScope?: 'global' | 'municipal'): string {
+    if (role === 'admin') return '/admin-dashboard';
+    if (role === 'provider' || role === 'staff') return '/provider-dashboard';
+    return '/patient-dashboard';
+}
+
 export interface HealthCenter {
     _id: string;
     name: string;

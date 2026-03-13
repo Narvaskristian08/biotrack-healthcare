@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost } from './api';
+import { API_BASE_URL, apiGet, apiPatch, apiPost } from './api';
 import { getSession } from './auth';
 import { downloadTextFile } from './patient-role';
 
@@ -28,6 +28,40 @@ export interface AdminUserNotification {
   channel: string;
   recipientMasked?: string;
   message?: string;
+}
+
+export interface MunicipalOnboardingAttachment {
+  fileId: string;
+  label?: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+export interface MunicipalOnboardingRequest {
+  _id: string;
+  cityMunicipality: string;
+  province?: string;
+  officeName: string;
+  contactName: string;
+  contactRole: string;
+  email: string;
+  phone: string;
+  pricingTier?: string;
+  estimatedBarangays?: number | null;
+  estimatedPopulation?: number | null;
+  desiredStartDate?: string | null;
+  message?: string;
+  status: 'submitted' | 'approved' | 'rejected';
+  attachments: MunicipalOnboardingAttachment[];
+  decision?: {
+    status?: 'approved' | 'rejected' | null;
+    decidedAt?: string | null;
+    decidedByAdminId?: string | null;
+    note?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AdminOverview {
@@ -226,6 +260,55 @@ export async function fetchSystemLogs(params?: {
     suspiciousCount: result.data?.suspiciousCount ?? 0,
     pagination: result.data?.pagination,
   };
+}
+
+export async function fetchMunicipalOnboardingRequests(params?: {
+  status?: 'submitted' | 'approved' | 'rejected' | '';
+  q?: string;
+  limit?: number;
+}): Promise<{ requests?: MunicipalOnboardingRequest[]; error?: string }> {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set('status', params.status);
+  if (params?.q) qs.set('q', params.q);
+  if (params?.limit) qs.set('limit', String(params.limit));
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  const result = await apiGet<{ requests: MunicipalOnboardingRequest[] }>(`/admin/onboarding/applications${suffix}`);
+  if (result.error) return { error: result.error.message };
+  return { requests: result.data?.requests ?? [] };
+}
+
+export async function updateMunicipalOnboardingRequest(
+  applicationId: string,
+  payload: { status: 'approved' | 'rejected'; decisionNote?: string }
+): Promise<{ request?: MunicipalOnboardingRequest; error?: string }> {
+  const result = await apiPatch<{ request: MunicipalOnboardingRequest }>(`/admin/onboarding/applications/${applicationId}`, payload);
+  if (result.error) return { error: result.error.message };
+  return { request: result.data?.request };
+}
+
+export async function downloadMunicipalOnboardingFile(fileId: string, fileName?: string): Promise<{ error?: string }> {
+  const session = getSession();
+  if (!session?.accessToken) return { error: 'Admin session is required' };
+  const response = await fetch(`${API_BASE_URL}/admin/onboarding/files/${fileId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+    },
+  });
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    return { error: errorText || 'Failed to download file' };
+  }
+  const blob = await response.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = fileName || `attachment-${fileId}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(blobUrl);
+  return {};
 }
 
 export async function fetchSystemMonitoring(): Promise<{

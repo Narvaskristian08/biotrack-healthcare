@@ -25,7 +25,7 @@ function resolveApiBaseUrl(): string {
     }
 }
 
-const API_BASE_URL = resolveApiBaseUrl();
+export const API_BASE_URL = resolveApiBaseUrl();
 const CSRF_ENDPOINT = '/auth/csrf-token';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const SESSION_TIMEOUT_FALLBACK_SECONDS = 10;
@@ -57,6 +57,10 @@ async function ensureCsrfToken(): Promise<string> {
     const json = await response.json().catch(() => ({}));
     csrfTokenCache = String(json?.csrfToken ?? '');
     return csrfTokenCache;
+}
+
+export async function getCsrfToken(): Promise<string> {
+    return ensureCsrfToken();
 }
 
 export interface ApiError {

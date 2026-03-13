@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useDashboardRole, type UserRole } from '@/hooks/use-dashboard-role'
-import { getSession, clearSession } from '@/lib/auth'
+import { getSession, clearSession, resolveAuthenticatedHomePath } from '@/lib/auth'
 import { apiGet, SESSION_TIMEOUT_EVENT, type SessionTimeoutEventDetail } from '@/lib/api'
 
 const PUBLIC_PATHS = new Set([
+  '/',
   '/about',
   '/account-verification',
   '/forgot-password',
   '/login',
+  '/municipal-onboarding',
   '/privacy',
   '/register',
   '/terms',
@@ -19,7 +21,6 @@ const PUBLIC_PATHS = new Set([
 const AUTH_PAGES = new Set(['/login', '/register', '/forgot-password'])
 
 const COMMON_PROTECTED_PATHS = new Set([
-  '/',
   '/blockchain',
   '/blockchain-verification',
   '/help-support',
@@ -27,6 +28,7 @@ const COMMON_PROTECTED_PATHS = new Set([
 ])
 
 const PATIENT_PATHS = new Set([
+  '/patient-dashboard',
   '/ai-health-advisory',
   '/evaluation-feedback',
   '/health-monitoring',
@@ -46,11 +48,19 @@ const PROVIDER_PATHS = new Set([
 ])
 
 const ADMIN_PATHS = new Set(['/admin-dashboard'])
-const ADMIN_GLOBAL_ONLY_PATHS = new Set(['/admin/ai-configuration', '/admin/backup-recovery'])
+const ADMIN_GLOBAL_ONLY_PATHS = new Set([
+  '/admin/ai-configuration',
+  '/admin/backup-recovery',
+  '/admin/municipal-onboarding',
+])
 
 const PATIENT_PREFIXES: string[] = []
 const PROVIDER_PREFIXES = ['/users/', '/patients/']
 const ADMIN_PREFIXES = ['/admin/']
+
+function resolveHomePath(role: UserRole, adminScope: string = 'global') {
+  return resolveAuthenticatedHomePath(role, adminScope === 'municipal' ? 'municipal' : 'global')
+}
 
 function hasPrefix(pathname: string, prefixes: string[]) {
   return prefixes.some(prefix => pathname.startsWith(prefix))
@@ -243,8 +253,8 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
     if (!isReady) return
 
     if (isPublicPath(pathname)) {
-      if (isAuthenticated && AUTH_PAGES.has(pathname)) {
-        router.replace('/')
+      if (isAuthenticated && (AUTH_PAGES.has(pathname) || pathname === '/')) {
+        router.replace(resolveHomePath(role, adminScope))
       }
       return
     }
@@ -255,7 +265,7 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (!isRoleAllowed(pathname, role, adminScope)) {
-      router.replace('/')
+      router.replace(resolveHomePath(role, adminScope))
     }
   }, [isReady, isAuthenticated, pathname, role, router, adminScope])
 

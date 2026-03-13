@@ -21,6 +21,7 @@ import {
   fetchGoogleOAuthConfig,
   loginPatientWithGoogleIdToken,
   loginWithDetectedRole,
+  resolveAuthenticatedHomePath,
   type PatientLoginMfaChallenge,
   verifyPatientLoginMfa,
 } from '@/lib/auth'
@@ -199,7 +200,7 @@ export default function LoginPage() {
             }
 
             setSuccess('Google login successful. Redirecting...')
-            router.replace('/')
+            router.replace(resolveAuthenticatedHomePath(oauthResult.session?.role, oauthResult.session?.adminScope))
           },
         })
 
@@ -258,7 +259,7 @@ export default function LoginPage() {
       }
 
       setSuccess('Login successful. Redirecting...')
-      router.replace('/')
+      router.replace(resolveAuthenticatedHomePath(verifyResult.session?.role, verifyResult.session?.adminScope))
       return
     }
 
@@ -302,7 +303,7 @@ export default function LoginPage() {
     }
 
     setSuccess('Login successful. Redirecting...')
-    router.replace('/')
+    router.replace(resolveAuthenticatedHomePath(result.session?.role, result.session?.adminScope))
   }
 
   return (
@@ -472,6 +473,12 @@ export default function LoginPage() {
                 Don&apos;t have an account?{' '}
                 <Link href="/register" className="font-semibold text-[#0f8f60] underline-offset-4 hover:underline">
                   Sign up
+                </Link>
+              </p>
+              <p className="mt-3 text-center text-xs text-[#6b8579]">
+                Government onboarding?{' '}
+                <Link href="/municipal-onboarding" className="font-semibold text-[#0f8f60] underline-offset-4 hover:underline">
+                  Apply for municipal access
                 </Link>
               </p>
 

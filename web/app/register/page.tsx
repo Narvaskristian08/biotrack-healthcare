@@ -198,11 +198,13 @@ export default function RegisterPage() {
     if (!cityFilter) return healthCenters
     const target = normalizeCity(cityFilter)
     return healthCenters.filter(
-      (center) => normalizeCity(String(center.cityMunicipality ?? '')) === target
+      (center) => normalizeCity(String(center.cityMunicipality ?? '')).includes(target)
     )
   }, [healthCenters, cityFilter])
 
   const healthCentersForDisplay = cityFilter ? filteredHealthCenters : healthCenters
+  const hasAnyHealthCenters = healthCenters.length > 0
+  const hasCentersInCity = cityFilter ? filteredHealthCenters.length > 0 : false
 
   useEffect(() => {
     if (!cityFilter) return
@@ -241,8 +243,14 @@ export default function RegisterPage() {
   }
 
   const validateStep1 = (): string | null => {
-    if (!cityFilter) return 'Please select your city or municipality'
-    if (!patientData.healthCenterId) return 'Please select a health center'
+    if (!cityFilter) return 'Please enter your city or municipality'
+    if (!hasAnyHealthCenters) {
+      return 'BioTrack is not available in your area yet. Ask your local health office to onboard.'
+    }
+    if (!patientData.healthCenterId) {
+      if (!hasCentersInCity) return `No active health centers found in ${cityFilter}.`
+      return 'Please select a health center'
+    }
     if (!patientData.lastName.trim()) return 'Please enter your last name'
     if (!patientData.firstName.trim()) return 'Please enter your first name'
     if (!patientData.middleInitial.trim()) return 'Please enter your middle initial'
@@ -390,24 +398,23 @@ export default function RegisterPage() {
                     <>
                       <div className="space-y-2">
                         <Label className="text-sm font-semibold text-[#163428]">City / Municipality *</Label>
-                        <Select
-                          value={cityFilter}
-                          onValueChange={(value) => setCityFilter(value)}
-                          disabled={loadingHealthCenters || cityOptions.length === 0}
-                        >
-                          <SelectTrigger className="h-11 rounded-xl border-[#cfe5d9] bg-white text-[#173328] focus:ring-2 focus:ring-[#12b76a]/30">
-                            <SelectValue
-                              placeholder={loadingHealthCenters ? 'Loading cities...' : 'Select your city/municipality'}
-                            />
-                          </SelectTrigger>
-                          <SelectContent className="z-[140] max-h-72">
+                        <div className="auth-input-shell relative rounded-xl">
+                          <Input
+                            list="city-suggestions"
+                            value={cityFilter}
+                            onChange={(event) => setCityFilter(event.target.value)}
+                            placeholder={loadingHealthCenters ? 'Loading cities...' : 'Enter your city/municipality'}
+                            className="h-11 border-0 bg-transparent px-4 text-[#173328] placeholder:text-[#8fa398] shadow-none focus-visible:ring-0"
+                          />
+                          <datalist id="city-suggestions">
                             {cityOptions.map((city) => (
-                              <SelectItem key={city} value={city}>
-                                {city}
-                              </SelectItem>
+                              <option key={city} value={city} />
                             ))}
-                          </SelectContent>
-                        </Select>
+                          </datalist>
+                        </div>
+                        <p className="text-xs text-[#5b786d] mt-1 px-1">
+                          You can type any city. Health centers appear once BioTrack is active in your area.
+                        </p>
                         {!loadingHealthCenters && cityOptions.length === 0 ? (
                           <p className="text-xs text-amber-700 mt-1 px-1">
                             No cities are available yet. Ask your administrator to complete clinic profiles.

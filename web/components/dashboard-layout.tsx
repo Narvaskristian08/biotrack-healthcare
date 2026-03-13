@@ -23,6 +23,7 @@ import {
   Building2,
   Database,
   Cpu,
+  ClipboardList,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -52,6 +53,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useDashboardRole, type UserRole } from '@/hooks/use-dashboard-role'
+import { resolveAuthenticatedHomePath } from '@/lib/auth'
 import LogoutConfirmDialog from '@/components/logout-confirm-dialog'
 
 type NavItem = { label: string; href: string; icon: React.ComponentType<{ className?: string }> }
@@ -60,7 +62,7 @@ type NavGroup = { label: string; items: NavItem[] }
 const PATIENT_NAV_GROUPS: NavGroup[] = [
   {
     label: 'Overview',
-    items: [{ label: 'Dashboard', href: '/', icon: Home }],
+    items: [{ label: 'Dashboard', href: '/patient-dashboard', icon: Home }],
   },
   {
     label: 'Care And Monitoring',
@@ -83,7 +85,7 @@ const PATIENT_NAV_GROUPS: NavGroup[] = [
 const PROVIDER_NAV_GROUPS: NavGroup[] = [
   {
     label: 'Overview',
-    items: [{ label: 'Dashboard', href: '/', icon: Home }],
+    items: [{ label: 'Dashboard', href: '/provider-dashboard', icon: Home }],
   },
   {
     label: 'Patient Operations',
@@ -112,7 +114,10 @@ const ADMIN_NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Operations',
-    items: [{ label: 'User Management', href: '/admin/users', icon: Users }],
+    items: [
+      { label: 'User Management', href: '/admin/users', icon: Users },
+      { label: 'Municipal Applications', href: '/admin/municipal-onboarding', icon: ClipboardList },
+    ],
   },
   {
     label: 'Security And Compliance',
@@ -237,7 +242,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         .map((group) => ({
           ...group,
           items: group.items.filter(
-            (item) => !['/admin/ai-configuration', '/admin/backup-recovery'].includes(item.href)
+            (item) =>
+              !['/admin/ai-configuration', '/admin/backup-recovery', '/admin/municipal-onboarding'].includes(
+                item.href
+              )
           ),
         }))
         .filter((group) => group.items.length > 0)
@@ -245,6 +253,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigationItems = filteredNavigationGroups.flatMap((group) => group.items)
   const roleLabel = getRoleLabel(role)
   const profileHref = getProfileHref(role)
+  const homeHref = resolveAuthenticatedHomePath(role, sessionUser?.adminScope)
   const displayName = getDisplayName(sessionUser, role)
   const displayInitials = getInitialsFromName(sessionUser?.name, sessionUser?.firstName, sessionUser?.lastName) || role[0].toUpperCase()
   const activeNavItem =
@@ -279,7 +288,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <Sidebar className="border-r border-sidebar-border/80 bg-sidebar/95 backdrop-blur-sm">
           <SidebarHeader className="shrink-0 border-b border-sidebar-border/80 px-4 py-4">
             <Link
-              href="/"
+              href={homeHref}
               className="flex items-center gap-3 rounded-xl border border-sidebar-border/70 bg-background/70 px-3 py-3 shadow-sm transition-colors hover:bg-background"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-sm">
