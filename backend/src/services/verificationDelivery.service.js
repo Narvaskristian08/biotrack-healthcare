@@ -418,3 +418,215 @@ export async function deliverProviderOnboardingNotification({
     message: 'SMTP not configured; onboarding notification logged in backend console.',
   };
 }
+
+export async function deliverMunicipalOnboardingDecision({
+  email,
+  status = 'approved',
+  contactName = '',
+  cityMunicipality = '',
+  officeName = '',
+  pricingTier = '',
+  decisionNote = '',
+  applicationId = '',
+  loginEmail = '',
+  temporaryPassword = '',
+  accountExisting = false,
+}) {
+  const recipient = String(email ?? '').trim().toLowerCase();
+  const recipientMasked = maskEmailAddress(recipient);
+  if (!recipient) {
+    return {
+      attempted: false,
+      delivered: false,
+      channel: 'none',
+      recipientMasked,
+      message: 'Missing applicant email; notification skipped.',
+    };
+  }
+
+  const normalizedStatus = String(status ?? 'approved').trim().toLowerCase();
+  const statusLabel = normalizedStatus === 'approved' ? 'APPROVED' : normalizedStatus.toUpperCase() || 'UPDATED';
+  const safeContact = escapeHtml(contactName || 'Applicant');
+  const safeCity = escapeHtml(String(cityMunicipality || 'N/A'));
+  const safeOffice = escapeHtml(String(officeName || 'N/A'));
+  const safeTier = escapeHtml(String(pricingTier || 'N/A'));
+  const safeNote = escapeHtml(String(decisionNote || '').trim());
+  const safeAppId = escapeHtml(String(applicationId || '').trim());
+  const loginUrl = getPortalLoginUrl();
+  const safeLoginUrl = escapeHtml(loginUrl);
+  const normalizedLoginEmail = String(loginEmail ?? recipient).trim().toLowerCase() || recipient;
+  const normalizedTemporaryPassword = String(temporaryPassword ?? '').trim();
+  const shouldIncludeCredentials = normalizedStatus === 'approved' && Boolean(normalizedLoginEmail);
+  const hasCredentials = shouldIncludeCredentials && Boolean(normalizedTemporaryPassword);
+  const safeLoginEmail = escapeHtml(normalizedLoginEmail || 'N/A');
+  const safeTemporaryPassword = escapeHtml(normalizedTemporaryPassword);
+
+  const subject =
+    normalizedStatus === 'approved'
+      ? 'BioTrack Municipal Application Approved'
+      : 'BioTrack Municipal Application Update';
+
+  const textLines = [
+    `Hello ${contactName || 'there'},`,
+    '',
+    `Your BioTrack municipal onboarding request for ${cityMunicipality || 'your LGU'} has been ${normalizedStatus}.`,
+    officeName ? `Office: ${officeName}` : '',
+    pricingTier ? `Coverage Tier: ${pricingTier}` : '',
+    applicationId ? `Application ID: ${applicationId}` : '',
+    shouldIncludeCredentials ? `Login Email: ${normalizedLoginEmail || recipient}` : '',
+    hasCredentials ? `Temporary Password: ${normalizedTemporaryPassword}` : '',
+    hasCredentials ? 'Please change this password immediately after your first login.' : '',
+    shouldIncludeCredentials && !hasCredentials && accountExisting
+      ? 'An admin account already exists for this email. Use your existing password or request a reset.'
+      : '',
+    shouldIncludeCredentials && !hasCredentials && !accountExisting
+      ? 'Your account setup is in progress. Login credentials will be sent separately.'
+      : '',
+    '',
+    safeNote ? `Decision note: ${decisionNote}` : '',
+    '',
+    normalizedStatus === 'approved'
+      ? shouldIncludeCredentials
+        ? 'Next steps: Use the login details above to access your municipal admin dashboard.'
+        : 'Next steps: Our team will contact you to finalize account setup and onboarding.'
+      : 'If you need to update your submission, please reply to this email or reapply with updated credentials.',
+    loginUrl ? `Login URL: ${loginUrl}` : '',
+  ].filter(Boolean);
+  const text = textLines.join('\n');
+
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:24px;background:#f1f5f9;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:680px;margin:0 auto;">
+      <tr>
+        <td style="padding:0;">
+          <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
+            <div style="background:linear-gradient(90deg,#0c5d3a 0%,#19a86b 100%);padding:18px 22px;color:#ffffff;">
+              <h1 style="margin:0;font-size:22px;line-height:1.25;font-weight:700;">BioTrack Municipal Onboarding</h1>
+              <p style="margin:8px 0 0 0;font-size:13px;opacity:0.9;">Application ${statusLabel}</p>
+            </div>
+            <div style="padding:22px;">
+              <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;">Hello ${safeContact},</p>
+              <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;">
+                Your BioTrack municipal onboarding request for <strong>${safeCity}</strong> has been ${escapeHtml(normalizedStatus)}.
+              </p>
+
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin-bottom:14px;">
+                <p style="margin:0 0 10px 0;font-size:12px;color:#475569;letter-spacing:.04em;text-transform:uppercase;">Request Details</p>
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:14px;line-height:1.5;">
+                  <tr><td style="padding:3px 0;color:#334155;">Office</td><td style="padding:3px 0;font-weight:600;text-align:right;">${safeOffice}</td></tr>
+                  <tr><td style="padding:3px 0;color:#334155;">Coverage Tier</td><td style="padding:3px 0;font-weight:600;text-align:right;">${safeTier}</td></tr>
+                  <tr><td style="padding:3px 0;color:#334155;">Application ID</td><td style="padding:3px 0;font-weight:600;text-align:right;">${safeAppId || 'N/A'}</td></tr>
+                </table>
+              </div>
+
+              ${
+                safeNote
+                  ? `<div style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:12px;padding:12px 14px;margin-bottom:14px;">
+                       <p style="margin:0 0 6px 0;font-size:12px;color:#155e75;letter-spacing:.04em;text-transform:uppercase;">Decision Note</p>
+                       <p style="margin:0;font-size:14px;color:#0f172a;">${safeNote}</p>
+                     </div>`
+                  : ''
+              }
+
+              ${
+                shouldIncludeCredentials
+                  ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;margin-bottom:14px;">
+                       <p style="margin:0 0 10px 0;font-size:12px;color:#14532d;letter-spacing:.04em;text-transform:uppercase;">Login Credentials</p>
+                       <p style="margin:0 0 6px 0;font-size:14px;"><strong>Email:</strong> ${safeLoginEmail}</p>
+                       ${
+                         hasCredentials
+                           ? `<p style="margin:0 0 8px 0;font-size:14px;"><strong>Temporary Password:</strong> ${safeTemporaryPassword}</p>`
+                           : ''
+                       }
+                       ${
+                         hasCredentials
+                           ? '<p style="margin:0;font-size:12px;color:#166534;">Please change this password immediately after your first login.</p>'
+                           : accountExisting
+                             ? '<p style="margin:0;font-size:12px;color:#166534;">An admin account already exists for this email. Use your existing password or request a reset.</p>'
+                             : '<p style="margin:0;font-size:12px;color:#166534;">Your account setup is in progress. Login credentials will be sent separately.</p>'
+                       }
+                     </div>`
+                  : ''
+              }
+
+              <p style="margin:0 0 12px 0;font-size:14px;color:#334155;">
+                ${
+                  normalizedStatus === 'approved'
+                    ? shouldIncludeCredentials
+                      ? 'Next steps: Use the login details above to access your municipal admin dashboard.'
+                      : 'Next steps: Our team will contact you to finalize account setup and onboarding.'
+                    : 'If you need to update your submission, please reply to this email or reapply with updated credentials.'
+                }
+              </p>
+
+              ${
+                loginUrl
+                  ? `
+                    <a href="${safeLoginUrl}" style="display:inline-block;background:#0c5d3a;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;">Open BioTrack Login</a>
+                    <p style="margin:10px 0 0 0;font-size:12px;color:#64748b;">Login URL: ${safeLoginUrl}</p>
+                  `
+                  : ''
+              }
+            </div>
+            <div style="padding:12px 22px;border-top:1px solid #e2e8f0;background:#f8fafc;">
+              <p style="margin:0;font-size:11px;color:#64748b;">This message was sent to ${escapeHtml(recipient)} by BioTrack.</p>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  if (hasSmtpConfig()) {
+    try {
+      const transporter = await getSmtpTransporter();
+      await transporter.sendMail({
+        from: env.SMTP_FROM || env.SMTP_USER,
+        to: recipient,
+        subject,
+        text,
+        html,
+      });
+      return {
+        attempted: true,
+        delivered: true,
+        channel: 'smtp',
+        recipientMasked,
+        message: 'Municipal onboarding decision email delivered.',
+      };
+    } catch (error) {
+      return {
+        attempted: true,
+        delivered: false,
+        channel: 'smtp',
+        recipientMasked,
+        message: error instanceof Error ? error.message : 'Failed to send municipal onboarding email',
+      };
+    }
+  }
+
+  if (env.NODE_ENV === 'production') {
+    return {
+      attempted: true,
+      delivered: false,
+      channel: 'none',
+      recipientMasked,
+      message: 'SMTP is not configured for production.',
+    };
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `[DEV_MUNICIPAL_ONBOARDING] to=${recipient} status=${normalizedStatus} city=${String(cityMunicipality).trim()}`
+  );
+  return {
+    attempted: true,
+    delivered: false,
+    channel: 'dev',
+    recipientMasked,
+    message: 'SMTP not configured; municipal onboarding notification logged in backend console.',
+  };
+}

@@ -232,6 +232,25 @@ export const adminBlockchainArchiveSchema = z.object({
   logIds: z.array(objectIdSchema).min(1, 'At least one blockchain log is required').max(200, 'Too many blockchain logs selected'),
 });
 
+export const onboardingApplicationParamsSchema = z.object({
+  applicationId: objectIdSchema,
+});
+
+export const onboardingFileParamsSchema = z.object({
+  fileId: objectIdSchema,
+});
+
+export const municipalOnboardingListQuerySchema = z.object({
+  status: z.preprocess(emptyStringToUndefined, z.enum(['submitted', 'approved', 'rejected']).optional()),
+  q: z.string().trim().max(120).optional(),
+  limit: z.coerce.number().int().min(1).max(300).optional(),
+});
+
+export const municipalOnboardingDecisionSchema = z.object({
+  status: z.enum(['approved', 'rejected']),
+  decisionNote: z.string().trim().max(500).optional(),
+});
+
 export const adminUserUpdateParamsSchema = z.object({
   userRole: z.enum(['patient', 'provider', 'admin']),
   userId: objectIdSchema,
@@ -351,3 +370,27 @@ export const adminUserUpdateSchema = z
   .refine((value) => Object.keys(value).length > 0, {
     message: 'At least one field is required for update',
   });
+
+export const municipalOnboardingCreateSchema = z.object({
+  cityMunicipality: z.string().trim().min(1).max(140),
+  province: z.string().trim().max(140).optional(),
+  officeName: z.string().trim().min(1).max(140),
+  contactName: z.string().trim().min(1).max(120),
+  contactRole: z.string().trim().min(1).max(120),
+  email: z.string().trim().email('email must be a valid email address'),
+  phone: z.string().trim().min(6).max(40),
+  pricingTier: z.string().trim().max(60).optional(),
+  estimatedBarangays: z.coerce.number().int().min(1).max(1000).optional(),
+  estimatedPopulation: z.coerce.number().int().min(1).max(200000000).optional(),
+  desiredStartDate: optionalDateStringSchema.optional(),
+  message: z.string().trim().max(1000).optional(),
+  attachments: z
+    .array(
+      z.object({
+        fileId: objectIdSchema,
+        label: z.string().trim().max(80).optional(),
+      })
+    )
+    .max(10)
+    .optional(),
+});

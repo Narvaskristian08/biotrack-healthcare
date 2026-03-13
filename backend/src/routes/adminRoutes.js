@@ -11,6 +11,10 @@ import {
   adminGovernanceUpdateSchema,
   blockchainMetricsQuerySchema,
   blockchainOverviewQuerySchema,
+  municipalOnboardingDecisionSchema,
+  municipalOnboardingListQuerySchema,
+  onboardingApplicationParamsSchema,
+  onboardingFileParamsSchema,
   adminLogsQuerySchema,
   adminRbacUpdateSchema,
   adminUserUpdateParamsSchema,
@@ -40,6 +44,11 @@ import {
   updateDataGovernanceSettings,
   updateRbacSettings,
 } from '../controllers/adminController.js';
+import {
+  downloadOnboardingFile,
+  listMunicipalOnboardingRequests,
+  updateMunicipalOnboardingRequest,
+} from '../controllers/onboardingController.js';
 
 export const adminRoutes = Router();
 
@@ -76,6 +85,32 @@ adminRoutes.post(
   validateParams(providerStatusParamsSchema),
   validateBody(providerStatusUpdateSchema),
   asyncHandler(approveProviderCredentials)
+);
+
+adminRoutes.get(
+  '/onboarding/applications',
+  requireAdminAuth,
+  requireGlobalAdmin,
+  requireAdminCapability('canManageUsers'),
+  validateQuery(municipalOnboardingListQuerySchema),
+  asyncHandler(listMunicipalOnboardingRequests)
+);
+adminRoutes.patch(
+  '/onboarding/applications/:applicationId',
+  requireAdminAuth,
+  requireGlobalAdmin,
+  requireAdminCapability('canManageUsers'),
+  validateParams(onboardingApplicationParamsSchema),
+  validateBody(municipalOnboardingDecisionSchema),
+  asyncHandler(updateMunicipalOnboardingRequest)
+);
+adminRoutes.get(
+  '/onboarding/files/:fileId',
+  requireAdminAuth,
+  requireGlobalAdmin,
+  requireAdminCapability('canManageUsers'),
+  validateParams(onboardingFileParamsSchema),
+  asyncHandler(downloadOnboardingFile)
 );
 
 adminRoutes.get('/rbac', requireAdminAuth, requireGlobalAdmin, requireAdminCapability('canManagePolicies'), asyncHandler(getRbacSettings));

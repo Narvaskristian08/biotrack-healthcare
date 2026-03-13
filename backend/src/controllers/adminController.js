@@ -5,6 +5,7 @@ import { AuditLog } from '../models/AuditLog.js';
 import { BlockchainProofLog } from '../models/BlockchainProofLog.js';
 import { Session } from '../models/Session.js';
 import { AdminConfig } from '../models/AdminConfig.js';
+import { MunicipalOnboardingRequest } from '../models/MunicipalOnboardingRequest.js';
 import { env } from '../config/env.js';
 import { hashPassword, signAdminToken, verifyPassword } from '../services/authService.js';
 import { writeAuditLog } from '../services/auditService.js';
@@ -33,6 +34,7 @@ const QUEUED_PROVIDER_NOTIFICATION = Object.freeze({
 });
 
 const BARANGAY_STATUSES = ['pending', 'verified', 'active'];
+const MUNICIPAL_STARTER_BRGY_LIMIT = 20;
 
 function buildSafeRegex(value) {
   const escaped = String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -101,6 +103,35 @@ function applyScopeFilter(filter, scopeFilter) {
 function normalizeBarangayStatus(value, fallback = 'pending') {
   const normalized = String(value ?? fallback).trim().toLowerCase();
   return BARANGAY_STATUSES.includes(normalized) ? normalized : '';
+}
+
+function isStarterTier(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return normalized.includes('starter');
+}
+
+async function enforceStarterTierLimit(cityMunicipality) {
+  const cityRegex = buildExactMatchRegex(cityMunicipality);
+  if (!cityRegex) return null;
+  const latestApproved = await MunicipalOnboardingRequest.findOne({
+    cityMunicipality: cityRegex,
+    status: 'approved',
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+  if (!latestApproved || !isStarterTier(latestApproved.pricingTier)) return null;
+
+  const count = await HealthCenter.countDocuments({
+    cityMunicipality: cityRegex,
+    status: { $in: BARANGAY_STATUSES },
+  });
+  if (count < MUNICIPAL_STARTER_BRGY_LIMIT) return null;
+  return {
+    limit: MUNICIPAL_STARTER_BRGY_LIMIT,
+    count,
+    tier: latestApproved.pricingTier || 'Starter Coverage',
+    city: latestApproved.cityMunicipality || String(cityMunicipality).trim(),
+  };
 }
 
 function parseCoordinate(value) {
@@ -229,7 +260,7 @@ export async function registerAdmin(req, res) {
   if (existing) return res.status(409).json({ error: { message: 'Admin email already exists' } });
 
   const admin = await Admin.create({
-    email: '',
+    email: normalizedEmail,
     emailHash: emailFields.hash,
     emailEncrypted: emailFields.encrypted,
     passwordHash: await hashPassword(String(password)),
@@ -275,7 +306,7 @@ export async function loginAdmin(req, res) {
   if (!admin.emailHash || !admin.emailEncrypted) {
     admin.emailHash = emailFields.hash;
     admin.emailEncrypted = emailFields.encrypted;
-    admin.email = '';
+    admin.email = normalizedEmail;
     await admin.save();
   }
 
@@ -328,6 +359,16 @@ export async function adminCreateHealthCenter(req, res) {
   if (scopeContext.scope === 'municipal' && !isSameCity(cityMunicipality, scopeContext.cityMunicipality)) {
     return res.status(403).json({
       error: { message: 'Municipal admins can only create providers within their city/municipality' },
+    });
+  }
+
+  const starterLimit = await enforceStarterTierLimit(String(cityMunicipality).trim());
+  if (starterLimit) {
+    return res.status(403).json({
+      error: {
+        message: `${starterLimit.tier} allows up to ${starterLimit.limit} barangay accounts in ${starterLimit.city}. Current count: ${starterLimit.count}.`,
+        code: 'TIER_LIMIT_REACHED',
+      },
     });
   }
   const passwordCheck = validatePasswordPolicy(password);
@@ -682,6 +723,16 @@ export async function adminUpsertUser(req, res) {
         error: { message: 'Municipal admins can only create providers within their city/municipality' },
       });
     }
+
+    const starterLimit = await enforceStarterTierLimit(String(cityMunicipality).trim());
+    if (starterLimit) {
+      return res.status(403).json({
+        error: {
+          message: `${starterLimit.tier} allows up to ${starterLimit.limit} barangay accounts in ${starterLimit.city}. Current count: ${starterLimit.count}.`,
+          code: 'TIER_LIMIT_REACHED',
+        },
+      });
+    }
     const emailFields = buildEmailFields(email);
     const normalizedEmail = emailFields.normalized;
     let existing = await HealthCenter.findOne({ emailHash: emailFields.hash }).lean();
@@ -902,7 +953,7 @@ export async function adminUpsertUser(req, res) {
   }
 
   const admin = await Admin.create({
-    email: '',
+    email: normalizedEmail,
     emailHash: emailFields.hash,
     emailEncrypted: emailFields.encrypted,
     passwordHash: await hashPassword(String(password)),
@@ -1123,7 +1174,7 @@ export async function adminUpdateUser(req, res) {
   }
   if ('email' in update) {
     const emailFields = buildEmailFields(update.email);
-    update.email = '';
+    update.email = emailFields.normalized;
     update.emailHash = emailFields.hash;
     update.emailEncrypted = emailFields.encrypted;
   }

@@ -22,6 +22,7 @@ import { patientRoutes } from './routes/patientRoutes.js';
 import { auditLogRoutes } from './routes/auditLogRoutes.js';
 import { aiRoutes } from './routes/aiRoutes.js';
 import { authRoutes } from './routes/authRoutes.js';
+import { onboardingRoutes } from './routes/onboardingRoutes.js';
 
 import { activityInsightRoutes } from './routes/activityInsightRoutes.js';
 
@@ -111,6 +112,7 @@ app.use('/api/ai', fallInsightRoutes);
 app.use('/api/ai', trendInsightRoutes);
 app.use('/api/ai', summaryInsightRoutes);
 app.use('/api/ai', alertRoutes);
+app.use('/api/onboarding', onboardingRoutes);
 
 app.use(errorHandler);
 

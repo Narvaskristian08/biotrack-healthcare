@@ -29,7 +29,7 @@ export async function bootstrapDefaultAdmin() {
   }
 
   await Admin.create({
-    email: '',
+    email: emailFields.normalized,
     emailHash: emailFields.hash,
     emailEncrypted: emailFields.encrypted,
     passwordHash: await hashPassword(password),
