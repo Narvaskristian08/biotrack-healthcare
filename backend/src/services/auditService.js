@@ -1,4 +1,6 @@
 import { AuditLog } from '../models/AuditLog.js';
+import { runDetachedTask } from '../utils/backgroundTask.js';
+import { anchorGovernanceAuditLog, shouldAnchorGovernanceAction } from './blockchain/governanceProof.service.js';
 
 export async function writeAuditLog({
   req,
@@ -18,7 +20,7 @@ export async function writeAuditLog({
   const actorType = ctx?.adminId ? 'admin' : ctx?.patientId ? 'patient' : ctx?.healthCenterId ? 'healthcenter' : 'unknown';
   const actorId = ctx?.adminId ?? ctx?.patientId ?? ctx?.healthCenterId ?? null;
 
-  return AuditLog.create({
+  const auditLog = await AuditLog.create({
     healthCenterId: ctx.healthCenterId ?? null,
     barangay,
     actorName,
@@ -35,5 +37,12 @@ export async function writeAuditLog({
     ip,
     userAgent,
   });
-}
 
+  if (shouldAnchorGovernanceAction(action)) {
+    runDetachedTask(`audit-governance-anchor:${String(auditLog?._id ?? 'unknown')}`, async () => {
+      await anchorGovernanceAuditLog(auditLog);
+    });
+  }
+
+  return auditLog;
+}

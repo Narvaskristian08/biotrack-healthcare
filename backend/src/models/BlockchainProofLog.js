@@ -2,11 +2,11 @@ import mongoose from 'mongoose';
 
 const BlockchainProofLogSchema = new mongoose.Schema(
   {
-    kind: { type: String, enum: ['identity', 'record', 'verification'], required: true, index: true },
+    kind: { type: String, enum: ['identity', 'record', 'verification', 'governance'], required: true, index: true },
     status: { type: String, enum: ['success', 'failed', 'skipped'], required: true, index: true },
 
     healthCenterId: { type: mongoose.Schema.Types.ObjectId, ref: 'HealthCenter', default: null, index: true },
-    subjectType: { type: String, enum: ['patient', 'healthcenter', 'patientrecord', 'unknown'], default: 'unknown', index: true },
+    subjectType: { type: String, enum: ['patient', 'healthcenter', 'patientrecord', 'auditlog', 'unknown'], default: 'unknown', index: true },
     subjectId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
 
     recordId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
