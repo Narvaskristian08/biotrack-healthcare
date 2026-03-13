@@ -35,6 +35,34 @@ function buildQueuedBlockchainIdentityPayload() {
   };
 }
 
+function resolveErrorMessage(error) {
+  if (!error) return 'Unknown error';
+  if (typeof error === 'string') return error;
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error?.message === 'string') return error.message;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function isRecoverableBlockchainFailure(error) {
+  const statusCode = Number(error?.statusCode ?? error?.status ?? 0);
+  if (statusCode === 502) return true;
+  const code = String(error?.code ?? '').trim();
+  return code.startsWith('BLOCKCHAIN_');
+}
+
+function buildBlockchainIdentityVerificationFallback(error) {
+  return {
+    verified: false,
+    onChain: Boolean(env.BLOCKCHAIN_ENABLED),
+    reason: 'IDENTITY_VERIFY_ERROR',
+    error: resolveErrorMessage(error),
+  };
+}
+
 function normalizeVerificationMethod(value) {
   const method = String(value ?? '').trim().toLowerCase();
   if (method === 'email' || method === 'sms') return method;
@@ -887,17 +915,39 @@ export async function loginPatient(req, res) {
   }
 
   if (!env.PATIENT_LOGIN_MFA_REQUIRED) {
-    const { identity } = await ensureBlockchainIdentityForDocument({
-      doc: match,
-      subjectType: 'patient',
-      uniqueSeed: resolvePatientEmail(match) || normalizedEmail,
-      healthCenterId: match.healthCenterId,
-    });
-    const identityVerification = await verifyBlockchainIdentity(identity, {
-      subjectType: 'patient',
-      subjectId: match._id,
-      healthCenterId: match.healthCenterId,
-    });
+    let identity = match.blockchainIdentity ?? buildQueuedBlockchainIdentityPayload();
+    try {
+      ({ identity } = await ensureBlockchainIdentityForDocument({
+        doc: match,
+        subjectType: 'patient',
+        uniqueSeed: resolvePatientEmail(match) || normalizedEmail,
+        healthCenterId: match.healthCenterId,
+      }));
+    } catch (error) {
+      if (env.NODE_ENV === 'production' || !isRecoverableBlockchainFailure(error)) {
+        throw error;
+      }
+      // eslint-disable-next-line no-console
+      console.error('[PATIENT_LOGIN] Blockchain identity provisioning skipped:', resolveErrorMessage(error));
+      identity = match.blockchainIdentity ?? buildQueuedBlockchainIdentityPayload();
+    }
+
+    let identityVerification;
+    try {
+      identityVerification = await verifyBlockchainIdentity(identity, {
+        subjectType: 'patient',
+        subjectId: match._id,
+        healthCenterId: match.healthCenterId,
+      });
+    } catch (error) {
+      if (env.NODE_ENV === 'production' || !isRecoverableBlockchainFailure(error)) {
+        throw error;
+      }
+      // eslint-disable-next-line no-console
+      console.error('[PATIENT_LOGIN] Blockchain identity verification skipped:', resolveErrorMessage(error));
+      identityVerification = buildBlockchainIdentityVerificationFallback(error);
+    }
+
     return res.json(
       await issuePatientAccessToken({
         req,
@@ -1084,17 +1134,38 @@ export async function verifyPatientLoginMfa(req, res) {
     });
   }
 
-  const { identity } = await ensureBlockchainIdentityForDocument({
-    doc: patient,
-    subjectType: 'patient',
-    uniqueSeed: resolvePatientEmail(patient),
-    healthCenterId: patient.healthCenterId,
-  });
-  const identityVerification = await verifyBlockchainIdentity(identity, {
-    subjectType: 'patient',
-    subjectId: patient._id,
-    healthCenterId: patient.healthCenterId,
-  });
+  let identity = patient.blockchainIdentity ?? buildQueuedBlockchainIdentityPayload();
+  try {
+    ({ identity } = await ensureBlockchainIdentityForDocument({
+      doc: patient,
+      subjectType: 'patient',
+      uniqueSeed: resolvePatientEmail(patient),
+      healthCenterId: patient.healthCenterId,
+    }));
+  } catch (error) {
+    if (env.NODE_ENV === 'production' || !isRecoverableBlockchainFailure(error)) {
+      throw error;
+    }
+    // eslint-disable-next-line no-console
+    console.error('[PATIENT_LOGIN_MFA_VERIFY] Blockchain identity provisioning skipped:', resolveErrorMessage(error));
+    identity = patient.blockchainIdentity ?? buildQueuedBlockchainIdentityPayload();
+  }
+
+  let identityVerification;
+  try {
+    identityVerification = await verifyBlockchainIdentity(identity, {
+      subjectType: 'patient',
+      subjectId: patient._id,
+      healthCenterId: patient.healthCenterId,
+    });
+  } catch (error) {
+    if (env.NODE_ENV === 'production' || !isRecoverableBlockchainFailure(error)) {
+      throw error;
+    }
+    // eslint-disable-next-line no-console
+    console.error('[PATIENT_LOGIN_MFA_VERIFY] Blockchain identity verification skipped:', resolveErrorMessage(error));
+    identityVerification = buildBlockchainIdentityVerificationFallback(error);
+  }
 
   await writeAuditLog({
     req,
