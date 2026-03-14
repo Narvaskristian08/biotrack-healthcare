@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import DashboardLayout from '@/components/dashboard-layout';
+import { useDashboardRole } from '@/hooks/use-dashboard-role';
 import { exportAdminJson, fetchSystemMonitoring, type AuditLogItem } from '@/lib/admin-role';
 
 function formatTimestamp(value: string) {
@@ -20,6 +21,11 @@ function isHighlighted(log: AuditLogItem) {
 }
 
 export default function AdminSystemMonitoringPage() {
+  const { sessionUser } = useDashboardRole();
+  const isMunicipalAdmin = sessionUser?.adminScope === 'municipal';
+  const municipalTierId = sessionUser?.adminCoverageTierId ?? 'starter';
+  const canAccessEnterpriseFeatures = !isMunicipalAdmin || municipalTierId === 'enterprise';
+
   const [monitoring, setMonitoring] = useState<{
     activeSessions: number;
     totalSessions24h: number;
@@ -214,28 +220,43 @@ export default function AdminSystemMonitoringPage() {
                   Review authentication failures and repeated denied actions first. They are the strongest indicators of session misuse or policy gaps.
                 </p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-medium">2. Verify blockchain operations separately</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Blockchain proof logs are supervised on the blockchain page and can now be archived locally without deleting immutable proof history.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-medium">3. Confirm RBAC policy impact</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Admin capabilities are enforced at the API layer. Review the RBAC page before changing monitoring, user-management, or backup access.
-                </p>
-              </div>
+              {canAccessEnterpriseFeatures ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm font-medium">2. Verify blockchain operations separately</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Blockchain proof logs are supervised on the blockchain page and can now be archived locally without deleting immutable proof history.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-medium">2. Blockchain supervision is locked</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Upgrade to Enterprise Coverage to unlock blockchain proof supervision and archiving.
+                  </p>
+                </div>
+              )}
+              {!isMunicipalAdmin ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm font-medium">3. Confirm RBAC policy impact</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Admin capabilities are enforced at the API layer. Review the RBAC page before changing monitoring, user-management, or backup access.
+                  </p>
+                </div>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button asChild variant="outline">
                   <Link href="/admin/logs">Open System Logs</Link>
                 </Button>
-                <Button asChild variant="outline">
-                  <Link href="/admin/blockchain-management">Open Blockchain Supervision</Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href="/admin/ai-configuration">Open RBAC Policies</Link>
-                </Button>
+                {canAccessEnterpriseFeatures ? (
+                  <Button asChild variant="outline">
+                    <Link href="/admin/blockchain-management">Open Blockchain Supervision</Link>
+                  </Button>
+                ) : null}
+                {!isMunicipalAdmin ? (
+                  <Button asChild variant="outline">
+                    <Link href="/admin/ai-configuration">Open RBAC Policies</Link>
+                  </Button>
+                ) : null}
               </div>
             </CardContent>
           </Card>
