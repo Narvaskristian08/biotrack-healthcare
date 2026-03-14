@@ -54,6 +54,27 @@ const ADMIN_GLOBAL_ONLY_PATHS = new Set([
   '/admin/municipal-onboarding',
 ])
 
+type MunicipalCoverageTierId = 'starter' | 'citywide' | 'enterprise'
+
+const MUNICIPAL_CITYWIDE_ONLY_PATHS = new Set(['/admin/system-monitoring', '/admin/logs'])
+const MUNICIPAL_ENTERPRISE_ONLY_PATHS = new Set(['/admin/blockchain-management'])
+
+const MUNICIPAL_TIER_RANK: Record<MunicipalCoverageTierId, number> = {
+  starter: 0,
+  citywide: 1,
+  enterprise: 2,
+}
+
+function normalizeMunicipalCoverageTierId(value?: string): MunicipalCoverageTierId {
+  if (value === 'enterprise') return 'enterprise'
+  if (value === 'citywide') return 'citywide'
+  return 'starter'
+}
+
+function municipalTierAtLeast(current: MunicipalCoverageTierId, required: MunicipalCoverageTierId): boolean {
+  return MUNICIPAL_TIER_RANK[current] >= MUNICIPAL_TIER_RANK[required]
+}
+
 const PATIENT_PREFIXES: string[] = []
 const PROVIDER_PREFIXES = ['/users/', '/patients/']
 const ADMIN_PREFIXES = ['/admin/']
@@ -70,7 +91,12 @@ function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.has(pathname)
 }
 
-function isRoleAllowed(pathname: string, role: UserRole, adminScope: string = 'global') {
+function isRoleAllowed(
+  pathname: string,
+  role: UserRole,
+  adminScope: string = 'global',
+  adminCoverageTierId: string = 'starter'
+) {
   if (COMMON_PROTECTED_PATHS.has(pathname)) return true
 
   if (role === 'patient') {
@@ -85,6 +111,16 @@ function isRoleAllowed(pathname: string, role: UserRole, adminScope: string = 'g
     return false
   }
 
+  if (role === 'admin' && adminScope === 'municipal') {
+    const municipalTier = normalizeMunicipalCoverageTierId(adminCoverageTierId)
+    if (MUNICIPAL_CITYWIDE_ONLY_PATHS.has(pathname) && !municipalTierAtLeast(municipalTier, 'citywide')) {
+      return false
+    }
+    if (MUNICIPAL_ENTERPRISE_ONLY_PATHS.has(pathname) && !municipalTierAtLeast(municipalTier, 'enterprise')) {
+      return false
+    }
+  }
+
   return ADMIN_PATHS.has(pathname) || hasPrefix(pathname, ADMIN_PREFIXES)
 }
 
@@ -93,6 +129,7 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
   const router = useRouter()
   const { role, isAuthenticated, isReady, sessionUser } = useDashboardRole()
   const adminScope = sessionUser?.adminScope ?? 'global'
+  const adminCoverageTierId = sessionUser?.adminCoverageTierId ?? 'starter'
   const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null)
   const [timeoutMessage, setTimeoutMessage] = useState('')
   const timeoutHandledRef = useRef(false)
@@ -264,13 +301,13 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
       return
     }
 
-    if (!isRoleAllowed(pathname, role, adminScope)) {
+    if (!isRoleAllowed(pathname, role, adminScope, adminCoverageTierId)) {
       router.replace(resolveHomePath(role, adminScope))
     }
-  }, [isReady, isAuthenticated, pathname, role, router, adminScope])
+  }, [isReady, isAuthenticated, pathname, role, router, adminScope, adminCoverageTierId])
 
   const shouldBlockProtectedRender =
-    !isPublicPath(pathname) && (!isAuthenticated || !isRoleAllowed(pathname, role, adminScope))
+    !isPublicPath(pathname) && (!isAuthenticated || !isRoleAllowed(pathname, role, adminScope, adminCoverageTierId))
   const shouldBlockAuthPageRender =
     isPublicPath(pathname) && isAuthenticated && AUTH_PAGES.has(pathname)
 

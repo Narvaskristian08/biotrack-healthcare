@@ -83,6 +83,8 @@ export interface UserSession {
     healthCenterId?: string;
     adminScope?: 'global' | 'municipal';
     adminCityMunicipality?: string;
+    adminCoverageTierId?: 'starter' | 'citywide' | 'enterprise';
+    adminCoverageTierLabel?: string;
     loginTime: string;
 }
 
@@ -481,7 +483,14 @@ export async function loginHealthCenter(data: LoginData): Promise<LoginOutcome> 
 export async function registerAdmin(data: AdminRegisterData): Promise<{ success: boolean; session?: UserSession; error?: string }> {
     const result = await apiPost<{
         accessToken: string;
-        admin: { id: string; email: string; scope?: 'global' | 'municipal'; cityMunicipality?: string };
+        admin: {
+            id: string;
+            email: string;
+            scope?: 'global' | 'municipal';
+            cityMunicipality?: string;
+            coverageTierId?: 'starter' | 'citywide' | 'enterprise';
+            coverageTierLabel?: string;
+        };
     }>('/admin/register', data);
 
     if (result.error) {
@@ -497,6 +506,8 @@ export async function registerAdmin(data: AdminRegisterData): Promise<{ success:
         id: admin.id,
         adminScope: admin.scope,
         adminCityMunicipality: admin.cityMunicipality,
+        adminCoverageTierId: admin.coverageTierId,
+        adminCoverageTierLabel: admin.coverageTierLabel,
         loginTime: new Date().toISOString(),
     };
 
@@ -507,7 +518,14 @@ export async function registerAdmin(data: AdminRegisterData): Promise<{ success:
 export async function loginAdmin(data: LoginData): Promise<LoginOutcome> {
     const result = await apiPost<{
         accessToken: string;
-        admin: { id: string; email: string; scope?: 'global' | 'municipal'; cityMunicipality?: string };
+        admin: {
+            id: string;
+            email: string;
+            scope?: 'global' | 'municipal';
+            cityMunicipality?: string;
+            coverageTierId?: 'starter' | 'citywide' | 'enterprise';
+            coverageTierLabel?: string;
+        };
     }>('/admin/login', data);
 
     if (result.error) {
@@ -523,6 +541,8 @@ export async function loginAdmin(data: LoginData): Promise<LoginOutcome> {
         id: admin.id,
         adminScope: admin.scope,
         adminCityMunicipality: admin.cityMunicipality,
+        adminCoverageTierId: admin.coverageTierId,
+        adminCoverageTierLabel: admin.coverageTierLabel,
         loginTime: new Date().toISOString(),
     };
 

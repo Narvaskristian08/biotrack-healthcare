@@ -23,6 +23,8 @@ interface SessionUser {
   id?: string
   adminScope?: 'global' | 'municipal'
   adminCityMunicipality?: string
+  adminCoverageTierId?: 'starter' | 'citywide' | 'enterprise'
+  adminCoverageTierLabel?: string
 }
 
 interface DashboardRoleContextType {
@@ -73,6 +75,8 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
         id: session.id,
         adminScope: session.adminScope,
         adminCityMunicipality: session.adminCityMunicipality,
+        adminCoverageTierId: session.adminCoverageTierId,
+        adminCoverageTierLabel: session.adminCoverageTierLabel,
       })
       setIsAuthenticated(true)
     } else {

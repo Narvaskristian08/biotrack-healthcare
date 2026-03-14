@@ -59,6 +59,24 @@ import LogoutConfirmDialog from '@/components/logout-confirm-dialog'
 type NavItem = { label: string; href: string; icon: React.ComponentType<{ className?: string }> }
 type NavGroup = { label: string; items: NavItem[] }
 
+type MunicipalCoverageTierId = 'starter' | 'citywide' | 'enterprise'
+
+const MUNICIPAL_TIER_RANK: Record<MunicipalCoverageTierId, number> = {
+  starter: 0,
+  citywide: 1,
+  enterprise: 2,
+}
+
+function normalizeMunicipalCoverageTierId(value?: string): MunicipalCoverageTierId {
+  if (value === 'enterprise') return 'enterprise'
+  if (value === 'citywide') return 'citywide'
+  return 'starter'
+}
+
+function municipalTierAtLeast(current: MunicipalCoverageTierId, required: MunicipalCoverageTierId): boolean {
+  return MUNICIPAL_TIER_RANK[current] >= MUNICIPAL_TIER_RANK[required]
+}
+
 const PATIENT_NAV_GROUPS: NavGroup[] = [
   {
     label: 'Overview',
@@ -237,16 +255,24 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [logoutPending, setLogoutPending] = React.useState(false)
   const navigationGroups = getNavigationGroups(role)
   const isMunicipalAdmin = role === 'admin' && sessionUser?.adminScope === 'municipal'
+  const municipalTierId = normalizeMunicipalCoverageTierId(sessionUser?.adminCoverageTierId)
+  const municipalHiddenPaths = React.useMemo(() => {
+    if (!isMunicipalAdmin) return new Set<string>()
+    const hidden = new Set<string>(['/admin/ai-configuration', '/admin/backup-recovery', '/admin/municipal-onboarding'])
+    if (!municipalTierAtLeast(municipalTierId, 'citywide')) {
+      hidden.add('/admin/system-monitoring')
+      hidden.add('/admin/logs')
+    }
+    if (!municipalTierAtLeast(municipalTierId, 'enterprise')) {
+      hidden.add('/admin/blockchain-management')
+    }
+    return hidden
+  }, [isMunicipalAdmin, municipalTierId])
   const filteredNavigationGroups = isMunicipalAdmin
     ? navigationGroups
         .map((group) => ({
           ...group,
-          items: group.items.filter(
-            (item) =>
-              !['/admin/ai-configuration', '/admin/backup-recovery', '/admin/municipal-onboarding'].includes(
-                item.href
-              )
-          ),
+          items: group.items.filter((item) => !municipalHiddenPaths.has(item.href)),
         }))
         .filter((group) => group.items.length > 0)
     : navigationGroups

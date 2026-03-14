@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import DashboardLayout from '@/components/dashboard-layout';
+import { useDashboardRole } from '@/hooks/use-dashboard-role';
 import { fetchAdminOverview, fetchSystemMonitoring, exportAdminJson } from '@/lib/admin-role';
 
 function formatTimestamp(value: string) {
@@ -18,6 +19,12 @@ function isHighlightedAction(value: string) {
 }
 
 export default function AdminDashboardPage() {
+  const { sessionUser } = useDashboardRole();
+  const isMunicipalAdmin = sessionUser?.adminScope === 'municipal';
+  const municipalTierId = sessionUser?.adminCoverageTierId ?? 'starter';
+  const canAccessCitywideFeatures = !isMunicipalAdmin || municipalTierId === 'citywide' || municipalTierId === 'enterprise';
+  const canAccessEnterpriseFeatures = !isMunicipalAdmin || municipalTierId === 'enterprise';
+
   const [overview, setOverview] = useState<{
     users: { patients: number; providers: number; admins: number };
     providers: { total: number; active: number; pendingApproval: number };
@@ -44,6 +51,7 @@ export default function AdminDashboardPage() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [monitoringLocked, setMonitoringLocked] = useState(false);
 
   const totals = useMemo(() => {
     const patients = overview?.users?.patients ?? 0;
@@ -78,7 +86,11 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const [overviewRes, monitoringRes] = await Promise.all([fetchAdminOverview(), fetchSystemMonitoring()]);
+      setMonitoringLocked(false);
+      const [overviewRes, monitoringRes] = await Promise.all([
+        fetchAdminOverview(),
+        canAccessCitywideFeatures ? fetchSystemMonitoring() : Promise.resolve({ error: 'Monitoring locked', monitoring: undefined }),
+      ]);
       if (!active) return;
       if (overviewRes.error) {
         setError(overviewRes.error);
@@ -87,13 +99,18 @@ export default function AdminDashboardPage() {
       }
       if (!monitoringRes.error) {
         setMonitoring(monitoringRes.monitoring ?? null);
+      } else {
+        setMonitoring(null);
+        if (!canAccessCitywideFeatures) {
+          setMonitoringLocked(true);
+        }
       }
       setLoading(false);
     })();
     return () => {
       active = false;
     };
-  }, []);
+  }, [canAccessCitywideFeatures]);
 
   const exportSnapshot = () => {
     exportAdminJson(`admin-overview-${new Date().toISOString().slice(0, 10)}.json`, {
@@ -112,9 +129,11 @@ export default function AdminDashboardPage() {
             <p className="text-muted-foreground mt-1">System governance, stability, and security oversight.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline">
-              <Link href="/admin/system-monitoring">Open Monitoring</Link>
-            </Button>
+            {canAccessCitywideFeatures ? (
+              <Button asChild variant="outline">
+                <Link href="/admin/system-monitoring">Open Monitoring</Link>
+              </Button>
+            ) : null}
             <Button variant="outline" onClick={exportSnapshot}>
               Export Snapshot
             </Button>
@@ -124,6 +143,13 @@ export default function AdminDashboardPage() {
         {error ? (
           <Card className="border-destructive/30 bg-destructive/5">
             <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
+          </Card>
+        ) : null}
+        {monitoringLocked ? (
+          <Card className="border-amber-200 bg-amber-50/60">
+            <CardContent className="pt-6 text-sm text-amber-800">
+              Monitoring and system logs are available on Citywide Coverage or higher.
+            </CardContent>
           </Card>
         ) : null}
 
@@ -139,7 +165,7 @@ export default function AdminDashboardPage() {
                   {loading ? (
                     <p className="text-sm text-muted-foreground">Loading...</p>
                   ) : (
-                    <div className="text-3xl font-bold">{monitoring?.activeSessions ?? 0}</div>
+                    <div className="text-3xl font-bold">{monitoring?.activeSessions ?? overview?.sessions?.active ?? 0}</div>
                   )}
                 </CardContent>
               </Card>
@@ -152,6 +178,8 @@ export default function AdminDashboardPage() {
                 <CardContent>
                   {loading ? (
                     <p className="text-sm text-muted-foreground">Loading...</p>
+                  ) : monitoringLocked ? (
+                    <p className="text-sm text-muted-foreground">Locked</p>
                   ) : (
                     <div className="text-3xl font-bold">{monitoring?.totalSessions24h ?? 0}</div>
                   )}
@@ -180,6 +208,8 @@ export default function AdminDashboardPage() {
                 <CardContent>
                   {loading ? (
                     <p className="text-sm text-muted-foreground">Loading...</p>
+                  ) : monitoringLocked ? (
+                    <p className="text-sm text-muted-foreground">Locked</p>
                   ) : (
                     <div className="text-3xl font-bold">{monitoring?.alerts24h ?? 0}</div>
                   )}
@@ -300,7 +330,10 @@ export default function AdminDashboardPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {loading ? <p className="text-sm text-muted-foreground">Loading...</p> : null}
-                {!loading ? (
+                {!loading && monitoringLocked ? (
+                  <p className="text-sm text-muted-foreground">Locked on Starter Coverage.</p>
+                ) : null}
+                {!loading && !monitoringLocked ? (
                   <div className={`rounded-xl border px-3 py-2 text-sm ${totals.suspicious ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
                     {totals.suspicious ? 'Attention needed' : 'Within expected range'} • Threshold {totals.suspiciousThreshold}/24h
                   </div>
@@ -317,15 +350,21 @@ export default function AdminDashboardPage() {
                 <Button asChild variant="outline">
                   <Link href="/admin/users">Manage Users</Link>
                 </Button>
-                <Button asChild variant="outline">
-                  <Link href="/admin/logs">Review System Logs</Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href="/admin/blockchain-management">Blockchain Supervision</Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href="/admin/ai-configuration">RBAC Policies</Link>
-                </Button>
+                {canAccessCitywideFeatures ? (
+                  <Button asChild variant="outline">
+                    <Link href="/admin/logs">Review System Logs</Link>
+                  </Button>
+                ) : null}
+                {canAccessEnterpriseFeatures ? (
+                  <Button asChild variant="outline">
+                    <Link href="/admin/blockchain-management">Blockchain Supervision</Link>
+                  </Button>
+                ) : null}
+                {!isMunicipalAdmin ? (
+                  <Button asChild variant="outline">
+                    <Link href="/admin/ai-configuration">RBAC Policies</Link>
+                  </Button>
+                ) : null}
               </CardContent>
             </Card>
           </div>
@@ -338,12 +377,17 @@ export default function AdminDashboardPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {loading ? <p className="text-sm text-muted-foreground">Loading...</p> : null}
-            {!loading && recentSecurity.length === 0 ? (
+            {!loading && monitoringLocked ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-muted-foreground">
+                Recent security activity is available on Citywide Coverage or higher.
+              </div>
+            ) : null}
+            {!loading && !monitoringLocked && recentSecurity.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-muted-foreground">
                 No recent high-priority activity in the latest audit batch.
               </div>
             ) : null}
-            {!loading
+            {!loading && !monitoringLocked
               ? recentSecurity.map((log) => (
                   <div key={log._id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                     <div className="flex flex-wrap items-center gap-2">

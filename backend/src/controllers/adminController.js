@@ -35,6 +35,11 @@ const QUEUED_PROVIDER_NOTIFICATION = Object.freeze({
 
 const BARANGAY_STATUSES = ['pending', 'verified', 'active'];
 const MUNICIPAL_STARTER_BRGY_LIMIT = 20;
+const MUNICIPAL_COVERAGE_TIER_RANK = Object.freeze({
+  starter: 0,
+  citywide: 1,
+  enterprise: 2,
+});
 
 function buildSafeRegex(value) {
   const escaped = String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -108,6 +113,68 @@ function normalizeBarangayStatus(value, fallback = 'pending') {
 function isStarterTier(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
   return normalized.includes('starter');
+}
+
+function normalizeMunicipalCoverageTier(value) {
+  const raw = String(value ?? '').trim();
+  const normalized = raw.toLowerCase();
+  const collapsed = normalized.replace(/[^a-z]/g, '');
+
+  if (collapsed.includes('enterprise')) {
+    return { id: 'enterprise', label: 'Enterprise Coverage', raw };
+  }
+  if (collapsed.includes('citywide')) {
+    return { id: 'citywide', label: 'Citywide Coverage', raw };
+  }
+  if (collapsed.includes('starter')) {
+    return { id: 'starter', label: 'Starter Coverage', raw };
+  }
+
+  return {
+    id: 'starter',
+    label: raw || 'Starter Coverage',
+    raw,
+  };
+}
+
+function resolveMunicipalCoverageTierRank(tierId) {
+  const normalized = String(tierId ?? '').trim().toLowerCase();
+  if (normalized === 'enterprise') return MUNICIPAL_COVERAGE_TIER_RANK.enterprise;
+  if (normalized === 'citywide') return MUNICIPAL_COVERAGE_TIER_RANK.citywide;
+  return MUNICIPAL_COVERAGE_TIER_RANK.starter;
+}
+
+function isMunicipalCoverageTierAtLeast(currentTierId, requiredTierId) {
+  return resolveMunicipalCoverageTierRank(currentTierId) >= resolveMunicipalCoverageTierRank(requiredTierId);
+}
+
+async function resolveMunicipalCoverageTier(cityMunicipality) {
+  const cityRegex = buildExactMatchRegex(cityMunicipality);
+  if (!cityRegex) return normalizeMunicipalCoverageTier('');
+  const latestApproved = await MunicipalOnboardingRequest.findOne({
+    cityMunicipality: cityRegex,
+    status: 'approved',
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+  return normalizeMunicipalCoverageTier(latestApproved?.pricingTier ?? '');
+}
+
+async function ensureMunicipalCoverageTier(scopeContext, requiredTierId, res, featureLabel) {
+  if (scopeContext.scope !== 'municipal') return true;
+  const currentTier = await resolveMunicipalCoverageTier(scopeContext.cityMunicipality);
+  if (isMunicipalCoverageTierAtLeast(currentTier.id, requiredTierId)) return true;
+
+  const requiredTier = normalizeMunicipalCoverageTier(requiredTierId);
+  res.status(403).json({
+    error: {
+      message: `${featureLabel} requires ${requiredTier.label} or higher. Current tier: ${currentTier.label}.`,
+      code: 'TIER_FORBIDDEN',
+      requiredTierId: requiredTier.id,
+      currentTierId: currentTier.id,
+    },
+  });
+  return false;
 }
 
 async function enforceStarterTierLimit(cityMunicipality) {
@@ -312,6 +379,9 @@ export async function loginAdmin(req, res) {
 
   const token = signAdminToken({ adminId: admin._id });
   await writeAuditLog({ req, action: 'ADMIN.LOGIN', entityType: 'Admin', entityId: admin._id });
+
+  const isMunicipal = String(admin.scope ?? '').trim().toLowerCase() === 'municipal';
+  const coverageTier = isMunicipal ? await resolveMunicipalCoverageTier(admin.cityMunicipality) : null;
   return res.json({
     accessToken: token,
     admin: {
@@ -319,6 +389,12 @@ export async function loginAdmin(req, res) {
       email: resolveEmail(admin),
       scope: admin.scope ?? 'global',
       cityMunicipality: admin.cityMunicipality ?? '',
+      ...(coverageTier
+        ? {
+            coverageTierId: coverageTier.id,
+            coverageTierLabel: coverageTier.label,
+          }
+        : {}),
     },
   });
 }
@@ -1274,6 +1350,7 @@ export async function updateRbacSettings(req, res) {
 export async function listSystemLogs(req, res) {
   const scopeContext = resolveAdminScopeContext(req);
   if (!ensureMunicipalScope(scopeContext, res)) return;
+  if (!(await ensureMunicipalCoverageTier(scopeContext, 'citywide', res, 'System logs'))) return;
   const { healthCenterIds } = await resolveScopeHealthCenters(scopeContext);
 
   const q = String(req.query.q ?? '').trim();
@@ -1335,6 +1412,7 @@ export async function listSystemLogs(req, res) {
 export async function getSystemMonitoring(req, res) {
   const scopeContext = resolveAdminScopeContext(req);
   if (!ensureMunicipalScope(scopeContext, res)) return;
+  if (!(await ensureMunicipalCoverageTier(scopeContext, 'citywide', res, 'System monitoring'))) return;
   const { healthCenterIds } = await resolveScopeHealthCenters(scopeContext);
 
   const now = new Date();
@@ -1391,6 +1469,7 @@ export async function getSystemMonitoring(req, res) {
 export async function getBlockchainOverview(req, res) {
   const scopeContext = resolveAdminScopeContext(req);
   if (!ensureMunicipalScope(scopeContext, res)) return;
+  if (!(await ensureMunicipalCoverageTier(scopeContext, 'enterprise', res, 'Blockchain supervision'))) return;
   const { healthCenterIds } = await resolveScopeHealthCenters(scopeContext);
 
   const scope = String(req.query?.scope ?? 'active').trim().toLowerCase() || 'active';
@@ -1433,6 +1512,7 @@ export async function getBlockchainOverview(req, res) {
 export async function getBlockchainMetrics(req, res) {
   const scopeContext = resolveAdminScopeContext(req);
   if (!ensureMunicipalScope(scopeContext, res)) return;
+  if (!(await ensureMunicipalCoverageTier(scopeContext, 'enterprise', res, 'Blockchain supervision'))) return;
   const { healthCenterIds } = await resolveScopeHealthCenters(scopeContext);
 
   const days = Math.min(Math.max(Number(req.query?.days ?? 7), 1), 30);
@@ -1533,6 +1613,7 @@ export async function getBlockchainMetrics(req, res) {
 export async function archiveBlockchainLogs(req, res) {
   const scopeContext = resolveAdminScopeContext(req);
   if (!ensureMunicipalScope(scopeContext, res)) return;
+  if (!(await ensureMunicipalCoverageTier(scopeContext, 'enterprise', res, 'Blockchain supervision'))) return;
   const { healthCenterIds } = await resolveScopeHealthCenters(scopeContext);
 
   const requestedIds = Array.from(new Set((req.body?.logIds ?? []).map((value) => String(value).trim()).filter(Boolean)));
