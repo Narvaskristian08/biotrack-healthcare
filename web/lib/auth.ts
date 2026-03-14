@@ -2,7 +2,7 @@
  * Authentication service for all user types
  */
 
-import { apiGet, apiPost } from './api';
+import { apiGet, apiPost, API_BASE_URL } from './api';
 
 // ============== Types ==============
 
@@ -141,10 +141,9 @@ async function startHealthCenterSession(
     healthCenterAccessToken: string
 ): Promise<{ sessionToken?: string; error?: string }> {
     try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
         const csrf = await apiGet<{ csrfToken: string }>('/auth/csrf-token');
         const csrfToken = csrf.data?.csrfToken ?? '';
-        const response = await fetch(`${baseUrl}/sessions/start`, {
+        const response = await fetch(`${API_BASE_URL}/sessions/start`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
