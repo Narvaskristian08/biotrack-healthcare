@@ -52,6 +52,7 @@ async function ensureCsrfToken(): Promise<string> {
     const response = await fetch(`${API_BASE_URL}${CSRF_ENDPOINT}`, {
         method: 'GET',
         credentials: 'include',
+        cache: 'no-store',
     });
     if (!response.ok) return '';
     const json = await response.json().catch(() => ({}));
@@ -190,6 +191,11 @@ export async function apiFetch<T>(
                     countdownSeconds,
                 },
             };
+        }
+
+        if (endpoint === CSRF_ENDPOINT) {
+            // Keep the in-memory cache aligned with the latest cookie token.
+            csrfTokenCache = String(json?.csrfToken ?? '');
         }
 
         return { data: json };

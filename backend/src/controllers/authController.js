@@ -21,7 +21,14 @@ function getBearerToken(req) {
 }
 
 export async function getCsrfToken(req, res) {
-  const token = issueCsrfToken(req, res);
+  // This endpoint must never be cached; clients use it to keep the double-submit
+  // cookie + header token in sync.
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
+  const existing = String(req.cookies?.[env.CSRF_COOKIE_NAME] ?? '').trim();
+  const token = existing || issueCsrfToken(req, res);
   return res.json({
     csrfToken: token,
     headerName: env.CSRF_HEADER_NAME,
