@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Activity,
   ArrowRight,
@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import ForgotPasswordModal from '@/components/forgot-password-modal'
 import {
   fetchGoogleOAuthConfig,
   loginPatientWithGoogleIdToken,
@@ -127,6 +128,7 @@ function LoginHeroPanel() {
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
@@ -138,10 +140,12 @@ export default function LoginPage() {
   const [mfaCode, setMfaCode] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [forgotOpen, setForgotOpen] = useState(false)
   const [googleReady, setGoogleReady] = useState(false)
   const [googleClientId, setGoogleClientId] = useState(GOOGLE_OAUTH_CLIENT_ID.trim())
   const googleButtonRef = useRef<HTMLDivElement | null>(null)
   const googleOauthEnabled = googleClientId.length > 0
+  const handledUrlStateRef = useRef(false)
 
   useEffect(() => {
     if (googleClientId) return
@@ -306,6 +310,33 @@ export default function LoginPage() {
     router.replace(resolveAuthenticatedHomePath(result.session?.role, result.session?.adminScope))
   }
 
+  useEffect(() => {
+    if (handledUrlStateRef.current) return
+    const forgot = searchParams.get('forgot')
+    const reset = searchParams.get('reset')
+    const shouldOpenForgot = forgot === '1' || forgot === 'true'
+    const resetSuccess = reset === 'success'
+
+    if (resetSuccess) {
+      setError('')
+      setSuccess('Password reset successful. Please sign in with your new password.')
+    }
+
+    if (shouldOpenForgot) {
+      setForgotOpen(true)
+    }
+
+    if (shouldOpenForgot || resetSuccess) {
+      const nextParams = new URLSearchParams(searchParams.toString())
+      nextParams.delete('forgot')
+      nextParams.delete('reset')
+      const suffix = nextParams.toString()
+      router.replace(suffix ? `/login?${suffix}` : '/login')
+    }
+
+    handledUrlStateRef.current = true
+  }, [router, searchParams])
+
   return (
     <div className="min-h-screen bg-[#eef8f2]">
       <div className="grid min-h-screen lg:grid-cols-2">
@@ -396,9 +427,13 @@ export default function LoginPage() {
                           />
                           Remember for 30 days
                         </label>
-                        <Link href="/forgot-password" className="font-medium text-[#0f8f60] underline-offset-4 hover:underline">
+                        <button
+                          type="button"
+                          onClick={() => setForgotOpen(true)}
+                          className="font-medium text-[#0f8f60] underline-offset-4 hover:underline"
+                        >
                           Forgot password
-                        </Link>
+                        </button>
                       </div>
                     </div>
                   ) : (
@@ -507,6 +542,17 @@ export default function LoginPage() {
 
         <LoginHeroPanel />
       </div>
+
+      <ForgotPasswordModal
+        open={forgotOpen}
+        onOpenChange={setForgotOpen}
+        initialEmail={formData.email}
+        onPasswordReset={(resetEmail) => {
+          setFormData((prev) => ({ ...prev, email: resetEmail, password: '' }))
+          setError('')
+          setSuccess('Password reset successful. Please sign in with your new password.')
+        }}
+      />
     </div>
   )
 }

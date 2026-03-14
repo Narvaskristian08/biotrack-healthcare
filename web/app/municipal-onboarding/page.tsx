@@ -15,11 +15,13 @@ import {
   UploadCloud,
 } from 'lucide-react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   createMunicipalOnboardingApplication,
   uploadMunicipalOnboardingFile,
@@ -107,11 +109,16 @@ function formatBytes(bytes: number) {
 
 export default function MunicipalOnboardingLandingPage() {
   const formRef = useRef<HTMLDivElement | null>(null);
+  const alertRef = useRef<HTMLDivElement | null>(null);
+  const documentsRef = useRef<HTMLDivElement | null>(null);
+  const authorizationRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [selectedTier, setSelectedTier] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState<{ id: string; status: string } | null>(null);
   const [authorized, setAuthorized] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const [formData, setFormData] = useState({
     cityMunicipality: '',
@@ -146,6 +153,23 @@ export default function MunicipalOnboardingLandingPage() {
     return tier ? `${tier.name}: ${tier.price}` : 'Choose a tier to lock an indicative range.';
   }, [selectedTier]);
 
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const requiredAttachments = useMemo(() => attachments.filter((entry) => entry.required), [attachments]);
+  const missingRequiredAttachments = useMemo(
+    () => requiredAttachments.filter((entry) => !entry.file).map((entry) => entry.label),
+    [requiredAttachments]
+  );
+  const hasAttachmentErrors = useMemo(() => attachments.some((entry) => entry.status === 'error'), [attachments]);
+  const selectedRequiredCount = useMemo(
+    () => requiredAttachments.filter((entry) => entry.file && entry.status !== 'error').length,
+    [requiredAttachments]
+  );
+  const requiredSelectionProgress = useMemo(() => {
+    if (!requiredAttachments.length) return 0;
+    const pct = (selectedRequiredCount / requiredAttachments.length) * 100;
+    return Math.min(100, Math.max(0, pct));
+  }, [requiredAttachments.length, selectedRequiredCount]);
+
   const handleTierSelect = (tierId: string) => {
     setSelectedTier(tierId);
     const tier = TIERS.find((entry) => entry.id === tierId);
@@ -153,6 +177,12 @@ export default function MunicipalOnboardingLandingPage() {
     window.requestAnimationFrame(() => {
       formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  };
+
+  const handlePricingTierChange = (tierName: string) => {
+    setFormData((prev) => ({ ...prev, pricingTier: tierName }));
+    const match = TIERS.find((entry) => entry.name === tierName);
+    setSelectedTier(match?.id ?? '');
   };
 
   const updateForm = (field: keyof typeof formData, value: string) => {
@@ -176,6 +206,7 @@ export default function MunicipalOnboardingLandingPage() {
       if (!target) return prev;
       if (!file) {
         next[index] = { ...target, file: null, upload: null, status: 'idle', error: '' };
+        if (fileInputRefs.current[target.id]) fileInputRefs.current[target.id]!.value = '';
         return next;
       }
       const validation = validateFile(file);
@@ -214,25 +245,44 @@ export default function MunicipalOnboardingLandingPage() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    setSubmitAttempted(true);
     setError('');
     setSuccess(null);
 
     if (!formData.cityMunicipality.trim() || !formData.officeName.trim() || !formData.contactName.trim()) {
       setError('Please complete the required city, office, and contact fields.');
+      window.requestAnimationFrame(() => alertRef.current?.focus());
       return;
     }
     if (!formData.contactRole.trim() || !formData.email.trim() || !formData.phone.trim()) {
       setError('Please include contact role, email, and phone number.');
+      window.requestAnimationFrame(() => alertRef.current?.focus());
       return;
     }
     if (!authorized) {
       setError('Please confirm you are authorized to submit this request.');
+      window.requestAnimationFrame(() => {
+        authorizationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        alertRef.current?.focus();
+      });
       return;
     }
 
     const missingDocs = attachments.filter((doc) => doc.required && !doc.file);
     if (missingDocs.length > 0) {
-      setError('Please upload all required credentials before submitting.');
+      setError(`Please upload all required credentials before submitting: ${missingDocs.map((doc) => doc.label).join(', ')}.`);
+      window.requestAnimationFrame(() => {
+        documentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        alertRef.current?.focus();
+      });
+      return;
+    }
+    if (hasAttachmentErrors) {
+      setError('Please fix the document upload errors before submitting.');
+      window.requestAnimationFrame(() => {
+        documentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        alertRef.current?.focus();
+      });
       return;
     }
 
@@ -267,16 +317,59 @@ export default function MunicipalOnboardingLandingPage() {
       if (result.error || !result.request) {
         setError(result.error || 'Submission failed. Please try again.');
         setSubmitting(false);
+        window.requestAnimationFrame(() => alertRef.current?.focus());
         return;
       }
 
       setSuccess({ id: result.request.id, status: result.request.status });
       setSubmitting(false);
       formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.requestAnimationFrame(() => alertRef.current?.focus());
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Submission failed.');
       setSubmitting(false);
+      window.requestAnimationFrame(() => alertRef.current?.focus());
     }
+  };
+
+  const resetForm = () => {
+    setSelectedTier('');
+    setSubmitting(false);
+    setError('');
+    setSuccess(null);
+    setAuthorized(false);
+    setSubmitAttempted(false);
+    setFormData({
+      cityMunicipality: '',
+      province: '',
+      officeName: '',
+      contactName: '',
+      contactRole: '',
+      email: '',
+      phone: '',
+      pricingTier: '',
+      estimatedBarangays: '',
+      estimatedPopulation: '',
+      desiredStartDate: '',
+      message: '',
+    });
+    setAttachments(
+      REQUIRED_DOCUMENTS.map((doc) => ({
+        id: doc.id,
+        label: doc.label,
+        helper: doc.helper,
+        required: doc.required,
+        file: null,
+        upload: null,
+        status: 'idle',
+      }))
+    );
+    Object.values(fileInputRefs.current).forEach((input) => {
+      if (input) input.value = '';
+    });
+    window.requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   return (
@@ -424,15 +517,19 @@ export default function MunicipalOnboardingLandingPage() {
           </div>
 
           {error ? (
-            <Card className="border-destructive/40 bg-destructive/5">
-              <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
+            <Card className="border-destructive/40 bg-destructive/5" role="alert">
+              <CardContent className="pt-6 text-sm text-destructive">
+                <div ref={alertRef} tabIndex={-1} className="outline-none">
+                  {error}
+                </div>
+              </CardContent>
             </Card>
           ) : null}
 
           {success ? (
             <Card className="border-emerald-200 bg-emerald-50/70">
               <CardContent className="pt-6 text-sm text-emerald-900">
-                <div className="flex items-start gap-3">
+                <div ref={alertRef} tabIndex={-1} className="flex items-start gap-3 outline-none">
                   <div className="rounded-full bg-emerald-100 p-2">
                     <CheckCircle2 className="h-5 w-5" />
                   </div>
@@ -444,6 +541,14 @@ export default function MunicipalOnboardingLandingPage() {
                     <p className="mt-1 text-xs text-emerald-700">
                       Our team will contact you once verification is complete.
                     </p>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <Button type="button" variant="outline" size="sm" onClick={resetForm}>
+                        Submit another request
+                      </Button>
+                      <Link href="/login" className="text-sm font-semibold text-[#0c6c45] underline underline-offset-4">
+                        Go to login
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -452,15 +557,20 @@ export default function MunicipalOnboardingLandingPage() {
 
           <Card className="border-slate-200 bg-white">
             <CardContent className="pt-6">
-              <form className="space-y-8" onSubmit={handleSubmit}>
+              <form className="space-y-8" onSubmit={handleSubmit} aria-disabled={submitting || Boolean(success)}>
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="cityMunicipality">City / Municipality</Label>
+                    <Label htmlFor="cityMunicipality">
+                      City / Municipality <span className="text-destructive">*</span>
+                    </Label>
                     <Input
                       id="cityMunicipality"
+                      name="cityMunicipality"
+                      autoComplete="address-level2"
                       placeholder="Dagupan City"
                       value={formData.cityMunicipality}
                       onChange={(event) => updateForm('cityMunicipality', event.target.value)}
+                      disabled={submitting || Boolean(success)}
                       required
                     />
                   </div>
@@ -468,77 +578,111 @@ export default function MunicipalOnboardingLandingPage() {
                     <Label htmlFor="province">Province (optional)</Label>
                     <Input
                       id="province"
+                      name="province"
+                      autoComplete="address-level1"
                       placeholder="Pangasinan"
                       value={formData.province}
                       onChange={(event) => updateForm('province', event.target.value)}
+                      disabled={submitting || Boolean(success)}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="officeName">Office / Department</Label>
+                    <Label htmlFor="officeName">
+                      Office / Department <span className="text-destructive">*</span>
+                    </Label>
                     <Input
                       id="officeName"
+                      name="officeName"
+                      autoComplete="organization"
                       placeholder="City Health Office"
                       value={formData.officeName}
                       onChange={(event) => updateForm('officeName', event.target.value)}
+                      disabled={submitting || Boolean(success)}
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="contactName">Contact person</Label>
+                    <Label htmlFor="contactName">
+                      Contact person <span className="text-destructive">*</span>
+                    </Label>
                     <Input
                       id="contactName"
+                      name="contactName"
+                      autoComplete="name"
                       placeholder="Juan Dela Cruz"
                       value={formData.contactName}
                       onChange={(event) => updateForm('contactName', event.target.value)}
+                      disabled={submitting || Boolean(success)}
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="contactRole">Role / Title</Label>
+                    <Label htmlFor="contactRole">
+                      Role / Title <span className="text-destructive">*</span>
+                    </Label>
                     <Input
                       id="contactRole"
+                      name="contactRole"
+                      autoComplete="organization-title"
                       placeholder="Mayor's Secretary"
                       value={formData.contactRole}
                       onChange={(event) => updateForm('contactRole', event.target.value)}
+                      disabled={submitting || Boolean(success)}
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email address</Label>
+                    <Label htmlFor="email">
+                      Email address <span className="text-destructive">*</span>
+                    </Label>
                     <Input
                       id="email"
+                      name="email"
                       type="email"
+                      autoComplete="email"
                       placeholder="mayor.office@example.gov.ph"
                       value={formData.email}
                       onChange={(event) => updateForm('email', event.target.value)}
+                      disabled={submitting || Boolean(success)}
                       required
                     />
+                    <p className="text-xs text-muted-foreground">Use an official LGU email address if available.</p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone number</Label>
+                    <Label htmlFor="phone">
+                      Phone number <span className="text-destructive">*</span>
+                    </Label>
                     <Input
                       id="phone"
+                      name="phone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
                       placeholder="+63 912 345 6789"
                       value={formData.phone}
                       onChange={(event) => updateForm('phone', event.target.value)}
+                      disabled={submitting || Boolean(success)}
                       required
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="pricingTier">Preferred coverage tier</Label>
-                    <select
-                      id="pricingTier"
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    <Select
                       value={formData.pricingTier}
-                      onChange={(event) => updateForm('pricingTier', event.target.value)}
+                      onValueChange={(value) => handlePricingTierChange(value)}
+                      disabled={submitting || Boolean(success)}
                     >
-                      <option value="">Select a tier</option>
-                      {TIERS.map((tier) => (
-                        <option key={tier.id} value={tier.name}>
-                          {tier.name} ({tier.price})
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger id="pricingTier">
+                        <SelectValue placeholder="Select a tier" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIERS.map((tier) => (
+                          <SelectItem key={tier.id} value={tier.name}>
+                            {tier.name} ({tier.price})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -547,31 +691,40 @@ export default function MunicipalOnboardingLandingPage() {
                     <Label htmlFor="estimatedBarangays">Estimated barangays</Label>
                     <Input
                       id="estimatedBarangays"
+                      name="estimatedBarangays"
                       type="number"
+                      inputMode="numeric"
                       min="1"
                       placeholder="35"
                       value={formData.estimatedBarangays}
                       onChange={(event) => updateForm('estimatedBarangays', event.target.value)}
+                      disabled={submitting || Boolean(success)}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="estimatedPopulation">Estimated population</Label>
                     <Input
                       id="estimatedPopulation"
+                      name="estimatedPopulation"
                       type="number"
+                      inputMode="numeric"
                       min="1"
                       placeholder="180000"
                       value={formData.estimatedPopulation}
                       onChange={(event) => updateForm('estimatedPopulation', event.target.value)}
+                      disabled={submitting || Boolean(success)}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="desiredStartDate">Desired start date</Label>
                     <Input
                       id="desiredStartDate"
+                      name="desiredStartDate"
                       type="date"
+                      min={todayIso}
                       value={formData.desiredStartDate}
                       onChange={(event) => updateForm('desiredStartDate', event.target.value)}
+                      disabled={submitting || Boolean(success)}
                     />
                   </div>
                 </div>
@@ -580,24 +733,55 @@ export default function MunicipalOnboardingLandingPage() {
                   <Label htmlFor="message">Short message (optional)</Label>
                   <textarea
                     id="message"
+                    name="message"
                     className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                     placeholder="Share any notes about your timeline, contacts, or city requirements."
                     value={formData.message}
                     onChange={(event) => updateForm('message', event.target.value)}
+                    disabled={submitting || Boolean(success)}
                   />
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                <div ref={documentsRef} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
                   <div className="flex items-start gap-3">
                     <div className="rounded-lg bg-white p-2 shadow-sm">
                       <UploadCloud className="h-5 w-5 text-[#0c6c45]" />
                     </div>
                     <div>
-                      <p className="font-semibold">Upload credentials</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold">Upload credentials</p>
+                        <Badge variant="outline" className="border-slate-200 bg-white text-slate-700">
+                          Required selected: {selectedRequiredCount}/{requiredAttachments.length || 0}
+                        </Badge>
+                        {hasAttachmentErrors ? (
+                          <Badge variant="destructive">Fix upload errors</Badge>
+                        ) : missingRequiredAttachments.length > 0 && submitAttempted ? (
+                          <Badge variant="outline" className="border-destructive/40 bg-destructive/5 text-destructive">
+                            Missing required documents
+                          </Badge>
+                        ) : null}
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         Supported files: PDF, JPG, PNG. Maximum size: 5 MB each.
                       </p>
                     </div>
+                  </div>
+                  <div className="mt-3">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+                      <div
+                        className="h-2 rounded-full bg-[#1bb376]"
+                        style={{ width: `${requiredSelectionProgress}%` }}
+                      />
+                    </div>
+                    {missingRequiredAttachments.length > 0 && submitAttempted ? (
+                      <p className="mt-2 text-xs text-destructive">
+                        Missing: {missingRequiredAttachments.join(', ')}
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Select all required documents before submitting the request.
+                      </p>
+                    )}
                   </div>
                   <ul className="mt-4 space-y-1 text-xs text-slate-600">
                     {DOCUMENT_INSTRUCTIONS.map((line) => (
@@ -609,12 +793,46 @@ export default function MunicipalOnboardingLandingPage() {
                   </ul>
                   <div className="mt-4 grid gap-4 lg:grid-cols-2">
                     {attachments.map((entry, index) => (
-                      <div key={entry.id} className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                      <div
+                        key={entry.id}
+                        className={`space-y-2 rounded-lg border p-3 ${
+                          entry.status === 'error' || (submitAttempted && entry.required && !entry.file)
+                            ? 'border-destructive/40 bg-destructive/5'
+                            : 'border-slate-200 bg-white'
+                        }`}
+                      >
                         <div>
-                          <p className="text-sm font-semibold">
-                            {entry.label}
-                            {entry.required ? <span className="text-destructive"> *</span> : null}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold">
+                              {entry.label}
+                              {entry.required ? <span className="text-destructive"> *</span> : null}
+                            </p>
+                            <Badge
+                              variant="outline"
+                              className={
+                                entry.required
+                                  ? 'border-slate-200 bg-slate-50 text-slate-700'
+                                  : 'border-slate-200 bg-white text-muted-foreground'
+                              }
+                            >
+                              {entry.required ? 'Required' : 'Optional'}
+                            </Badge>
+                            {entry.file && entry.status === 'idle' ? (
+                              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">
+                                Selected
+                              </Badge>
+                            ) : null}
+                            {entry.status === 'uploading' ? (
+                              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                                Uploading...
+                              </Badge>
+                            ) : null}
+                            {entry.status === 'uploaded' ? (
+                              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">
+                                Uploaded
+                              </Badge>
+                            ) : null}
+                          </div>
                           <p className="text-xs text-muted-foreground">{entry.helper}</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -623,28 +841,30 @@ export default function MunicipalOnboardingLandingPage() {
                             type="file"
                             accept=".pdf,.png,.jpg,.jpeg"
                             onChange={(event) => handleFileChange(index, event.target.files?.[0] ?? null)}
+                            ref={(element) => {
+                              fileInputRefs.current[entry.id] = element;
+                            }}
                             className="hidden"
                           />
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => document.getElementById(`file-${entry.id}`)?.click()}
+                            disabled={submitting || Boolean(success)}
+                            onClick={() => fileInputRefs.current[entry.id]?.click()}
                           >
                             {entry.file ? 'Replace file' : 'Upload file'}
                           </Button>
-                          {entry.file ? (
-                            <span className="text-xs text-slate-600">
-                              {entry.file.name} | {formatBytes(entry.file.size)}
-                            </span>
-                          ) : null}
                         </div>
                         {entry.file ? (
                           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <span>{entry.file.name} | {formatBytes(entry.file.size)}</span>
+                            <span>
+                              {entry.file.name} | {formatBytes(entry.file.size)}
+                            </span>
                             <button
                               type="button"
                               className="text-[#0c6c45] underline underline-offset-2"
+                              disabled={submitting || Boolean(success)}
                               onClick={() => {
                                 const url = URL.createObjectURL(entry.file as File);
                                 window.open(url, '_blank', 'noopener,noreferrer');
@@ -653,13 +873,17 @@ export default function MunicipalOnboardingLandingPage() {
                             >
                               View file
                             </button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={submitting || Boolean(success)}
+                              className="h-auto px-2 py-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => handleFileChange(index, null)}
+                            >
+                              Remove
+                            </Button>
                           </div>
-                        ) : null}
-                        {entry.status === 'uploading' ? (
-                          <p className="text-xs text-amber-600">Uploading...</p>
-                        ) : null}
-                        {entry.status === 'uploaded' ? (
-                          <p className="text-xs text-emerald-700">Uploaded</p>
                         ) : null}
                         {entry.status === 'error' ? (
                           <p className="text-xs text-destructive">{entry.error}</p>
@@ -669,11 +893,17 @@ export default function MunicipalOnboardingLandingPage() {
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                <div
+                  ref={authorizationRef}
+                  className={`flex items-start gap-3 rounded-xl border bg-slate-50/70 p-4 ${
+                    submitAttempted && !authorized ? 'border-destructive/40' : 'border-slate-200'
+                  }`}
+                >
                   <Checkbox
                     id="authorized"
                     checked={authorized}
                     onCheckedChange={(checked) => setAuthorized(Boolean(checked))}
+                    disabled={submitting || Boolean(success)}
                   />
                   <Label htmlFor="authorized" className="text-sm text-muted-foreground">
                     I confirm that I am authorized to submit this request on behalf of the city/municipality and that the
@@ -682,12 +912,41 @@ export default function MunicipalOnboardingLandingPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button type="submit" size="lg" disabled={submitting}>
-                    {submitting ? 'Submitting...' : 'Submit onboarding request'}
+                  <Button type="submit" size="lg" disabled={submitting || Boolean(success)}>
+                    {submitting
+                      ? attachments.some((entry) => entry.status === 'uploading')
+                        ? 'Uploading documents...'
+                        : 'Submitting...'
+                      : success
+                        ? 'Submitted'
+                        : 'Submit onboarding request'}
                   </Button>
                   <span className="text-xs text-muted-foreground">
-                    You will receive a confirmation email once verification begins.
+                    We will email you once verification begins.
                   </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge
+                    variant="outline"
+                    className={
+                      authorized
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                        : 'border-slate-200 bg-white text-muted-foreground'
+                    }
+                  >
+                    Authorization: {authorized ? 'confirmed' : 'required'}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className={
+                      missingRequiredAttachments.length === 0 && !hasAttachmentErrors
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                        : 'border-slate-200 bg-white text-muted-foreground'
+                    }
+                  >
+                    Required documents: {selectedRequiredCount}/{requiredAttachments.length || 0}
+                  </Badge>
+                  {hasAttachmentErrors ? <Badge variant="destructive">Fix upload errors</Badge> : null}
                 </div>
               </form>
             </CardContent>

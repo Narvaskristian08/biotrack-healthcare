@@ -365,6 +365,12 @@ export default function RegisterPage() {
 
               <h1 className="mt-4 text-[2rem] font-semibold leading-tight text-[#111f1a]">Create patient account</h1>
               <p className="mt-1 text-[1rem] text-[#4e6b5d]">Complete the guided flow to register securely.</p>
+              <p className="mt-3 text-sm text-[#57756a]">
+                Already have an account?{' '}
+                <Link href="/login" className="font-semibold text-[#0f8f60] underline-offset-4 hover:underline">
+                  Sign in
+                </Link>
+              </p>
 
               <div className="mt-4 rounded-2xl border border-[#c7e6d7] bg-white p-4 shadow-sm">
                 <div className="mb-3 h-2.5 w-full overflow-hidden rounded-full bg-[#e6f4ed]">
@@ -718,13 +724,6 @@ export default function RegisterPage() {
                 </div>
               </form>
             </div>
-
-            <p className="mt-3 text-center text-sm text-[#57756a]">
-              Already have an account?{' '}
-              <Link href="/login" className="font-semibold text-[#0f8f60] underline-offset-4 hover:underline">
-                Sign in
-              </Link>
-            </p>
 
             <p className="mt-2 text-center text-xs text-[#6b8579]">
               <button
