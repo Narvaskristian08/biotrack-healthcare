@@ -15,6 +15,7 @@ The backend now supports:
 - Optional on-chain identity registration and login-time verification
 - Record hash anchoring on-chain when records are created
 - A verification endpoint that checks DB hash integrity plus blockchain proof
+- Patient record export requests that must be signed by the patient's linked wallet
 
 Role intent:
 - `Patient`: patient-facing verification plus self-monitoring record sync from patient tools
@@ -49,6 +50,7 @@ Main files involved:
 
 Role notes:
 - `POST /api/patients/:patientId/records` may be used by a patient session for self-monitoring uploads or by a healthcenter session for clinical record entry.
+- `PATCH /api/patients/:id` may be used by the patient to link a wallet address for future on-chain export requests.
 - Admin accounts do not receive a per-admin blockchain identity in the current design; they supervise proof logs and governance activity.
 
 ## 3. Prerequisites
@@ -306,6 +308,7 @@ Expected result:
 Wallet support is optional, but if provided:
 - Must be a valid EVM address
 - Must be unique across patients and health centers
+- Patient on-chain record export now requires the connected browser wallet to match the wallet linked on the patient's blockchain identity
 
 Test cases:
 
@@ -320,6 +323,15 @@ Test cases:
 3. Duplicate wallet:
 - Register second account using same wallet
 - Expect `409` with `WALLET_ADDRESS_ALREADY_USED`
+
+4. Patient wallet link for export:
+- Call `PATCH /api/patients/:id` as the patient with `walletAddress`
+- Expect the profile to return the linked wallet under `blockchainIdentity.walletAddress`
+
+5. Export wallet mismatch:
+- Link patient wallet `0xabc...`
+- Connect a different browser wallet and call `requestRecordExport`
+- Expect the contract to reject the export request
 
 ## 13. Key Rotation and Mainnet Safety Tests
 

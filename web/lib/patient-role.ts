@@ -23,6 +23,8 @@ export interface PatientProfile {
   blockchainIdentity?: {
     identityId?: string;
     verificationStatus?: string;
+    walletAddress?: string;
+    errorMessage?: string;
   };
   assignedHealthCenter?: {
     id?: string;
@@ -230,6 +232,10 @@ function toBytes32Hex(hashValue: string): string {
   return `0x${normalized}`;
 }
 
+function normalizeWalletAddress(value: string): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
 export async function requestMyRecordExtractionOnChain(
   record: Pick<PatientRecord, '_id' | 'recordHash' | 'blockchain'>,
   identityId = ''
@@ -256,17 +262,37 @@ export async function requestMyRecordExtractionOnChain(
       return { error: 'Blockchain records contract address is unavailable for this record.' };
     }
 
+    const profileResult = await fetchMyPatientProfile();
+    if (profileResult.error || !profileResult.patient) {
+      return { error: profileResult.error ?? 'Failed to load patient wallet settings.' };
+    }
+
+    const linkedWallet = normalizeWalletAddress(profileResult.patient.blockchainIdentity?.walletAddress ?? '');
+    if (!linkedWallet) {
+      return { error: 'Link your export wallet in Profile & Settings before requesting on-chain export.' };
+    }
+
+    const resolvedIdentityId = String(identityId ?? profileResult.patient.blockchainIdentity?.identityId ?? '').trim();
+
     await ethereum.request({ method: 'eth_requestAccounts' });
 
     const { BrowserProvider, Contract } = await import('ethers');
     const provider = new BrowserProvider(ethereum);
     const signer = await provider.getSigner();
+    const signerAddress = normalizeWalletAddress(await signer.getAddress());
+
+    if (signerAddress !== linkedWallet) {
+      return {
+        error: `Connected wallet ${signerAddress} does not match your linked export wallet ${linkedWallet}.`,
+      };
+    }
+
     const contract = new Contract(contractAddress, RECORD_EXPORT_REQUEST_ABI, signer);
 
     const tx = await contract.requestRecordExport(
       String(record._id),
       toBytes32Hex(record.recordHash),
-      String(identityId ?? '')
+      resolvedIdentityId
     );
     const receipt = await tx.wait();
 

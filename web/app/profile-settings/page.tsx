@@ -22,6 +22,7 @@ type FormState = {
   email: string;
   address: string;
   contactNumber: string;
+  walletAddress: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
 };
@@ -34,6 +35,7 @@ function toForm(patient: PatientProfile): FormState {
     email: patient.email ?? '',
     address: patient.address ?? '',
     contactNumber: patient.contactNumber ?? '',
+    walletAddress: patient.blockchainIdentity?.walletAddress ?? '',
     emergencyContactName: patient.emergencyContactName ?? '',
     emergencyContactPhone: patient.emergencyContactPhone ?? '',
   };
@@ -87,6 +89,7 @@ export default function ProfileSettingsPage() {
       email: form.email.trim().toLowerCase(),
       address: form.address.trim(),
       contactNumber: form.contactNumber.trim(),
+      ...(form.walletAddress.trim() ? { walletAddress: form.walletAddress.trim() } : {}),
       emergencyContactName: form.emergencyContactName.trim(),
       emergencyContactPhone: form.emergencyContactPhone.trim(),
     });
@@ -100,6 +103,8 @@ export default function ProfileSettingsPage() {
     setIsEditing(false);
     setSuccess('Profile updated successfully.');
   };
+
+  const walletLocked = Boolean(profile?.blockchainIdentity?.walletAddress?.trim());
 
   return (
     <DashboardLayout>
@@ -197,6 +202,21 @@ export default function ProfileSettingsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="address">Address</Label>
                   <Input id="address" value={form.address} onChange={(e) => onChange('address', e.target.value)} disabled={!isEditing} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="walletAddress">Export Wallet Address</Label>
+                  <Input
+                    id="walletAddress"
+                    value={form.walletAddress}
+                    onChange={(e) => onChange('walletAddress', e.target.value)}
+                    disabled={!isEditing || walletLocked}
+                    placeholder="0x..."
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Link the EVM wallet that must approve your on-chain record export requests.
+                    {walletLocked ? ' This wallet is already linked and cannot be changed here.' : ' Leave blank if you are not linking a wallet yet.'}
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

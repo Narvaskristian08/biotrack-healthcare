@@ -20,7 +20,9 @@ function nowDate() {
   return new Date();
 }
 
-function normalizeWalletAddress(walletAddress = '') {
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+export function normalizeWalletAddress(walletAddress = '') {
   const raw = String(walletAddress ?? '').trim();
   if (!raw) return '';
   if (!isAddress(raw)) {
@@ -30,6 +32,11 @@ function normalizeWalletAddress(walletAddress = '') {
     throw err;
   }
   return raw.toLowerCase();
+}
+
+function toContractWalletAddress(walletAddress = '') {
+  const normalized = normalizeWalletAddress(walletAddress);
+  return normalized || ZERO_ADDRESS;
 }
 
 async function writeProofLog(payload) {
@@ -67,6 +74,130 @@ async function assertWalletAddressAvailable({ walletAddress, subjectType, subjec
     err.statusCode = 409;
     err.code = 'WALLET_ADDRESS_ALREADY_USED';
     throw err;
+  }
+}
+
+async function linkIdentityWalletOnChain({
+  subjectType,
+  subjectId,
+  identityId,
+  walletAddress,
+  healthCenterId = null,
+}) {
+  const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
+  if (!normalizedWalletAddress) {
+    return { linked: false, errorMessage: 'walletAddress must be a valid EVM address' };
+  }
+
+  if (!blockchainEnabled()) {
+    await writeProofLog({
+      kind: 'identity',
+      status: 'skipped',
+      subjectType,
+      subjectId,
+      healthCenterId,
+      identityId,
+      reason: 'BLOCKCHAIN_DISABLED',
+      details: {
+        operation: 'IDENTITY_WALLET_LINK',
+        walletAddress: normalizedWalletAddress,
+      },
+    });
+    return { linked: true, errorMessage: '' };
+  }
+
+  if (blockchainWriteDisabled()) {
+    await writeProofLog({
+      kind: 'identity',
+      status: 'skipped',
+      subjectType,
+      subjectId,
+      healthCenterId,
+      identityId,
+      reason: 'BLOCKCHAIN_WRITES_DISABLED',
+      details: {
+        operation: 'IDENTITY_WALLET_LINK',
+        walletAddress: normalizedWalletAddress,
+      },
+    });
+    return { linked: true, errorMessage: '' };
+  }
+
+  try {
+    const contract = await getIdentityRegistryContract();
+    if (!contract || typeof contract.linkIdentityWallet !== 'function') {
+      const errorMessage = 'IDENTITY_WALLET_LINK_UNAVAILABLE';
+      await writeProofLog({
+        kind: 'identity',
+        status: 'failed',
+        subjectType,
+        subjectId,
+        healthCenterId,
+        identityId,
+        reason: errorMessage,
+        details: {
+          operation: 'IDENTITY_WALLET_LINK',
+          walletAddress: normalizedWalletAddress,
+        },
+      });
+      return { linked: false, errorMessage };
+    }
+
+    await assertContractWriteAccess(contract);
+
+    const tx = await contract.linkIdentityWallet(identityId, normalizedWalletAddress);
+    const receipt = await tx.wait();
+    const network = await getBlockchainNetwork();
+    const signer = await getSignerMetadata();
+
+    await writeProofLog({
+      kind: 'identity',
+      status: 'success',
+      subjectType,
+      subjectId,
+      healthCenterId,
+      identityId,
+      network,
+      contractAddress: getIdentityContractAddress(),
+      txId: tx.hash,
+      blockNumber: receipt?.blockNumber ? Number(receipt.blockNumber) : null,
+      anchoredAt: nowDate(),
+      reason: 'IDENTITY_WALLET_LINKED',
+      details: {
+        operation: 'IDENTITY_WALLET_LINK',
+        walletAddress: normalizedWalletAddress,
+        signerAddress: signer.address,
+        signerKeyIndex: signer.keyIndex,
+      },
+    });
+
+    return { linked: true, errorMessage: '' };
+  } catch (err) {
+    const errorMessage = err?.message ?? 'Identity wallet link failed';
+
+    await writeProofLog({
+      kind: 'identity',
+      status: 'failed',
+      subjectType,
+      subjectId,
+      healthCenterId,
+      identityId,
+      reason: errorMessage,
+      details: {
+        operation: 'IDENTITY_WALLET_LINK',
+        walletAddress: normalizedWalletAddress,
+        code: err?.code ?? '',
+      },
+    });
+
+    if (blockchainStrictMode()) {
+      const strictErr = new Error(`Blockchain identity wallet link failed: ${errorMessage}`);
+      strictErr.statusCode = 502;
+      strictErr.code = 'BLOCKCHAIN_IDENTITY_WALLET_LINK_FAILED';
+      throw strictErr;
+    }
+
+    return { linked: false, errorMessage };
   }
 }
 
@@ -186,7 +317,8 @@ export async function provisionBlockchainIdentity({
       identityId,
       toBytes32Hex(identityHash),
       String(subjectType),
-      buildSubjectIdHash(subjectId)
+      buildSubjectIdHash(subjectId),
+      toContractWalletAddress(normalizedWalletAddress)
     );
     const receipt = await tx.wait();
 
@@ -266,7 +398,20 @@ export async function ensureBlockchainIdentityForDocument({
     if (walletAddress && !existing.walletAddress) {
       const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
       await assertWalletAddressAvailable({ walletAddress: normalizedWalletAddress, subjectType, subjectId: doc._id });
-      existing.walletAddress = normalizedWalletAddress;
+      const linkResult = await linkIdentityWalletOnChain({
+        subjectType,
+        subjectId: doc._id,
+        identityId: existing.identityId,
+        walletAddress: normalizedWalletAddress,
+        healthCenterId,
+      });
+
+      if (linkResult.linked) {
+        existing.walletAddress = normalizedWalletAddress;
+        existing.errorMessage = '';
+      } else {
+        existing.errorMessage = linkResult.errorMessage;
+      }
       doc.blockchainIdentity = existing;
       await doc.save();
     }

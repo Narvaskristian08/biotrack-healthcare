@@ -98,6 +98,7 @@ Notes:
 - Patient self-access enforcement is applied where relevant.
 - Role restrictions apply per endpoint (`healthcenter`, `patient`, or both).
 - `POST /:patientId/records` supports patient self-monitoring uploads and provider-side clinical entry; downstream integrity verification still uses the stored hash plus blockchain proof when available.
+- `PATCH /:id` also supports patient self-service wallet linking via `walletAddress`; once linked, that wallet is used to authorize on-chain record export requests.
 
 ## Audit Logs (`/api/auditlogs`)
 

@@ -174,6 +174,7 @@ async function runPerformanceCases(anchorContract) {
 
 async function runSecurityCases(identityRegistry, recordRegistry, ownerSigner, attackerSigner) {
   const attackerAddress = await attackerSigner.getAddress();
+  const ownerAddress = await ownerSigner.getAddress();
   const ownerIdentity = identityRegistry.connect(ownerSigner);
   const attackerIdentity = identityRegistry.connect(attackerSigner);
   const ownerRecord = recordRegistry.connect(ownerSigner);
@@ -210,7 +211,7 @@ async function runSecurityCases(identityRegistry, recordRegistry, ownerSigner, a
   // S2 Invalid input
   {
     const reason = await tryStaticRevertReason(() =>
-      ownerIdentity.registerIdentity.staticCall('', hashA, 'patient', subjectHashA)
+      ownerIdentity.registerIdentity.staticCall('', hashA, 'patient', subjectHashA, ethers.ZeroAddress)
     );
     const actual = reason ? `Reverted: ${reason}` : 'Unexpected success';
     const pass = Boolean(reason);
@@ -228,7 +229,7 @@ async function runSecurityCases(identityRegistry, recordRegistry, ownerSigner, a
   // S3 Data exposure
   {
     const sensitiveSubjectId = '123456';
-    const tx = await ownerIdentity.registerIdentity('PAT002', hashA, 'patient', subjectHashA);
+    const tx = await ownerIdentity.registerIdentity('PAT002', hashA, 'patient', subjectHashA, ethers.ZeroAddress);
     const receipt = await tx.wait();
     const parsed = receipt.logs
       .map((log) => {
@@ -261,7 +262,7 @@ async function runSecurityCases(identityRegistry, recordRegistry, ownerSigner, a
   // S4 Replay / duplicate identity
   {
     const reason = await tryStaticRevertReason(() =>
-      ownerIdentity.registerIdentity.staticCall('PAT002', hashA, 'patient', subjectHashA)
+      ownerIdentity.registerIdentity.staticCall('PAT002', hashA, 'patient', subjectHashA, ethers.ZeroAddress)
     );
     const actual = reason ? `Reverted: ${reason}` : 'Unexpected success';
     const pass = Boolean(reason);
@@ -281,7 +282,7 @@ async function runSecurityCases(identityRegistry, recordRegistry, ownerSigner, a
     await ownerIdentity.setWritesPaused(true);
 
     const reason = await tryStaticRevertReason(() =>
-      ownerIdentity.registerIdentity.staticCall('PAT003', hashB, 'patient', subjectHashB)
+      ownerIdentity.registerIdentity.staticCall('PAT003', hashB, 'patient', subjectHashB, ethers.ZeroAddress)
     );
     const actual = reason ? `Reverted: ${reason}` : 'Unexpected success';
     const pass = Boolean(reason);
@@ -301,7 +302,7 @@ async function runSecurityCases(identityRegistry, recordRegistry, ownerSigner, a
 
   // S6 Record hash replay
   {
-    await ownerIdentity.registerIdentity('PAT004', hashC, 'patient', subjectHashC);
+    await ownerIdentity.registerIdentity('PAT004', hashC, 'patient', subjectHashC, ownerAddress);
     await ownerRecord.anchorRecord('REC001', 'PAT001', recordHash, 'PAT004');
 
     const reason = await tryStaticRevertReason(() =>
@@ -336,6 +337,24 @@ async function runSecurityCases(identityRegistry, recordRegistry, ownerSigner, a
       actual,
       pass,
       note: 'Access Control',
+    });
+  }
+
+  // S8 Export wallet authorization
+  {
+    const reason = await tryStaticRevertReason(() =>
+      attackerRecord.requestRecordExport.staticCall('REC001', recordHash, 'PAT004')
+    );
+    const actual = reason ? `Reverted: ${reason}` : 'Unexpected success';
+    const pass = Boolean(reason);
+    cases.push({
+      id: 'S8',
+      name: 'Export Wallet Authorization',
+      step: 'Request record export from a wallet that is not linked to the patient identity',
+      expected: 'Revert unauthorized export request',
+      actual,
+      pass,
+      note: 'Wallet Ownership',
     });
   }
 
@@ -458,7 +477,7 @@ async function main() {
   const identityRegistry = await identityFactory.deploy();
   await identityRegistry.waitForDeployment();
 
-  const recordRegistry = await recordFactory.deploy();
+  const recordRegistry = await recordFactory.deploy(await identityRegistry.getAddress());
   await recordRegistry.waitForDeployment();
 
   const performanceResults = await runPerformanceCases(anchorContract);

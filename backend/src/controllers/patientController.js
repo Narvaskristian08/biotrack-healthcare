@@ -3,7 +3,7 @@ import { HealthCenter } from '../models/HealthCenter.js';
 import { PatientLoginHistory } from '../models/PatientLoginHistory.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { hashPassword } from '../services/authService.js';
-import { ensureBlockchainIdentityForDocument } from '../services/blockchain/identity.service.js';
+import { ensureBlockchainIdentityForDocument, normalizeWalletAddress } from '../services/blockchain/identity.service.js';
 import { runDetachedTask } from '../utils/backgroundTask.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
 import {
@@ -267,6 +267,30 @@ export async function updatePatient(req, res) {
 
   const before = await Patient.findOne({ _id: req.params.id, healthCenterId }).lean();
   if (!before) return res.status(404).json({ error: { message: 'Patient not found' } });
+  const existingWalletAddress = normalizeWalletAddress(before?.blockchainIdentity?.walletAddress ?? '');
+  let requestedWalletAddress = '';
+  let nextEmailNormalized = resolvePiiField({
+    encrypted: before.emailEncrypted,
+    fallback: before.email,
+    field: 'email',
+  });
+
+  if ('walletAddress' in (req.body ?? {})) {
+    if (role !== 'patient') {
+      return res.status(403).json({ error: { message: 'Only the patient can link an export wallet' } });
+    }
+
+    const rawWalletAddress = String(req.body.walletAddress ?? '').trim();
+    if (!rawWalletAddress) {
+      return res.status(400).json({ error: { message: 'walletAddress is required when provided' } });
+    }
+
+    requestedWalletAddress = normalizeWalletAddress(rawWalletAddress);
+
+    if (existingWalletAddress && requestedWalletAddress !== existingWalletAddress) {
+      return res.status(409).json({ error: { message: 'A wallet is already linked to this patient profile' } });
+    }
+  }
 
   const allowed = role === 'patient'
     ? [
@@ -313,6 +337,7 @@ export async function updatePatient(req, res) {
   if ('middleInitial' in patch) patch.middleInitial = String(patch.middleInitial).trim();
   if ('email' in patch) {
     const emailFields = buildEmailFields(patch.email);
+    nextEmailNormalized = emailFields.normalized;
     patch.email = '';
     patch.emailHash = emailFields.hash;
     patch.emailEncrypted = emailFields.encrypted;
@@ -359,6 +384,27 @@ export async function updatePatient(req, res) {
     }).lean();
     if (existingEmail) {
       return res.status(409).json({ error: { message: 'Email already exists in this health center' } });
+    }
+  }
+
+  if (requestedWalletAddress && !existingWalletAddress) {
+    const patientDoc = await Patient.findOne({ _id: req.params.id, healthCenterId });
+    if (!patientDoc) {
+      return res.status(404).json({ error: { message: 'Patient not found' } });
+    }
+
+    const { identity } = await ensureBlockchainIdentityForDocument({
+      doc: patientDoc,
+      subjectType: 'patient',
+      uniqueSeed: nextEmailNormalized,
+      walletAddress: requestedWalletAddress,
+      healthCenterId,
+    });
+
+    if (String(identity?.walletAddress ?? '').trim().toLowerCase() !== requestedWalletAddress) {
+      return res.status(502).json({
+        error: { message: identity?.errorMessage || 'Failed to link export wallet on-chain. Please try again.' },
+      });
     }
   }
 

@@ -61,6 +61,7 @@ contract IdentityRegistry is BioTrackAccessControlled {
         bytes32 identityHash;
         string subjectType;
         bytes32 subjectIdHash;
+        address walletAddress;
         uint256 createdAt;
         bool exists;
     }
@@ -70,10 +71,17 @@ contract IdentityRegistry is BioTrackAccessControlled {
 
     event IdentityRegistered(
         string indexed identityId,
-        bytes32 indexed identityHash,
+        bytes32 identityHash,
         string subjectType,
         bytes32 subjectIdHash,
+        address indexed walletAddress,
         bytes32 proofId,
+        address indexed submittedBy
+    );
+
+    event IdentityWalletLinked(
+        string indexed identityId,
+        address indexed walletAddress,
         address indexed submittedBy
     );
 
@@ -81,7 +89,8 @@ contract IdentityRegistry is BioTrackAccessControlled {
         string calldata identityId,
         bytes32 identityHash,
         string calldata subjectType,
-        bytes32 subjectIdHash
+        bytes32 subjectIdHash,
+        address walletAddress
     ) external onlyWriter returns (bytes32 proofId) {
         require(bytes(identityId).length > 0, "identityId required");
         require(identityHash != bytes32(0), "identityHash required");
@@ -96,6 +105,7 @@ contract IdentityRegistry is BioTrackAccessControlled {
             identityHash: identityHash,
             subjectType: subjectType,
             subjectIdHash: subjectIdHash,
+            walletAddress: walletAddress,
             createdAt: block.timestamp,
             exists: true
         });
@@ -108,6 +118,7 @@ contract IdentityRegistry is BioTrackAccessControlled {
                 identityHash,
                 subjectType,
                 subjectIdHash,
+                walletAddress,
                 block.chainid,
                 block.number,
                 block.timestamp,
@@ -115,16 +126,49 @@ contract IdentityRegistry is BioTrackAccessControlled {
             )
         );
 
-        emit IdentityRegistered(identityId, identityHash, subjectType, subjectIdHash, proofId, msg.sender);
+        emit IdentityRegistered(
+            identityId,
+            identityHash,
+            subjectType,
+            subjectIdHash,
+            walletAddress,
+            proofId,
+            msg.sender
+        );
+    }
+
+    function linkIdentityWallet(string calldata identityId, address walletAddress) external onlyWriter {
+        require(bytes(identityId).length > 0, "identityId required");
+        require(walletAddress != address(0), "walletAddress required");
+
+        bytes32 idKey = keccak256(bytes(identityId));
+        IdentityEntry storage entry = identitiesById[idKey];
+        require(entry.exists, "Identity not found");
+        require(entry.walletAddress == address(0), "Wallet already linked");
+
+        entry.walletAddress = walletAddress;
+        emit IdentityWalletLinked(identityId, walletAddress, msg.sender);
     }
 
     function isIdentityRegistered(string calldata identityId, bytes32 identityHash) external view returns (bool) {
         bytes32 idKey = keccak256(bytes(identityId));
         return hashByIdentityId[idKey][identityHash];
     }
+
+    function getIdentityWallet(string calldata identityId) external view returns (address walletAddress, bool exists) {
+        bytes32 idKey = keccak256(bytes(identityId));
+        IdentityEntry storage entry = identitiesById[idKey];
+        return (entry.walletAddress, entry.exists);
+    }
+}
+
+interface IIdentityWalletResolver {
+    function getIdentityWallet(string calldata identityId) external view returns (address walletAddress, bool exists);
 }
 
 contract RecordProofRegistry is BioTrackAccessControlled {
+    address public identityRegistry;
+
     struct RecordEntry {
         string patientId;
         bytes32 recordHash;
@@ -153,6 +197,21 @@ contract RecordProofRegistry is BioTrackAccessControlled {
         bytes32 exportId,
         address indexed requestedBy
     );
+
+    event IdentityRegistryUpdated(address indexed previousRegistry, address indexed currentRegistry);
+
+    constructor(address identityRegistryAddress) {
+        require(identityRegistryAddress != address(0), "identityRegistry required");
+        identityRegistry = identityRegistryAddress;
+        emit IdentityRegistryUpdated(address(0), identityRegistryAddress);
+    }
+
+    function setIdentityRegistry(address identityRegistryAddress) external onlyOwner {
+        require(identityRegistryAddress != address(0), "identityRegistry required");
+        address previousRegistry = identityRegistry;
+        identityRegistry = identityRegistryAddress;
+        emit IdentityRegistryUpdated(previousRegistry, identityRegistryAddress);
+    }
 
     function anchorRecord(
         string calldata recordId,
@@ -196,11 +255,6 @@ contract RecordProofRegistry is BioTrackAccessControlled {
         emit RecordAnchored(recordId, patientId, recordHash, identityId, proofId, msg.sender);
     }
 
-    /**
-     * Patient-initiated export receipt.
-     * This is intentionally open to any wallet so the caller pays their own network fee.
-     * The call only succeeds for an already-anchored record/hash pair.
-     */
     function requestRecordExport(
         string calldata recordId,
         bytes32 recordHash,
@@ -220,6 +274,13 @@ contract RecordProofRegistry is BioTrackAccessControlled {
                 "Identity mismatch"
             );
         }
+
+        (address linkedWallet, bool identityExists) = IIdentityWalletResolver(identityRegistry).getIdentityWallet(
+            entry.identityId
+        );
+        require(identityExists, "Identity not found");
+        require(linkedWallet != address(0), "Export wallet not configured");
+        require(msg.sender == linkedWallet, "Not authorized export wallet");
 
         exportId = keccak256(
             abi.encodePacked(

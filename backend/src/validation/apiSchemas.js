@@ -165,6 +165,7 @@ export const patientUpdateSchema = z
     middleInitial: z.string().trim().min(1).max(1).optional(),
     nameExtension: z.string().trim().optional(),
     email: z.string().trim().email('email must be a valid email address').optional(),
+    walletAddress: z.preprocess(emptyStringToUndefined, z.string().trim().optional()),
     birthDate: optionalDateStringSchema.optional(),
     sex: patientSexSchema.optional(),
     address: z.string().trim().min(1).optional(),

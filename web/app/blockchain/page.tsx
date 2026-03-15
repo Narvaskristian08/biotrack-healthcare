@@ -108,6 +108,7 @@ export default function BlockchainPage() {
             Blockchain Verification
           </h1>
           <p className="text-muted-foreground">Confirm record authenticity, hash integrity, and blockchain timestamps</p>
+          <p className="text-xs text-muted-foreground">On-chain export uses the wallet linked in Profile &amp; Settings, and that wallet pays the network fee.</p>
         </div>
 
         {error ? (
@@ -159,7 +160,7 @@ export default function BlockchainPage() {
                   disabled={extracting === record._id}
                 >
                   {extracting === record._id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-                  Extract On-Chain (You Pay Fee)
+                  Extract On-Chain (Linked Wallet Pays Fee)
                 </Button>
                 {exportTx[record._id] ? (
                   <p className="text-xs text-muted-foreground break-all">Export Tx: {exportTx[record._id]}</p>

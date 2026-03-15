@@ -24,7 +24,9 @@ test('Smart Contract Access mitigation is implemented', () => {
   assert.match(contractSource, /function setWriter\(address account, bool allowed\) external onlyOwner/);
   assert.match(contractSource, /function transferOwnership\(address newOwner\) external onlyOwner/);
   assert.match(contractSource, /function registerIdentity\([\s\S]*?\) external onlyWriter returns \(bytes32 proofId\)/);
+  assert.match(contractSource, /function linkIdentityWallet\(string calldata identityId, address walletAddress\) external onlyWriter/);
   assert.match(contractSource, /function anchorRecord\([\s\S]*?\) external onlyWriter returns \(bytes32 proofId\)/);
+  assert.match(contractSource, /function setIdentityRegistry\(address identityRegistryAddress\) external onlyOwner/);
 });
 
 test('Data Integrity mitigation is implemented and deterministic', () => {
@@ -127,9 +129,12 @@ test('Smart Contract Vulnerability mitigation is implemented', () => {
   assert.match(contractSource, /function setWritesPaused\(bool paused\) external onlyOwner/);
   assert.match(contractSource, /require\(bytes\(identityId\)\.length > 0, "identityId required"\);/);
   assert.match(contractSource, /require\(identityHash != bytes32\(0\), "identityHash required"\);/);
+  assert.match(contractSource, /require\(walletAddress != address\(0\), "walletAddress required"\);/);
   assert.match(contractSource, /require\(bytes\(recordId\)\.length > 0, "recordId required"\);/);
   assert.match(contractSource, /require\(recordHash != bytes32\(0\), "recordHash required"\);/);
   assert.match(contractSource, /require\(!recordById\[recordKey\]\.exists, "Record already anchored"\);/);
+  assert.match(contractSource, /require\(linkedWallet != address\(0\), "Export wallet not configured"\);/);
+  assert.match(contractSource, /require\(msg\.sender == linkedWallet, "Not authorized export wallet"\);/);
 
   // Guard against regression where duplicate strict errors are incorrectly masked as generic 502s.
   assert.match(recordProofSource, /if \(err\?\.code === 'BLOCKCHAIN_RECORD_DUPLICATE_HASH'\) \{\s*throw err;\s*\}/);

@@ -204,6 +204,9 @@ export default function MedicalRecordsPage() {
           <p className="text-muted-foreground text-sm sm:text-base">
             Your health history with simple summaries and authenticity checks.
           </p>
+          <p className="text-xs text-muted-foreground">
+            On-chain export requests must be signed by the wallet linked in Profile &amp; Settings.
+          </p>
         </header>
 
         {error ? (
@@ -224,7 +227,7 @@ export default function MedicalRecordsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold">{records.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">Read-only records</p>
+              <p className="text-xs text-muted-foreground mt-1">Provider-issued and self-monitoring entries</p>
             </CardContent>
           </Card>
           <Card>
