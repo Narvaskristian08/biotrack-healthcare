@@ -1,4 +1,4 @@
-import { apiGet, apiPatch } from './api';
+import { apiGet, apiPatch, apiPost } from './api';
 import { getSession } from './auth';
 import { downloadTextFile } from './patient-role';
 
@@ -30,6 +30,21 @@ export interface ProviderPatientRecord {
     verificationStatus?: string;
   };
   createdAt: string;
+}
+
+export interface ProviderPatientRecordCreateInput {
+  type?:
+    | 'consultation'
+    | 'vitals'
+    | 'immunization'
+    | 'prenatal'
+    | 'lab'
+    | 'medication'
+    | 'referral'
+    | 'note'
+    | 'other';
+  data: Record<string, unknown>;
+  capturedAt?: string;
 }
 
 export interface ProviderAlert {
@@ -177,6 +192,20 @@ export async function fetchPatientRecords(patientId: string): Promise<{ records?
   const result = await apiGet<{ records: ProviderPatientRecord[] }>(`/patients/${patientId}/records`);
   if (result.error) return { error: result.error.message };
   return { records: result.data?.records ?? [] };
+}
+
+export async function createPatientRecord(
+  patientId: string,
+  payload: ProviderPatientRecordCreateInput
+): Promise<{ record?: ProviderPatientRecord; error?: string }> {
+  try {
+    assertProviderSession();
+    const result = await apiPost<{ record: ProviderPatientRecord }>(`/patients/${patientId}/records`, payload);
+    if (result.error) return { error: result.error.message };
+    return { record: result.data?.record };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to create patient record' };
+  }
 }
 
 export async function verifyPatientRecord(

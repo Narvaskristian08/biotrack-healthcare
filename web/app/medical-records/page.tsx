@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Download, Eye, EyeOff, Lock, RefreshCw, Shield, ShieldAlert, Wallet } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -199,14 +200,21 @@ export default function MedicalRecordsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-8 max-w-5xl">
-        <header className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Medical Records</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">
-            Your health history with simple summaries and authenticity checks.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            On-chain export requests must be signed by the wallet linked in Profile &amp; Settings.
-          </p>
+        <header className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Medical Records</h1>
+              <p className="text-muted-foreground text-sm sm:text-base">
+                Your health history with simple summaries and authenticity checks.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                On-chain export requests must be signed by the wallet linked in Profile &amp; Settings.
+              </p>
+            </div>
+            <Button variant="outline" asChild>
+              <Link href="/health-monitoring#self-monitoring-entry">Add self-monitoring entry</Link>
+            </Button>
+          </div>
         </header>
 
         {error ? (

@@ -1,10 +1,14 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Heart, Shield, Sparkles, Trash2, TrendingUp } from 'lucide-react';
+import { Activity, AlertTriangle, FilePlus2, Heart, RefreshCw, Shield, Sparkles, Trash2, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DashboardLayout from '@/components/dashboard-layout';
 import { PatientPageContentSkeleton } from '@/components/patient-page-skeleton';
 import {
@@ -17,7 +21,17 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { clearMyMonitoringHistory, fetchMyAiInsights, fetchMyAlerts, fetchMyHealthSummary, fetchMyTrendInsight } from '@/lib/patient-role';
+import {
+  analyzeMyVitals,
+  clearMyMonitoringHistory,
+  createMyPatientRecord,
+  fetchMyAiInsights,
+  fetchMyAlerts,
+  fetchMyHealthSummary,
+  fetchMyTrendInsight,
+  type PatientRecordCreateInput,
+  type PatientVitalsAnalysisInput,
+} from '@/lib/patient-role';
 import { useDashboardRole } from '@/hooks/use-dashboard-role';
 
 const DEFAULT_SUMMARY = {
@@ -67,6 +81,155 @@ function describeTrend(value: string, latest: number | null, baseline: number | 
   return 'At least 3 monitoring samples are needed for a reliable trend.';
 }
 
+type SelfMonitoringFormState = {
+  capturedAt: string;
+  heartRate: string;
+  activityLevel: string;
+  fallDetected: '' | 'yes' | 'no';
+  note: string;
+};
+
+type MonitoringSnapshot = {
+  heartRates: number[];
+  baseline: number | null;
+  trend: string;
+  trendInsight: string;
+  summary: typeof DEFAULT_SUMMARY;
+  summaryInsight: string;
+  alerts: { id: string; message: string; severity: string }[];
+  error: string;
+};
+
+const selfMonitoringTextareaClassName =
+  'min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50';
+
+function toDateTimeLocalValue(date = new Date()): string {
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function toIsoFromLocalInput(value: string): string | undefined {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return undefined;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  return parsed.toISOString();
+}
+
+function createEmptySelfMonitoringForm(): SelfMonitoringFormState {
+  return {
+    capturedAt: toDateTimeLocalValue(),
+    heartRate: '',
+    activityLevel: '',
+    fallDetected: '',
+    note: '',
+  };
+}
+
+function buildSelfMonitoringSubmission(
+  form: SelfMonitoringFormState
+): { recordPayload?: PatientRecordCreateInput; analysisPayload?: PatientVitalsAnalysisInput; error?: string } {
+  const heartRate = Number(form.heartRate);
+  if (!Number.isFinite(heartRate) || heartRate <= 0) {
+    return { error: 'Enter a valid heart-rate reading before saving.' };
+  }
+  if (heartRate < 25 || heartRate > 250) {
+    return { error: 'Heart rate should be between 25 and 250 bpm.' };
+  }
+
+  const capturedAt = toIsoFromLocalInput(form.capturedAt);
+  const activityLevel = String(form.activityLevel ?? '').trim().toUpperCase();
+  const note = String(form.note ?? '').trim();
+  const fallDetected =
+    form.fallDetected === 'yes' ? true : form.fallDetected === 'no' ? false : undefined;
+
+  const metrics: Record<string, unknown> = {
+    heartRate,
+    bpm: heartRate,
+  };
+  if (fallDetected !== undefined) metrics.fallDetected = fallDetected;
+
+  const data: Record<string, unknown> = {
+    source: 'patient_web_manual',
+    entryMode: 'self_monitoring',
+    manuallyEntered: true,
+    heartRate,
+    bpm: heartRate,
+    metrics,
+  };
+
+  if (activityLevel) {
+    data.activityLevel = activityLevel;
+  }
+  if (fallDetected !== undefined) {
+    data.fallDetected = fallDetected;
+  }
+  if (note) {
+    data.note = note;
+    data.assessment = note;
+  }
+
+  return {
+    recordPayload: {
+      type: 'vitals',
+      data,
+      ...(capturedAt ? { capturedAt } : {}),
+    },
+    analysisPayload: {
+      heartRate,
+      ...(activityLevel ? { activity: activityLevel } : {}),
+      ...(fallDetected !== undefined ? { fallDetected } : {}),
+      language: 'en',
+    },
+  };
+}
+
+async function loadMonitoringSnapshot(): Promise<MonitoringSnapshot> {
+  try {
+    const [insightsRes, trendRes, alertsRes, summaryRes] = await Promise.all([
+      fetchMyAiInsights(1),
+      fetchMyTrendInsight({}, 'en', false),
+      fetchMyAlerts(10),
+      fetchMyHealthSummary(7, {}, 'en', false),
+    ]);
+
+    const errors = [
+      insightsRes.error ?? '',
+      trendRes.error ?? '',
+      alertsRes.error ?? '',
+      summaryRes.error ?? '',
+    ].filter(Boolean);
+
+    const latestInsight = (insightsRes.insights ?? [])[0] ?? null;
+
+    return {
+      heartRates: trendRes.data?.trendData?.recentHeartRates ?? [],
+      baseline: typeof trendRes.data?.trendData?.baseline === 'number' ? Number(trendRes.data?.trendData?.baseline) : null,
+      trend: trendRes.data?.trendData?.trend ?? 'INSUFFICIENT_DATA',
+      trendInsight: '',
+      summary: summaryRes.data?.summaryData ?? DEFAULT_SUMMARY,
+      summaryInsight: String(latestInsight?.text ?? '').trim(),
+      alerts: (alertsRes.alerts ?? []).map((alert) => ({
+        id: alert._id,
+        message: alert.message,
+        severity: alert.severity,
+      })),
+      error: errors[0] ?? '',
+    };
+  } catch (error) {
+    return {
+      heartRates: [],
+      baseline: null,
+      trend: 'INSUFFICIENT_DATA',
+      trendInsight: '',
+      summary: DEFAULT_SUMMARY,
+      summaryInsight: '',
+      alerts: [],
+      error: error instanceof Error ? error.message : 'Failed to load monitoring data.',
+    };
+  }
+}
+
 export default function HealthMonitoringPage() {
   const { isReady, isAuthenticated, role } = useDashboardRole();
   const [heartRates, setHeartRates] = useState<number[]>([]);
@@ -78,8 +241,20 @@ export default function HealthMonitoringPage() {
   const [alerts, setAlerts] = useState<{ id: string; message: string; severity: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
+  const [savingRecord, setSavingRecord] = useState(false);
+  const [selfMonitoringForm, setSelfMonitoringForm] = useState<SelfMonitoringFormState>(() => createEmptySelfMonitoringForm());
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+
+  const applyMonitoringSnapshot = (snapshot: MonitoringSnapshot) => {
+    setHeartRates(snapshot.heartRates);
+    setBaseline(snapshot.baseline);
+    setTrend(snapshot.trend);
+    setTrendInsight(snapshot.trendInsight);
+    setSummary(snapshot.summary);
+    setSummaryInsight(snapshot.summaryInsight);
+    setAlerts(snapshot.alerts);
+  };
 
   useEffect(() => {
     if (!isReady || !isAuthenticated || role !== 'patient') return;
@@ -88,48 +263,11 @@ export default function HealthMonitoringPage() {
     (async () => {
       setLoading(true);
       setError('');
-      try {
-        const [insightsRes, trendRes, alertsRes, summaryRes] = await Promise.all([
-          fetchMyAiInsights(1),
-          fetchMyTrendInsight({}, 'en', false),
-          fetchMyAlerts(10),
-          fetchMyHealthSummary(7, {}, 'en', false),
-        ]);
-        if (!active) return;
-        if (insightsRes.error) {
-          setError((prev) => prev || insightsRes.error || '');
-        } else {
-          const latestInsight = (insightsRes.insights ?? [])[0] ?? null;
-          setSummaryInsight(String(latestInsight?.text ?? '').trim());
-        }
-        if (trendRes.error) {
-          setError(trendRes.error);
-        } else {
-          setHeartRates(trendRes.data?.trendData?.recentHeartRates ?? []);
-          setBaseline(
-            typeof trendRes.data?.trendData?.baseline === 'number' ? Number(trendRes.data?.trendData?.baseline) : null
-          );
-          setTrend(trendRes.data?.trendData?.trend ?? 'INSUFFICIENT_DATA');
-          setTrendInsight('');
-        }
-        if (alertsRes.error) {
-          setError((prev) => prev || alertsRes.error || '');
-        } else {
-          setAlerts((alertsRes.alerts ?? []).map((a) => ({ id: a._id, message: a.message, severity: a.severity })));
-        }
-        if (summaryRes.error) {
-          setError((prev) => prev || summaryRes.error || '');
-        } else {
-          setSummary(summaryRes.data?.summaryData ?? DEFAULT_SUMMARY);
-        }
-      } catch (fetchError) {
-        if (!active) return;
-        setError(fetchError instanceof Error ? fetchError.message : 'Failed to load monitoring data.');
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
+      const snapshot = await loadMonitoringSnapshot();
+      if (!active) return;
+      applyMonitoringSnapshot(snapshot);
+      setError(snapshot.error);
+      setLoading(false);
     })();
     return () => {
       active = false;
@@ -142,6 +280,51 @@ export default function HealthMonitoringPage() {
   );
   const latestHeartRate = heartRates.length > 0 ? heartRates[heartRates.length - 1] : null;
   const trendDescription = describeTrend(trend, latestHeartRate, baseline);
+
+  const updateSelfMonitoringForm = <Key extends keyof SelfMonitoringFormState>(
+    key: Key,
+    value: SelfMonitoringFormState[Key]
+  ) => {
+    setSelfMonitoringForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSelfMonitoringSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const built = buildSelfMonitoringSubmission(selfMonitoringForm);
+    if (built.error || !built.recordPayload || !built.analysisPayload) {
+      setNotice('');
+      setError(built.error ?? 'Unable to build self-monitoring record');
+      return;
+    }
+
+    setSavingRecord(true);
+    setError('');
+    setNotice('');
+
+    const recordResult = await createMyPatientRecord(built.recordPayload);
+    if (recordResult.error || !recordResult.record) {
+      setSavingRecord(false);
+      setError(recordResult.error ?? 'Failed to save self-monitoring record');
+      return;
+    }
+
+    const analysisResult = await analyzeMyVitals(built.analysisPayload);
+    const snapshot = await loadMonitoringSnapshot();
+    applyMonitoringSnapshot(snapshot);
+    setSavingRecord(false);
+    setSelfMonitoringForm(createEmptySelfMonitoringForm());
+
+    const recordSavedMessage = 'Self-monitoring record saved to your medical history.';
+    if (analysisResult.error || snapshot.error) {
+      setError('');
+      setNotice(`${recordSavedMessage} Monitoring insights may take a moment to refresh. You can still review the entry on Medical Records.`);
+      return;
+    }
+
+    setError('');
+    setNotice('Self-monitoring record saved and your monitoring insights were refreshed.');
+  };
 
   const handleClearHistory = async () => {
     const hasData = heartRates.length > 0 || alerts.length > 0;
@@ -225,6 +408,107 @@ export default function HealthMonitoringPage() {
             <CardContent className="pt-6 text-sm text-emerald-700">{notice}</CardContent>
           </Card>
         ) : null}
+
+        <Card id="self-monitoring-entry" className="border-primary/30 bg-primary/5">
+          <CardHeader>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2">
+                  <FilePlus2 className="h-5 w-5 text-primary" />
+                  Add Self-Monitoring Record
+                </CardTitle>
+                <CardDescription>
+                  Enter a home reading manually when you are not using the mobile camera scan. BioTrack stores it as a vitals record and updates your monitoring insights.
+                </CardDescription>
+              </div>
+              <Button variant="outline" asChild>
+                <Link href="/medical-records">Review medical records</Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-5" onSubmit={handleSelfMonitoringSubmit}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="capturedAt">Recorded at</Label>
+                  <Input
+                    id="capturedAt"
+                    type="datetime-local"
+                    value={selfMonitoringForm.capturedAt}
+                    onChange={(event) => updateSelfMonitoringForm('capturedAt', event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="heartRate">Heart rate (bpm)</Label>
+                  <Input
+                    id="heartRate"
+                    type="number"
+                    min="25"
+                    max="250"
+                    placeholder="72"
+                    value={selfMonitoringForm.heartRate}
+                    onChange={(event) => updateSelfMonitoringForm('heartRate', event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="activityLevel">Activity level</Label>
+                  <Select
+                    value={selfMonitoringForm.activityLevel || 'unset'}
+                    onValueChange={(value) => updateSelfMonitoringForm('activityLevel', value === 'unset' ? '' : value)}
+                  >
+                    <SelectTrigger id="activityLevel">
+                      <SelectValue placeholder="Select activity level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unset">Not specified</SelectItem>
+                      <SelectItem value="LOW">Low</SelectItem>
+                      <SelectItem value="MODERATE">Moderate</SelectItem>
+                      <SelectItem value="HIGH">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fallDetected">Fall or safety event</Label>
+                  <Select
+                    value={selfMonitoringForm.fallDetected || 'unset'}
+                    onValueChange={(value) =>
+                      updateSelfMonitoringForm('fallDetected', value === 'unset' ? '' : (value as SelfMonitoringFormState['fallDetected']))
+                    }
+                  >
+                    <SelectTrigger id="fallDetected">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unset">Not specified</SelectItem>
+                      <SelectItem value="yes">Yes</SelectItem>
+                      <SelectItem value="no">No</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="monitoringNote">Notes</Label>
+                  <textarea
+                    id="monitoringNote"
+                    className={selfMonitoringTextareaClassName}
+                    placeholder="Optional symptoms, context, or what was happening during the reading."
+                    value={selfMonitoringForm.note}
+                    onChange={(event) => updateSelfMonitoringForm('note', event.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <p>
+                  This creates a patient-entered vitals record and then refreshes your monitoring overview so your chart and alerts stay current.
+                </p>
+                <Button type="submit" className="gap-2" disabled={savingRecord}>
+                  {savingRecord ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FilePlus2 className="h-4 w-4" />}
+                  Save self-monitoring record
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>

@@ -108,12 +108,17 @@ export default function UserDetailPage() {
           <>
             <Card>
               <CardHeader>
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <CardTitle>{patient ? patientDisplayName(patient) : 'Patient'}</CardTitle>
                     <CardDescription>{patient?.email}</CardDescription>
                   </div>
-                  <Badge variant={risk === 'HIGH' || risk === 'CRITICAL' ? 'destructive' : 'secondary'}>{risk}</Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={risk === 'HIGH' || risk === 'CRITICAL' ? 'destructive' : 'secondary'}>{risk}</Badge>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/patients/${patientId}`}>Open clinical entry</Link>
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">

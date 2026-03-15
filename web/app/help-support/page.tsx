@@ -21,7 +21,7 @@ const faqs = [
   },
   {
     q: 'How do I update my vital readings?',
-    a: 'Use Health Monitoring to view trends. Vitals are typically synced from connected devices or entered by your provider.',
+    a: 'Use Health Monitoring to add a self-monitoring entry on web, or use the mobile vital scan. Provider-issued readings will also appear in your records.',
   },
   {
     q: 'How do I verify my medical records?',

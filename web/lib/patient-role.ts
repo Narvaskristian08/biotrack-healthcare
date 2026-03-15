@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPatch } from './api';
+import { apiDelete, apiGet, apiPatch, apiPost } from './api';
 import { getSession } from './auth';
 
 const RECORD_EXPORT_REQUEST_ABI = [
@@ -60,6 +60,28 @@ export interface PatientRecord {
   };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PatientRecordCreateInput {
+  type?:
+    | 'consultation'
+    | 'vitals'
+    | 'immunization'
+    | 'prenatal'
+    | 'lab'
+    | 'medication'
+    | 'referral'
+    | 'note'
+    | 'other';
+  data: Record<string, unknown>;
+  capturedAt?: string;
+}
+
+export interface PatientVitalsAnalysisInput {
+  heartRate: number;
+  activity?: string | number;
+  fallDetected?: boolean;
+  language?: 'en' | 'fil';
 }
 
 export interface RecordVerificationResult {
@@ -210,6 +232,32 @@ export async function fetchMyPatientRecords(requestOptions: RequestInit = {}): P
     return { records: result.data?.records ?? [] };
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to fetch patient records' };
+  }
+}
+
+export async function createMyPatientRecord(
+  payload: PatientRecordCreateInput
+): Promise<{ record?: PatientRecord; error?: string }> {
+  try {
+    const patientId = getPatientIdFromSession();
+    const result = await apiPost<{ record: PatientRecord }>(`/patients/${patientId}/records`, payload);
+    if (result.error) return { error: result.error.message };
+    return { record: result.data?.record };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to create patient record' };
+  }
+}
+
+export async function analyzeMyVitals(
+  payload: PatientVitalsAnalysisInput
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    getPatientIdFromSession();
+    const result = await apiPost<{ success: boolean }>('/ai/analyze', payload);
+    if (result.error) return { error: result.error.message };
+    return { success: Boolean(result.data?.success) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to analyze monitoring record' };
   }
 }
 
