@@ -7,6 +7,8 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "ai:timing": "node scripts/ai-track-timing.js",
+    "blockchain:deploy": "node scripts/deploy-registries.mjs",
+    "blockchain:repair": "node scripts/repair-blockchain-state.mjs",
     "test": "node --test test/**/*.test.js",
     "gas:benchmark": "node scripts/gas-benchmark.mjs",
     "test:pack": "node scripts/performance-security-pack.mjs"

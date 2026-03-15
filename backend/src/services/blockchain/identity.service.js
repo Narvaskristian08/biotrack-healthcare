@@ -236,35 +236,15 @@ function normalizeBlockchainIdentity(identity = {}) {
   };
 }
 
-export async function provisionBlockchainIdentity({
+async function registerIdentityReferenceOnChain({
   subjectType,
   subjectId,
-  uniqueSeed,
-  walletAddress = '',
   healthCenterId = null,
+  identityId,
+  identityHash,
+  normalizedWalletAddress = '',
+  base,
 }) {
-  const { identityId, identityHash, identitySalt } = buildIdentityReference({
-    subjectType,
-    subjectId,
-    uniqueSeed,
-  });
-
-  const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
-  await assertWalletAddressAvailable({ walletAddress: normalizedWalletAddress, subjectType, subjectId });
-  const base = {
-    identityId,
-    identityHash,
-    identitySalt,
-    walletAddress: normalizedWalletAddress,
-    network: '',
-    txId: '',
-    blockNumber: null,
-    proofId: '',
-    anchoredAt: null,
-    verificationStatus: 'local_only',
-    errorMessage: '',
-  };
-
   if (!blockchainEnabled()) {
     await writeProofLog({
       kind: 'identity',
@@ -311,11 +291,25 @@ export async function provisionBlockchainIdentity({
       });
       return base;
     }
+
+    const hash32 = toBytes32Hex(identityHash);
+    if (typeof contract.isIdentityRegistered === 'function') {
+      const alreadyRegistered = Boolean(await contract.isIdentityRegistered(identityId, hash32));
+      if (alreadyRegistered) {
+        return {
+          ...base,
+          network: await getBlockchainNetwork(),
+          verificationStatus: 'anchored',
+          errorMessage: '',
+        };
+      }
+    }
+
     await assertContractWriteAccess(contract);
 
     const tx = await contract.registerIdentity(
       identityId,
-      toBytes32Hex(identityHash),
+      hash32,
       String(subjectType),
       buildSubjectIdHash(subjectId),
       toContractWalletAddress(normalizedWalletAddress)
@@ -335,6 +329,7 @@ export async function provisionBlockchainIdentity({
       proofId,
       anchoredAt,
       verificationStatus: 'anchored',
+      errorMessage: '',
     };
 
     await writeProofLog({
@@ -386,6 +381,86 @@ export async function provisionBlockchainIdentity({
   }
 }
 
+async function hydrateIdentityFromProofLog({
+  subjectType,
+  subjectId,
+  healthCenterId = null,
+  identity,
+}) {
+  const normalizedIdentity = normalizeBlockchainIdentity(identity);
+  if (!normalizedIdentity.identityId) {
+    return normalizedIdentity;
+  }
+
+  const latestLog = await BlockchainProofLog.findOne({
+    kind: 'identity',
+    status: 'success',
+    subjectType,
+    subjectId,
+    healthCenterId,
+    identityId: normalizedIdentity.identityId,
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  if (!latestLog) {
+    return normalizedIdentity;
+  }
+
+  return {
+    ...normalizedIdentity,
+    network: String(latestLog.network ?? normalizedIdentity.network).trim(),
+    txId: String(latestLog.txId ?? normalizedIdentity.txId).trim(),
+    blockNumber: Number.isFinite(Number(latestLog.blockNumber))
+      ? Number(latestLog.blockNumber)
+      : normalizedIdentity.blockNumber,
+    proofId: String(latestLog.proofId ?? normalizedIdentity.proofId).trim(),
+    anchoredAt: latestLog.anchoredAt ? new Date(latestLog.anchoredAt) : normalizedIdentity.anchoredAt,
+    verificationStatus: 'anchored',
+    errorMessage: '',
+  };
+}
+
+export async function provisionBlockchainIdentity({
+  subjectType,
+  subjectId,
+  uniqueSeed,
+  walletAddress = '',
+  healthCenterId = null,
+}) {
+  const { identityId, identityHash, identitySalt } = buildIdentityReference({
+    subjectType,
+    subjectId,
+    uniqueSeed,
+  });
+
+  const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
+  await assertWalletAddressAvailable({ walletAddress: normalizedWalletAddress, subjectType, subjectId });
+  const base = {
+    identityId,
+    identityHash,
+    identitySalt,
+    walletAddress: normalizedWalletAddress,
+    network: '',
+    txId: '',
+    blockNumber: null,
+    proofId: '',
+    anchoredAt: null,
+    verificationStatus: 'local_only',
+    errorMessage: '',
+  };
+
+  return registerIdentityReferenceOnChain({
+    subjectType,
+    subjectId,
+    healthCenterId,
+    identityId,
+    identityHash,
+    normalizedWalletAddress,
+    base,
+  });
+}
+
 export async function ensureBlockchainIdentityForDocument({
   doc,
   subjectType,
@@ -395,6 +470,25 @@ export async function ensureBlockchainIdentityForDocument({
 }) {
   const existing = normalizeBlockchainIdentity(doc?.blockchainIdentity ?? {});
   if (existing.identityId && existing.identityHash) {
+    if (existing.verificationStatus === 'anchored' && !existing.txId) {
+      const hydratedIdentity = await hydrateIdentityFromProofLog({
+        subjectType,
+        subjectId: doc._id,
+        healthCenterId,
+        identity: existing,
+      });
+      if (hydratedIdentity.txId || hydratedIdentity.proofId || hydratedIdentity.anchoredAt) {
+        doc.blockchainIdentity = hydratedIdentity;
+        await doc.save({ validateBeforeSave: false });
+        existing.network = hydratedIdentity.network;
+        existing.txId = hydratedIdentity.txId;
+        existing.blockNumber = hydratedIdentity.blockNumber;
+        existing.proofId = hydratedIdentity.proofId;
+        existing.anchoredAt = hydratedIdentity.anchoredAt;
+        existing.errorMessage = hydratedIdentity.errorMessage;
+      }
+    }
+
     if (walletAddress && !existing.walletAddress) {
       const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
       await assertWalletAddressAvailable({ walletAddress: normalizedWalletAddress, subjectType, subjectId: doc._id });
@@ -413,8 +507,28 @@ export async function ensureBlockchainIdentityForDocument({
         existing.errorMessage = linkResult.errorMessage;
       }
       doc.blockchainIdentity = existing;
-      await doc.save();
+      await doc.save({ validateBeforeSave: false });
     }
+
+    if (existing.verificationStatus !== 'anchored' && !existing.txId) {
+      const anchoredExisting = await registerIdentityReferenceOnChain({
+        subjectType,
+        subjectId: doc._id,
+        healthCenterId,
+        identityId: existing.identityId,
+        identityHash: existing.identityHash,
+        normalizedWalletAddress: existing.walletAddress,
+        base: {
+          ...existing,
+          verificationStatus: blockchainEnabled() ? 'pending' : existing.verificationStatus,
+          errorMessage: '',
+        },
+      });
+      doc.blockchainIdentity = anchoredExisting;
+      await doc.save({ validateBeforeSave: false });
+      return { created: false, identity: anchoredExisting };
+    }
+
     return { created: false, identity: existing };
   }
 
@@ -427,7 +541,7 @@ export async function ensureBlockchainIdentityForDocument({
   });
 
   doc.blockchainIdentity = provisioned;
-  await doc.save();
+  await doc.save({ validateBeforeSave: false });
 
   return { created: true, identity: provisioned };
 }

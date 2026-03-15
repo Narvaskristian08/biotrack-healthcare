@@ -267,3 +267,53 @@ test('write kill switch returns unanchored state with explicit reason', async ()
     )
   );
 });
+
+test('missing contract runtime surfaces a clear deployment error', async () => {
+  const key0 = `0x${'11'.repeat(32)}`;
+
+  await withPatchedProofLogCreate(async () =>
+    withPatchedEnv(
+      {
+        BLOCKCHAIN_ENABLED: true,
+        BLOCKCHAIN_STRICT_MODE: true,
+        BLOCKCHAIN_WRITE_DISABLED: false,
+        BLOCKCHAIN_NETWORK: 'sepolia',
+        BLOCKCHAIN_RPC_URL: 'http://localhost:8545',
+        BLOCKCHAIN_PRIVATE_KEY: key0,
+        BLOCKCHAIN_PRIVATE_KEYS: '',
+        BLOCKCHAIN_ACTIVE_KEY_INDEX: 0,
+        BLOCKCHAIN_EXPECTED_SIGNER: '',
+        BLOCKCHAIN_ALLOW_MAINNET: false,
+        BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS: '0x00000000000000000000000000000000000000cc',
+      },
+      async () => {
+        const provider = {
+          getCode: async () => '0x',
+        };
+
+        __setBlockchainClientTestOverrides({
+          createProvider: () => provider,
+          createWallet: () => ({
+            address: '0x00000000000000000000000000000000000000aa',
+            provider,
+          }),
+          createRecordContract: ({ address }) => ({
+            target: address,
+            runner: { provider },
+          }),
+        });
+
+        await assert.rejects(
+          async () =>
+            anchorRecordProof({
+              patientId: 'pt-1',
+              recordId: 'rec-1',
+              identityId: 'did:biotrack:patient:abc',
+              recordHash: 'a'.repeat(64),
+            }),
+          /No contract deployed at BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS/
+        );
+      }
+    )
+  );
+});

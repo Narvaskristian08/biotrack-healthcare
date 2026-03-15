@@ -1,6 +1,7 @@
 import { env } from '../config/env.js';
 import { Admin } from '../models/Admin.js';
 import { hashPassword } from './authService.js';
+import { findExistingAdminOrProviderByEmail } from './accountEmailConflict.service.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
 import { buildEmailFields, normalizeEmail } from './pii.service.js';
 
@@ -19,12 +20,9 @@ export async function bootstrapDefaultAdmin() {
   }
 
   const emailFields = buildEmailFields(email);
-  let existing = await Admin.findOne({ emailHash: emailFields.hash }).lean();
-  if (!existing && emailFields.normalized) {
-    existing = await Admin.findOne({ email: emailFields.normalized }).lean();
-  }
-  if (existing) {
-    console.log(`[bootstrap] Default admin already exists for ${email}`);
+  const existingAccount = await findExistingAdminOrProviderByEmail(emailFields);
+  if (existingAccount) {
+    console.log(`[bootstrap] Default admin email is already used by a ${existingAccount.role} account for ${email}`);
     return;
   }
 

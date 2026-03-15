@@ -13,6 +13,10 @@ import { ensureBlockchainIdentityForDocument } from '../services/blockchain/iden
 import { deliverProviderOnboardingNotification } from '../services/verificationDelivery.service.js';
 import { invalidateAdminRbacCache } from '../middleware/rbac.js';
 import { createEncryptedDatabaseBackup } from '../services/databaseBackup.service.js';
+import {
+  buildAdminOrProviderEmailConflictMessage,
+  findExistingAdminOrProviderByEmail,
+} from '../services/accountEmailConflict.service.js';
 import { validatePasswordPolicy } from '../utils/passwordPolicy.js';
 import { runDetachedTask } from '../utils/backgroundTask.js';
 import { resolveSessionIdleTimeoutMs } from '../utils/sessionIdleTimeout.js';
@@ -512,11 +516,10 @@ export async function adminCreateHealthCenter(req, res) {
 
   const emailFields = buildEmailFields(email);
   const normalizedEmail = emailFields.normalized;
-  let existing = await HealthCenter.findOne({ emailHash: emailFields.hash }).lean();
-  if (!existing && normalizedEmail) {
-    existing = await HealthCenter.findOne({ email: normalizedEmail }).lean();
+  const existingAccount = await findExistingAdminOrProviderByEmail(emailFields);
+  if (existingAccount) {
+    return res.status(409).json({ error: { message: buildAdminOrProviderEmailConflictMessage(existingAccount) } });
   }
-  if (existing) return res.status(409).json({ error: { message: 'Health center email already exists' } });
 
   const assignedProviders = sanitizeAssignedProviders(assignedHealthcareProviders);
   const normalizedBarangayName = String(barangayName).trim();
@@ -859,11 +862,10 @@ export async function adminUpsertUser(req, res) {
     }
     const emailFields = buildEmailFields(email);
     const normalizedEmail = emailFields.normalized;
-    let existing = await HealthCenter.findOne({ emailHash: emailFields.hash }).lean();
-    if (!existing && normalizedEmail) {
-      existing = await HealthCenter.findOne({ email: normalizedEmail }).lean();
+    const existingAccount = await findExistingAdminOrProviderByEmail(emailFields);
+    if (existingAccount) {
+      return res.status(409).json({ error: { message: buildAdminOrProviderEmailConflictMessage(existingAccount) } });
     }
-    if (existing) return res.status(409).json({ error: { message: 'Provider email already exists' } });
 
     const onboardingStatus = normalizeBarangayStatus(status, 'active');
     if (!onboardingStatus) {
@@ -1063,11 +1065,10 @@ export async function adminUpsertUser(req, res) {
 
   const emailFields = buildEmailFields(email);
   const normalizedEmail = emailFields.normalized;
-  let existingAdmin = await Admin.findOne({ emailHash: emailFields.hash }).lean();
-  if (!existingAdmin && normalizedEmail) {
-    existingAdmin = await Admin.findOne({ email: normalizedEmail }).lean();
+  const existingAccount = await findExistingAdminOrProviderByEmail(emailFields);
+  if (existingAccount) {
+    return res.status(409).json({ error: { message: buildAdminOrProviderEmailConflictMessage(existingAccount) } });
   }
-  if (existingAdmin) return res.status(409).json({ error: { message: 'Admin email already exists' } });
   const requestedScope = String(req.body?.adminScope ?? req.body?.scope ?? 'global').trim().toLowerCase();
   const adminScope = requestedScope === 'municipal' ? 'municipal' : 'global';
   const adminCityMunicipality =
@@ -1146,6 +1147,10 @@ export async function adminUpdateUser(req, res) {
     for (const k of allowed) if (k in patch) update[k] = patch[k];
     if ('email' in update) {
       const emailFields = buildEmailFields(update.email);
+      const existingAccount = await findExistingAdminOrProviderByEmail(emailFields, { excludeProviderId: userId });
+      if (existingAccount) {
+        return res.status(409).json({ error: { message: buildAdminOrProviderEmailConflictMessage(existingAccount) } });
+      }
       update.email = '';
       update.emailHash = emailFields.hash;
       update.emailEncrypted = emailFields.encrypted;
@@ -1298,6 +1303,10 @@ export async function adminUpdateUser(req, res) {
   }
   if ('email' in update) {
     const emailFields = buildEmailFields(update.email);
+    const existingAccount = await findExistingAdminOrProviderByEmail(emailFields, { excludeAdminId: userId });
+    if (existingAccount) {
+      return res.status(409).json({ error: { message: buildAdminOrProviderEmailConflictMessage(existingAccount) } });
+    }
     update.email = emailFields.normalized;
     update.emailHash = emailFields.hash;
     update.emailEncrypted = emailFields.encrypted;

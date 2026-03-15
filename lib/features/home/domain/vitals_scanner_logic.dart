@@ -54,6 +54,22 @@ class VitalsScannerLogic {
     return sorted[sorted.length ~/ 2];
   }
 
+  static int? calculateStableMedianBpm(
+    List<int> samples, {
+    int minimumSamples = 3,
+    int toleranceBpm = 10,
+  }) {
+    if (samples.length < minimumSamples) {
+      return null;
+    }
+    final recent = samples.sublist(samples.length - minimumSamples);
+    final sorted = List<int>.from(recent)..sort();
+    if (sorted.last - sorted.first > toleranceBpm) {
+      return null;
+    }
+    return sorted[sorted.length ~/ 2];
+  }
+
   /// Blends the new incoming BPM with the current estimate using an exponential moving average
   static int blendLiveBpm(int? currentBpm, int incomingBpm) {
     final clampedIncoming = incomingBpm.clamp(42, 190).toInt();

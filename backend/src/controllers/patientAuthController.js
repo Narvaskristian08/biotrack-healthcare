@@ -35,6 +35,25 @@ function buildQueuedBlockchainIdentityPayload() {
   };
 }
 
+async function persistPatientBlockchainProvisionFailure(patientId, error) {
+  const message = resolveErrorMessage(error);
+  try {
+    await Patient.updateOne(
+      { _id: patientId },
+      {
+        $set: {
+          'blockchainIdentity.verificationStatus': 'failed',
+          'blockchainIdentity.errorMessage': message,
+        },
+      }
+    );
+  } catch (updateError) {
+    // eslint-disable-next-line no-console
+    console.error('[PATIENT_BLOCKCHAIN] Failed to persist provisioning error:', resolveErrorMessage(updateError));
+  }
+  return message;
+}
+
 function resolveErrorMessage(error) {
   if (!error) return 'Unknown error';
   if (typeof error === 'string') return error;
@@ -434,24 +453,30 @@ export async function registerPatientPublic(req, res) {
   });
 
   runDetachedTask(`patient-register:blockchain:${patient._id}`, async () => {
-    const { identity } = await ensureBlockchainIdentityForDocument({
-      doc: patient,
-      subjectType: 'patient',
-      uniqueSeed: normalizedEmail,
-      walletAddress,
-      healthCenterId: patient.healthCenterId,
-    });
-    await writeAuditLog({
-      req,
-      action: 'PATIENT.IDENTITY.PROVISION',
-      entityType: 'Patient',
-      entityId: patient._id,
-      after: {
-        blockchainIdentityId: identity.identityId,
-        verificationStatus: identity.verificationStatus,
-        txId: identity.txId,
-      },
-    });
+    try {
+      const { identity } = await ensureBlockchainIdentityForDocument({
+        doc: patient,
+        subjectType: 'patient',
+        uniqueSeed: normalizedEmail,
+        walletAddress,
+        healthCenterId: patient.healthCenterId,
+      });
+      await writeAuditLog({
+        req,
+        action: 'PATIENT.IDENTITY.PROVISION',
+        entityType: 'Patient',
+        entityId: patient._id,
+        after: {
+          blockchainIdentityId: identity.identityId,
+          verificationStatus: identity.verificationStatus,
+          txId: identity.txId,
+        },
+      });
+    } catch (error) {
+      const message = await persistPatientBlockchainProvisionFailure(patient._id, error);
+      // eslint-disable-next-line no-console
+      console.error('[PATIENT_REGISTER] Blockchain identity provisioning failed:', message);
+    }
   });
 
   return res.status(201).json({
@@ -927,6 +952,7 @@ export async function loginPatient(req, res) {
       if (env.NODE_ENV === 'production' || !isRecoverableBlockchainFailure(error)) {
         throw error;
       }
+      await persistPatientBlockchainProvisionFailure(match._id, error);
       // eslint-disable-next-line no-console
       console.error('[PATIENT_LOGIN] Blockchain identity provisioning skipped:', resolveErrorMessage(error));
       identity = match.blockchainIdentity ?? buildQueuedBlockchainIdentityPayload();
@@ -1146,6 +1172,7 @@ export async function verifyPatientLoginMfa(req, res) {
     if (env.NODE_ENV === 'production' || !isRecoverableBlockchainFailure(error)) {
       throw error;
     }
+    await persistPatientBlockchainProvisionFailure(patient._id, error);
     // eslint-disable-next-line no-console
     console.error('[PATIENT_LOGIN_MFA_VERIFY] Blockchain identity provisioning skipped:', resolveErrorMessage(error));
     identity = patient.blockchainIdentity ?? buildQueuedBlockchainIdentityPayload();

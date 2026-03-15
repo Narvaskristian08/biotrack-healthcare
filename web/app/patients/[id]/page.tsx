@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Download, Shield, ShieldAlert } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,8 +25,9 @@ import {
   type ProviderRecordVerification,
 } from '@/lib/provider-role';
 
-export default function PatientDetailPage({ params }: { params: { id: string } }) {
-  const patientId = params.id;
+export default function PatientDetailPage() {
+  const params = useParams<{ id: string | string[] }>();
+  const patientId = typeof params?.id === 'string' ? params.id : params?.id?.[0] ?? '';
   const [patient, setPatient] = useState<ProviderPatient | null>(null);
   const [records, setRecords] = useState<ProviderPatientRecord[]>([]);
   const [alerts, setAlerts] = useState<Array<{ id: string; severity: string; message: string; type: string }>>([]);
@@ -36,6 +38,12 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!patientId) {
+      setError('Patient id is missing');
+      setLoading(false);
+      return;
+    }
+
     let active = true;
     (async () => {
       const [patientRes, recordsRes, alertsRes, summaryRes, trendRes] = await Promise.all([

@@ -192,8 +192,27 @@ function extractCityMunicipality(
 
 const PHILIPPINES_CENTER = { lat: 14.5995, lng: 120.9842 };
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
-const GOOGLE_MAPS_SETUP_HINT =
-  'Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, enable Maps JavaScript API and Places API, attach billing, and allow http://127.0.0.1:3001/* and http://localhost:3001/* as referrers.';
+const DEFAULT_GOOGLE_MAPS_SETUP_HINT =
+  'Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, enable Maps JavaScript API and Places API, attach billing, and allow the active web origin as a referrer.';
+
+function getGoogleMapsSetupHint(): string {
+  const base = 'Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, enable Maps JavaScript API and Places API, attach billing';
+  if (typeof window === 'undefined') {
+    return DEFAULT_GOOGLE_MAPS_SETUP_HINT;
+  }
+
+  const origin = String(window.location.origin ?? '').trim();
+  if (!origin) {
+    return DEFAULT_GOOGLE_MAPS_SETUP_HINT;
+  }
+
+  return `${base}, and allow ${origin}/* as a referrer.`;
+}
+
+function buildMunicipalValidationFallbackMessage(scopeCity: string): string {
+  const targetCity = String(scopeCity ?? '').trim() || 'the assigned city/municipality';
+  return `Automatic city validation is unavailable. Manual coordinates are still allowed, but they must be within ${targetCity}. Check Google Maps configuration to restore automatic validation.`;
+}
 
 export default function AdminUsersPage() {
   const { sessionUser } = useDashboardRole();
@@ -219,6 +238,7 @@ export default function AdminUsersPage() {
   const adminScope = sessionUser?.adminScope ?? 'global';
   const adminCityMunicipality = sessionUser?.adminCityMunicipality ?? '';
   const isMunicipalAdmin = adminScope === 'municipal';
+  const [googleMapsSetupHint, setGoogleMapsSetupHint] = useState(DEFAULT_GOOGLE_MAPS_SETUP_HINT);
 
   const mapCanvasRef = useRef<HTMLDivElement | null>(null);
   const mapSearchRef = useRef<HTMLInputElement | null>(null);
@@ -236,6 +256,10 @@ export default function AdminUsersPage() {
       setForm((prev) => ({ ...prev, role: 'provider' }));
     }
   }, [form.role, isMunicipalAdmin]);
+
+  useEffect(() => {
+    setGoogleMapsSetupHint(getGoogleMapsSetupHint());
+  }, []);
 
   const reverseGeocodeCityMunicipality = (lat: number, lng: number) => {
     if (form.role !== 'provider') return;
@@ -261,6 +285,40 @@ export default function AdminUsersPage() {
         setMapNotice('City / Municipality not detected. You can type it manually.');
       }
     });
+  };
+
+  const resetMapRuntime = (resetState = true) => {
+    const googleObj = (window as any).google;
+
+    if (clickListenerRef.current?.remove) clickListenerRef.current.remove();
+    if (dragListenerRef.current?.remove) dragListenerRef.current.remove();
+
+    if (googleObj?.maps?.event?.clearInstanceListeners) {
+      if (placeAutocompleteRef.current) {
+        googleObj.maps.event.clearInstanceListeners(placeAutocompleteRef.current);
+      }
+      if (markerRef.current) {
+        googleObj.maps.event.clearInstanceListeners(markerRef.current);
+      }
+      if (mapInstanceRef.current) {
+        googleObj.maps.event.clearInstanceListeners(mapInstanceRef.current);
+      }
+    }
+
+    clickListenerRef.current = null;
+    dragListenerRef.current = null;
+    placeAutocompleteRef.current = null;
+    markerRef.current = null;
+    mapInstanceRef.current = null;
+    geocoderRef.current = null;
+
+    if (mapCanvasRef.current) {
+      mapCanvasRef.current.innerHTML = '';
+    }
+
+    if (resetState) {
+      setMapReady(false);
+    }
   };
 
   const applyCoordinatesInternal = (lat: number, lng: number, pan = true, resolveCity = true, remember = true) => {
@@ -309,8 +367,9 @@ export default function AdminUsersPage() {
 
     const googleObj = (window as any).google;
     if (!googleObj?.maps?.Geocoder) {
-      setMapError('City validation is unavailable. Please reload the page or check Google Maps configuration.');
+      setMapError(buildMunicipalValidationFallbackMessage(scopeCity));
       setMapNotice('');
+      lastValidCoordinatesRef.current = { lat, lng };
       return;
     }
 
@@ -363,8 +422,9 @@ export default function AdminUsersPage() {
     }
     const googleObj = (window as any).google;
     if (!googleObj?.maps?.Geocoder) {
-      setError('City validation is unavailable. Please reload the page or check Google Maps configuration.');
-      return false;
+      setMapError(buildMunicipalValidationFallbackMessage(scopeCity));
+      setMapNotice('');
+      return true;
     }
     if (!geocoderRef.current) {
       geocoderRef.current = new googleObj.maps.Geocoder();
@@ -393,6 +453,7 @@ export default function AdminUsersPage() {
           resolve(false);
           return;
         }
+        lastValidCoordinatesRef.current = { lat, lng };
         resolve(true);
       });
     });
@@ -402,7 +463,7 @@ export default function AdminUsersPage() {
     const googleObj = (window as any).google;
     if (!googleObj?.maps || !mapCanvasRef.current) {
       setMapReady(false);
-      setMapError('Google Maps loaded incorrectly. Check API key, enabled APIs, billing, and HTTP referrer restrictions.');
+      setMapError(`Google Maps loaded incorrectly. ${googleMapsSetupHint}`);
       setMapNotice('');
       return;
     }
@@ -411,11 +472,19 @@ export default function AdminUsersPage() {
     const startLat = Number(form.latitude);
     const startLng = Number(form.longitude);
     const hasStartCoordinates = isValidCoordinate(startLat, startLng);
-    const center = hasStartCoordinates ? { lat: startLat, lng: startLng } : PHILIPPINES_CENTER;
+    const preferredMunicipalCoordinates =
+      isMunicipalAdmin && lastValidCoordinatesRef.current && isValidCoordinate(lastValidCoordinatesRef.current.lat, lastValidCoordinatesRef.current.lng)
+        ? lastValidCoordinatesRef.current
+        : null;
+    const center = preferredMunicipalCoordinates
+      ? preferredMunicipalCoordinates
+      : !isMunicipalAdmin && hasStartCoordinates
+        ? { lat: startLat, lng: startLng }
+        : PHILIPPINES_CENTER;
 
     const map = new googleObj.maps.Map(mapCanvasRef.current, {
       center,
-      zoom: hasStartCoordinates ? 15 : 11,
+      zoom: preferredMunicipalCoordinates || (!isMunicipalAdmin && hasStartCoordinates) ? 15 : 11,
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
@@ -426,7 +495,7 @@ export default function AdminUsersPage() {
       position: center,
       draggable: true,
       title: 'Barangay/Clinic Location',
-      visible: hasStartCoordinates,
+      visible: Boolean(preferredMunicipalCoordinates || (!isMunicipalAdmin && hasStartCoordinates)),
     });
 
     // In some layouts the map can render before the container size is finalized.
@@ -442,11 +511,11 @@ export default function AdminUsersPage() {
       });
     }
 
-    if (hasStartCoordinates) {
-      lastValidCoordinatesRef.current = { lat: startLat, lng: startLng };
+    if (preferredMunicipalCoordinates || (!isMunicipalAdmin && hasStartCoordinates)) {
+      lastValidCoordinatesRef.current = preferredMunicipalCoordinates ?? { lat: startLat, lng: startLng };
     }
 
-    if (isMunicipalAdmin && adminCityMunicipality.trim() && !hasStartCoordinates) {
+    if (isMunicipalAdmin && adminCityMunicipality.trim() && !preferredMunicipalCoordinates) {
       if (!geocoderRef.current) {
         geocoderRef.current = new googleObj.maps.Geocoder();
       }
@@ -518,13 +587,57 @@ export default function AdminUsersPage() {
     markerRef.current = marker;
     setMapReady(true);
     setMapError('');
+    setMapNotice('');
+  };
+
+  const reloadGoogleMap = () => {
+    if (form.role !== 'provider') return;
+    if (!GOOGLE_MAPS_API_KEY) {
+      setMapReady(false);
+      setMapError(`Google Maps API key is missing. ${googleMapsSetupHint}`);
+      setMapNotice('');
+      return;
+    }
+
+    setMapError('');
+    setMapNotice('Reloading Google Maps...');
+    resetMapRuntime();
+
+    const existingScript = document.getElementById('google-maps-sdk');
+    if (existingScript && (window as any).google?.maps) {
+      requestAnimationFrame(() => initGoogleMap());
+      return;
+    }
+
+    if (existingScript) {
+      existingScript.remove();
+    }
+
+    try {
+      delete (window as any).google;
+    } catch {
+      (window as any).google = undefined;
+    }
+
+    const script = document.createElement('script');
+    script.id = 'google-maps-sdk';
+    script.async = true;
+    script.defer = true;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&libraries=places`;
+    script.onload = () => initGoogleMap();
+    script.onerror = () => {
+      setMapReady(false);
+      setMapError(`Failed to load Google Maps script. ${googleMapsSetupHint}`);
+      setMapNotice('');
+    };
+    document.head.appendChild(script);
   };
 
   useEffect(() => {
     if (form.role !== 'provider') return;
     if (!GOOGLE_MAPS_API_KEY) {
       setMapReady(false);
-      setMapError(`Google Maps API key is missing. ${GOOGLE_MAPS_SETUP_HINT}`);
+      setMapError(`Google Maps API key is missing. ${googleMapsSetupHint}`);
       setMapNotice('');
       return;
     }
@@ -532,7 +645,7 @@ export default function AdminUsersPage() {
     const previousAuthFailure = (window as any).gm_authFailure;
     (window as any).gm_authFailure = () => {
       setMapReady(false);
-      setMapError(`Google Maps authentication failed. ${GOOGLE_MAPS_SETUP_HINT}`);
+      setMapError(`Google Maps authentication failed. ${googleMapsSetupHint}`);
       setMapNotice('');
     };
 
@@ -542,7 +655,7 @@ export default function AdminUsersPage() {
         initGoogleMap();
       } else {
         setMapReady(false);
-        setMapError(`Google Maps script is present but did not initialize correctly. ${GOOGLE_MAPS_SETUP_HINT}`);
+        setMapError(`Google Maps script is present but did not initialize correctly. ${googleMapsSetupHint}`);
         setMapNotice('');
       }
       return () => {
@@ -559,14 +672,14 @@ export default function AdminUsersPage() {
     script.onload = () => initGoogleMap();
     script.onerror = () => {
       setMapReady(false);
-      setMapError(`Failed to load Google Maps script. ${GOOGLE_MAPS_SETUP_HINT}`);
+      setMapError(`Failed to load Google Maps script. ${googleMapsSetupHint}`);
       setMapNotice('');
     };
     document.head.appendChild(script);
     return () => {
       (window as any).gm_authFailure = previousAuthFailure;
     };
-  }, [form.role]);
+  }, [form.role, googleMapsSetupHint]);
 
   useEffect(() => {
     if (!mapReady || !markerRef.current || !mapInstanceRef.current) return;
@@ -583,8 +696,7 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     return () => {
-      if (clickListenerRef.current?.remove) clickListenerRef.current.remove();
-      if (dragListenerRef.current?.remove) dragListenerRef.current.remove();
+      resetMapRuntime(false);
     };
   }, []);
 
@@ -1265,7 +1377,7 @@ export default function AdminUsersPage() {
                     <div className="space-y-2 rounded-xl border border-border bg-slate-50/70 p-3">
                       <p className="text-sm font-medium">Google Maps Picker</p>
                       <p className="text-xs text-muted-foreground">
-                        Click the map or search a place to auto-fill latitude/longitude. Valid range: latitude -90..90, longitude -180..180.
+                        Click the map or search a place to auto-fill latitude/longitude. If Google Maps is unavailable, you can still enter coordinates manually. Valid range: latitude -90..90, longitude -180..180.
                       </p>
                       <Input ref={mapSearchRef} placeholder="Search in map (e.g., Longos Barangay, San Fabian)" />
                       <div className="relative h-52 w-full overflow-hidden rounded-md border border-border bg-muted">
@@ -1275,13 +1387,16 @@ export default function AdminUsersPage() {
                             <div className="max-w-lg space-y-2">
                               <p className="text-sm font-medium text-foreground">Map preview unavailable</p>
                               <p className="text-xs leading-5 text-muted-foreground">
-                                {mapError || `Google Maps has not been initialized yet. ${GOOGLE_MAPS_SETUP_HINT}`}
+                                {mapError || `Google Maps has not been initialized yet. ${googleMapsSetupHint}`}
                               </p>
                             </div>
                           </div>
                         ) : null}
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" onClick={reloadGoogleMap}>
+                          Reload Map
+                        </Button>
                         <Button type="button" variant="outline" onClick={useCurrentLocation}>
                           Use Current Location
                         </Button>

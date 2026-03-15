@@ -54,6 +54,11 @@ Optional:
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=<key>` (if using map picker features)
 - `NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID=<client-id>` (if using Google sign-in on `/login`)
 
+Notes:
+
+- For local Next.js development, `web/.env.local` takes precedence over `web/.env`.
+- If the same variable exists in both files, the value in `web/.env.local` wins.
+
 ## 5. Build and Start
 
 From repo root:

@@ -20,6 +20,21 @@ function toRecordResponse(record, context = {}) {
   };
 }
 
+function buildFailedBlockchainState(existing = {}, error) {
+  return {
+    enabled: Boolean(existing?.enabled),
+    network: String(existing?.network ?? '').trim(),
+    contractAddress: String(existing?.contractAddress ?? '').trim(),
+    txId: String(existing?.txId ?? '').trim(),
+    blockNumber: Number.isFinite(Number(existing?.blockNumber)) ? Number(existing.blockNumber) : null,
+    proofId: String(existing?.proofId ?? '').trim(),
+    anchoredAt: existing?.anchoredAt ? new Date(existing.anchoredAt) : null,
+    lastVerifiedAt: existing?.lastVerifiedAt ? new Date(existing.lastVerifiedAt) : null,
+    verificationStatus: 'failed',
+    errorMessage: String(error?.message ?? 'Blockchain record anchoring failed').trim(),
+  };
+}
+
 export async function addPatientRecord(req, res) {
   const { healthCenterId, adminId, sessionId, patientId: requesterPatientId, role } = req.context;
   const actorType = adminId ? 'admin' : role === 'patient' ? 'patient' : 'healthcenter';
@@ -107,46 +122,69 @@ export async function addPatientRecord(req, res) {
   });
 
   if (shouldAnchor) {
-    const anchored = await anchorRecordProof({
-      healthCenterId,
-      patientId,
-      recordId: rec._id,
-      identityId: patient?.blockchainIdentity?.identityId ?? '',
-      recordHash: rec.recordHash,
-    });
+    try {
+      const anchored = await anchorRecordProof({
+        healthCenterId,
+        patientId,
+        recordId: rec._id,
+        identityId: patient?.blockchainIdentity?.identityId ?? '',
+        recordHash: rec.recordHash,
+      });
 
-    await PatientRecord.updateOne(
-      { _id: rec._id },
-      {
-        $set: {
-          blockchain: {
-            enabled: anchored.enabled,
-            network: anchored.network,
-            contractAddress: anchored.contractAddress,
-            txId: anchored.txId,
-            blockNumber: anchored.blockNumber,
-            proofId: anchored.proofId,
-            anchoredAt: anchored.anchoredAt,
-            lastVerifiedAt: null,
-            verificationStatus: anchored.verificationStatus,
-            errorMessage: anchored.errorMessage,
+      await PatientRecord.updateOne(
+        { _id: rec._id },
+        {
+          $set: {
+            blockchain: {
+              enabled: anchored.enabled,
+              network: anchored.network,
+              contractAddress: anchored.contractAddress,
+              txId: anchored.txId,
+              blockNumber: anchored.blockNumber,
+              proofId: anchored.proofId,
+              anchoredAt: anchored.anchoredAt,
+              lastVerifiedAt: null,
+              verificationStatus: anchored.verificationStatus,
+              errorMessage: anchored.errorMessage,
+            },
           },
-        },
-      }
-    );
+        }
+      );
 
-    rec.blockchain = {
-      ...rec.blockchain,
-      enabled: anchored.enabled,
-      network: anchored.network,
-      contractAddress: anchored.contractAddress,
-      txId: anchored.txId,
-      blockNumber: anchored.blockNumber,
-      proofId: anchored.proofId,
-      anchoredAt: anchored.anchoredAt,
-      verificationStatus: anchored.verificationStatus,
-      errorMessage: anchored.errorMessage,
-    };
+      rec.blockchain = {
+        ...rec.blockchain,
+        enabled: anchored.enabled,
+        network: anchored.network,
+        contractAddress: anchored.contractAddress,
+        txId: anchored.txId,
+        blockNumber: anchored.blockNumber,
+        proofId: anchored.proofId,
+        anchoredAt: anchored.anchoredAt,
+        verificationStatus: anchored.verificationStatus,
+        errorMessage: anchored.errorMessage,
+      };
+    } catch (error) {
+      const failedBlockchain = buildFailedBlockchainState(
+        {
+          ...rec.blockchain,
+          enabled: shouldAnchor,
+          contractAddress: String(env.BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS ?? '').trim(),
+        },
+        error
+      );
+
+      await PatientRecord.updateOne(
+        { _id: rec._id },
+        {
+          $set: {
+            blockchain: failedBlockchain,
+          },
+        }
+      );
+
+      rec.blockchain = failedBlockchain;
+      throw error;
+    }
   }
 
   await writeAuditLog({

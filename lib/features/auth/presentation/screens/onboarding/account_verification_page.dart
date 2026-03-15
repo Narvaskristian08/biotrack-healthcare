@@ -41,7 +41,6 @@ class _AccountVerificationPageState extends State<AccountVerificationPage> {
   String _emailRecipient = '';
   String _smsRecipient = '';
   String _devPreviewCode = '';
-  bool _autoCodeRequested = false;
 
   bool get _missingSession => widget.patientId.trim().isEmpty;
 
@@ -54,11 +53,6 @@ class _AccountVerificationPageState extends State<AccountVerificationPage> {
     super.initState();
     _emailRecipient = widget.email.trim();
     _smsRecipient = _maskContactNumber(widget.contactNumber);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _missingSession || _autoCodeRequested) return;
-      _autoCodeRequested = true;
-      _requestCode('email');
-    });
   }
 
   @override

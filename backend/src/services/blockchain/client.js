@@ -1,4 +1,4 @@
-import { Contract, JsonRpcProvider, Wallet, getAddress, isAddress } from 'ethers';
+import { Contract, JsonRpcProvider, NonceManager, Wallet, getAddress, isAddress } from 'ethers';
 import { env } from '../../config/env.js';
 import { IDENTITY_REGISTRY_ABI, RECORD_PROOF_REGISTRY_ABI } from './abi.js';
 
@@ -173,6 +173,27 @@ function ensureConfigForEnabledMode() {
   }
 }
 
+function normalizeRuntimeBytecode(code) {
+  return trim(code).toLowerCase();
+}
+
+async function assertContractDeployment(contract, envVarName) {
+  if (!blockchainEnabled() || !contract) return;
+
+  const provider = contract?.runner?.provider ?? contract?.provider ?? contract?.runner ?? null;
+  if (!provider || typeof provider.getCode !== 'function') return;
+
+  const contractAddress = trim(contract?.target ?? contract?.address);
+  if (!contractAddress) return;
+
+  const code = normalizeRuntimeBytecode(await provider.getCode(contractAddress));
+  if (!code || code === '0x' || code === '0x0') {
+    throw new Error(
+      `No contract deployed at ${envVarName} (${contractAddress}). Redeploy BioTrackRegistries.sol and update backend/.env.`
+    );
+  }
+}
+
 async function getProvider() {
   if (!providerCache) {
     ensureConfigForEnabledMode();
@@ -189,10 +210,14 @@ async function getSigner() {
   if (!signerCache) {
     const signerConfig = resolveSignerKeyConfig();
     const provider = await getProvider();
-    signerCache = testOverrides.createWallet
+    const resolvedSigner = testOverrides.createWallet
       ? testOverrides.createWallet(signerConfig.privateKey, provider)
-      : new Wallet(signerConfig.privateKey, provider);
-    const configuredAddress = getAddress(signerCache.address);
+      : new NonceManager(new Wallet(signerConfig.privateKey, provider));
+    signerCache = resolvedSigner;
+    const rawAddress = typeof resolvedSigner?.getAddress === 'function'
+      ? await resolvedSigner.getAddress()
+      : resolvedSigner?.address;
+    const configuredAddress = getAddress(rawAddress);
     const expectedAddress = normalizeAddress(env.BLOCKCHAIN_EXPECTED_SIGNER, 'BLOCKCHAIN_EXPECTED_SIGNER');
     if (expectedAddress && configuredAddress !== expectedAddress) {
       throw new Error(
@@ -211,7 +236,8 @@ async function getSigner() {
 export async function getSignerAddress() {
   if (!blockchainEnabled()) return '';
   const signer = await getSigner();
-  return getAddress(signer.address);
+  const rawAddress = typeof signer?.getAddress === 'function' ? await signer.getAddress() : signer?.address;
+  return getAddress(rawAddress);
 }
 
 export async function getSignerMetadata() {
@@ -259,6 +285,8 @@ export async function getIdentityRegistryContract() {
       );
   }
 
+  await assertContractDeployment(identityContractCache, 'BLOCKCHAIN_IDENTITIES_CONTRACT_ADDRESS');
+
   return identityContractCache;
 }
 
@@ -280,6 +308,8 @@ export async function getRecordProofContract() {
         signer
       );
   }
+
+  await assertContractDeployment(recordContractCache, 'BLOCKCHAIN_RECORDS_CONTRACT_ADDRESS');
 
   return recordContractCache;
 }

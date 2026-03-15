@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { ArrowLeft, Brain, Heart, Lock, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,8 +21,9 @@ import {
   type ProviderPatient,
 } from '@/lib/provider-role';
 
-export default function UserDetailPage({ params }: { params: { id: string } }) {
-  const patientId = params.id;
+export default function UserDetailPage() {
+  const params = useParams<{ id: string | string[] }>();
+  const patientId = typeof params?.id === 'string' ? params.id : params?.id?.[0] ?? '';
   const [patient, setPatient] = useState<ProviderPatient | null>(null);
   const [risk, setRisk] = useState('LOW');
   const [summaryText, setSummaryText] = useState('');
@@ -33,6 +35,12 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!patientId) {
+      setError('Patient id is missing');
+      setLoading(false);
+      return;
+    }
+
     let active = true;
     (async () => {
       const [patientRes, summaryRes, alertsRes, trendRes, recordsRes] = await Promise.all([
@@ -67,6 +75,7 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
   const currentBpm = heartRates.length > 0 ? heartRates[heartRates.length - 1] : null;
 
   const exportReport = async () => {
+    if (!patientId) return;
     const recordsRes = await fetchPatientRecords(patientId);
     exportJson(`provider-user-report-${patientId}.json`, {
       generatedAt: new Date().toISOString(),

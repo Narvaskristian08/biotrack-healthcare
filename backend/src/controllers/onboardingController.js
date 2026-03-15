@@ -7,6 +7,10 @@ import { Admin } from '../models/Admin.js';
 import { OnboardingFile } from '../models/OnboardingFile.js';
 import { MunicipalOnboardingRequest } from '../models/MunicipalOnboardingRequest.js';
 import { hashPassword } from '../services/authService.js';
+import {
+  buildAdminOrProviderEmailConflictMessage,
+  findExistingAdminOrProviderByEmail,
+} from '../services/accountEmailConflict.service.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { buildEmailFields } from '../services/pii.service.js';
 import { deliverMunicipalOnboardingDecision } from '../services/verificationDelivery.service.js';
@@ -218,15 +222,14 @@ export async function updateMunicipalOnboardingRequest(req, res) {
 
     if (normalizedEmail) {
       const emailFields = buildEmailFields(normalizedEmail);
-      let adminDoc = await Admin.findOne({ emailHash: emailFields.hash }).lean();
-      if (!adminDoc && emailFields.normalized) {
-        adminDoc = await Admin.findOne({ email: emailFields.normalized }).lean();
-      }
+      const existingAccount = await findExistingAdminOrProviderByEmail(emailFields);
 
-      if (adminDoc) {
+      if (existingAccount?.role === 'admin') {
         accountExisting = true;
-        adminAccountId = adminDoc._id;
+        adminAccountId = existingAccount.id;
         loginEmail = emailFields.normalized || normalizedEmail;
+      } else if (existingAccount) {
+        return res.status(409).json({ error: { message: buildAdminOrProviderEmailConflictMessage(existingAccount) } });
       } else {
         temporaryPassword = generateTemporaryPassword();
         try {
@@ -255,10 +258,10 @@ export async function updateMunicipalOnboardingRequest(req, res) {
           });
         } catch (error) {
           if (error?.code === 11000) {
-            const fallbackAdmin = await Admin.findOne({ emailHash: emailFields.hash }).lean();
-            if (fallbackAdmin) {
+            const fallbackAdmin = await findExistingAdminOrProviderByEmail(emailFields);
+            if (fallbackAdmin?.role === 'admin') {
               accountExisting = true;
-              adminAccountId = fallbackAdmin._id;
+              adminAccountId = fallbackAdmin.id;
               loginEmail = emailFields.normalized || normalizedEmail;
               temporaryPassword = '';
             }
