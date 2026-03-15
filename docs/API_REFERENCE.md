@@ -104,11 +104,17 @@ Notes:
 ## AI Endpoints (`/api/ai`)
 
 - `POST /analyze`
+- `GET /insights`
 - `POST /activity-insight`
 - `POST /fall-insight`
 - `GET /trend-insight`
 - `GET /summary`
 - `GET /alerts`
+- `DELETE /history`
+
+Notes:
+
+- `GET /trend-insight` and `GET /summary` accept `includeInsight=false` to return computed data without generating LLM text.
 
 ## Validation and Errors
 

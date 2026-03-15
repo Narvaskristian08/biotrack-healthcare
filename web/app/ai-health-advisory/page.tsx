@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import DashboardLayout from '@/components/dashboard-layout';
 import { PatientPageContentSkeleton } from '@/components/patient-page-skeleton';
-import { fetchMyAlerts, fetchMyHealthSummary, fetchMyTrendInsight } from '@/lib/patient-role';
+import { fetchMyAiInsights, fetchMyAlerts, fetchMyHealthSummary, fetchMyTrendInsight } from '@/lib/patient-role';
 
 type AlertItem = { id: string; type: string; severity: string; message: string; createdAt: string };
 type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL' | 'UNKNOWN';
@@ -133,12 +133,12 @@ function recommendedActions(risk: RiskLevel, trend: TrendLevel, fallEvents: numb
 export default function AIHealthAdvisoryPage() {
   const [language, setLanguage] = useState<'en' | 'fil'>('en');
   const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState('');
+  const [scanInsightText, setScanInsightText] = useState('');
+  const [scanInsightMeta, setScanInsightMeta] = useState<{ createdAt: string; usedFallback: boolean; model?: string } | null>(null);
   const [summaryObservations, setSummaryObservations] = useState<string[]>([]);
   const [riskLevel, setRiskLevel] = useState('LOW');
   const [fallEvents, setFallEvents] = useState(0);
   const [trend, setTrend] = useState('INSUFFICIENT_DATA');
-  const [trendInsight, setTrendInsight] = useState('');
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -153,28 +153,46 @@ export default function AIHealthAdvisoryPage() {
     let active = true;
     (async () => {
       setLoading(true);
-      const [summaryRes, trendRes, alertsRes] = await Promise.all([
-        fetchMyHealthSummary(7, {}, language),
-        fetchMyTrendInsight({}, language),
+      const [insightsRes, summaryRes, trendRes, alertsRes] = await Promise.all([
+        fetchMyAiInsights(10),
+        fetchMyHealthSummary(7, {}, language, false),
+        fetchMyTrendInsight({}, language, false),
         fetchMyAlerts(10),
       ]);
       if (!active) return;
       const nextErrors: string[] = [];
 
+      const insights = insightsRes.error ? [] : (insightsRes.insights ?? []);
+      const latestInsight = insights.find((entry) => entry.language === language) ?? insights[0] ?? null;
+      if (insightsRes.error) {
+        nextErrors.push(`Insights endpoint: ${insightsRes.error}`);
+      } else if (latestInsight) {
+        setScanInsightText(latestInsight.text ?? '');
+        setScanInsightMeta({
+          createdAt: latestInsight.createdAt,
+          usedFallback: Boolean(latestInsight.usedFallback),
+          model: latestInsight.model,
+        });
+        setRiskLevel(latestInsight.riskLevel ?? 'LOW');
+      } else {
+        setScanInsightText('');
+        setScanInsightMeta(null);
+      }
+
       if (summaryRes.error) {
         nextErrors.push(`Summary endpoint: ${summaryRes.error}`);
       } else {
-        setSummary(summaryRes.data?.insight ?? '');
         setSummaryObservations(summaryRes.data?.summaryData?.observations ?? []);
-        setRiskLevel(summaryRes.data?.summaryData?.overallRisk ?? 'LOW');
         setFallEvents(Number(summaryRes.data?.summaryData?.fallEvents ?? 0));
+        if (!latestInsight) {
+          setRiskLevel(summaryRes.data?.summaryData?.overallRisk ?? 'LOW');
+        }
       }
 
       if (trendRes.error) {
         nextErrors.push(`Trend endpoint: ${trendRes.error}`);
       } else {
         setTrend(trendRes.data?.trendData?.trend ?? 'INSUFFICIENT_DATA');
-        setTrendInsight(trendRes.data?.insight ?? '');
       }
 
       if (alertsRes.error) {
@@ -213,13 +231,13 @@ export default function AIHealthAdvisoryPage() {
 
   const aiHighlights = useMemo(() => {
     const observationLines = (summaryObservations ?? []).map((item) => String(item ?? '').trim()).filter(Boolean);
-    const aiLines = [...toSentenceList(summary), ...toSentenceList(trendInsight)];
+    const aiLines = toSentenceList(scanInsightText);
     return uniqueLines([trendMeaning, riskMeaning, ...observationLines, ...aiLines]).slice(0, 7);
-  }, [riskMeaning, summary, summaryObservations, trendInsight, trendMeaning]);
+  }, [riskMeaning, scanInsightText, summaryObservations, trendMeaning]);
 
   const detailedNotes = useMemo(() => {
-    return uniqueLines([...toSentenceList(trendInsight), ...toSentenceList(summary)]).slice(0, 8);
-  }, [summary, trendInsight]);
+    return uniqueLines(toSentenceList(scanInsightText)).slice(0, 8);
+  }, [scanInsightText]);
 
   if (loading) {
     return (
@@ -443,13 +461,15 @@ export default function AIHealthAdvisoryPage() {
               <summary className="cursor-pointer text-sm font-medium">Show raw AI response text</summary>
               <div className="mt-3 space-y-2 text-xs text-muted-foreground">
                 <p>
-                  <span className="font-semibold text-foreground">Trend endpoint:</span>{' '}
-                  {trendInsight || 'No trend insight returned.'}
+                  <span className="font-semibold text-foreground">Saved scan insight:</span>{' '}
+                  {scanInsightText || 'No saved AI insight available yet. Run a mobile scan to generate one.'}
                 </p>
-                <p>
-                  <span className="font-semibold text-foreground">Summary endpoint:</span>{' '}
-                  {summary || 'No summary insight returned.'}
-                </p>
+                {scanInsightMeta ? (
+                  <p>
+                    <span className="font-semibold text-foreground">Metadata:</span>{' '}
+                    {`${new Date(scanInsightMeta.createdAt).toLocaleString()} • ${scanInsightMeta.usedFallback ? 'fallback' : 'model'}${scanInsightMeta.model ? ` • ${scanInsightMeta.model}` : ''}`}
+                  </p>
+                ) : null}
               </div>
             </details>
           </CardContent>

@@ -7,15 +7,17 @@ export async function getTrendInsight(req, res, next) {
   try {
     const userId = await resolveInsightPatientId(req, { source: 'query', field: 'patientId' });
     const language = normalizeAiLanguage(req.query?.language, 'en');
+    const includeInsight = req.query?.includeInsight !== undefined ? Boolean(req.query.includeInsight) : true;
 
     const trendData = await analyzeUserTrend(userId, req.context.healthCenterId);
-    const insight = await generateTrendInsight(trendData, { language });
+    const insight = includeInsight ? await generateTrendInsight(trendData, { language }) : '';
 
     res.json({
       success: true,
       trendData,
       insight,
       language,
+      includeInsight,
     });
   } catch (err) {
     next(err);

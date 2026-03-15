@@ -17,7 +17,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { clearMyMonitoringHistory, fetchMyAlerts, fetchMyHealthSummary, fetchMyTrendInsight } from '@/lib/patient-role';
+import { clearMyMonitoringHistory, fetchMyAiInsights, fetchMyAlerts, fetchMyHealthSummary, fetchMyTrendInsight } from '@/lib/patient-role';
 import { useDashboardRole } from '@/hooks/use-dashboard-role';
 
 const DEFAULT_SUMMARY = {
@@ -89,12 +89,19 @@ export default function HealthMonitoringPage() {
       setLoading(true);
       setError('');
       try {
-        const [trendRes, alertsRes, summaryRes] = await Promise.all([
-          fetchMyTrendInsight(),
+        const [insightsRes, trendRes, alertsRes, summaryRes] = await Promise.all([
+          fetchMyAiInsights(1),
+          fetchMyTrendInsight({}, 'en', false),
           fetchMyAlerts(10),
-          fetchMyHealthSummary(7),
+          fetchMyHealthSummary(7, {}, 'en', false),
         ]);
         if (!active) return;
+        if (insightsRes.error) {
+          setError((prev) => prev || insightsRes.error || '');
+        } else {
+          const latestInsight = (insightsRes.insights ?? [])[0] ?? null;
+          setSummaryInsight(String(latestInsight?.text ?? '').trim());
+        }
         if (trendRes.error) {
           setError(trendRes.error);
         } else {
@@ -103,7 +110,7 @@ export default function HealthMonitoringPage() {
             typeof trendRes.data?.trendData?.baseline === 'number' ? Number(trendRes.data?.trendData?.baseline) : null
           );
           setTrend(trendRes.data?.trendData?.trend ?? 'INSUFFICIENT_DATA');
-          setTrendInsight(String(trendRes.data?.insight ?? '').trim());
+          setTrendInsight('');
         }
         if (alertsRes.error) {
           setError((prev) => prev || alertsRes.error || '');
@@ -114,7 +121,6 @@ export default function HealthMonitoringPage() {
           setError((prev) => prev || summaryRes.error || '');
         } else {
           setSummary(summaryRes.data?.summaryData ?? DEFAULT_SUMMARY);
-          setSummaryInsight(String(summaryRes.data?.insight ?? '').trim());
         }
       } catch (fetchError) {
         if (!active) return;
@@ -162,6 +168,7 @@ export default function HealthMonitoringPage() {
 
     const deletedHealthRecords = Number(result.data?.deleted?.healthRecords ?? 0);
     const deletedAlerts = Number(result.data?.deleted?.alerts ?? 0);
+    const deletedInsights = Number(result.data?.deleted?.aiInsights ?? 0);
 
     setHeartRates([]);
     setBaseline(null);
@@ -170,7 +177,7 @@ export default function HealthMonitoringPage() {
     setSummary(DEFAULT_SUMMARY);
     setSummaryInsight('');
     setAlerts([]);
-    setNotice(`Monitoring history cleared (${deletedHealthRecords} samples, ${deletedAlerts} alerts).`);
+    setNotice(`Monitoring history cleared (${deletedHealthRecords} samples, ${deletedAlerts} alerts, ${deletedInsights} insights).`);
   };
 
   if (loading) {

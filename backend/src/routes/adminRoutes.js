@@ -7,6 +7,7 @@ import { authLoginLimiter } from '../middleware/rateLimit.js';
 import { adminRegisterSchema, adminUpsertSchema, loginSchema, providerCreateSchema } from '../validation/authSchemas.js';
 import {
   emptyBodySchema,
+  adminSelfPasswordUpdateSchema,
   adminBlockchainArchiveSchema,
   adminGovernanceUpdateSchema,
   blockchainMetricsQuerySchema,
@@ -41,6 +42,7 @@ import {
   markRestoreOperation,
   registerAdmin,
   runDatabaseBackup,
+  updateMyAdminPassword,
   updateDataGovernanceSettings,
   updateRbacSettings,
 } from '../controllers/adminController.js';
@@ -55,6 +57,12 @@ export const adminRoutes = Router();
 // Capstone bootstrap: create first admin
 adminRoutes.post('/register', authLoginLimiter, validateBody(adminRegisterSchema), asyncHandler(registerAdmin));
 adminRoutes.post('/login', authLoginLimiter, validateBody(loginSchema), asyncHandler(loginAdmin));
+adminRoutes.patch(
+  '/me/password',
+  requireAdminAuth,
+  validateBody(adminSelfPasswordUpdateSchema),
+  asyncHandler(updateMyAdminPassword)
+);
 
 // Admin management
 adminRoutes.post('/healthcenters', requireAdminAuth, validateBody(providerCreateSchema), asyncHandler(adminCreateHealthCenter));

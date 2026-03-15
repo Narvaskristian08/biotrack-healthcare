@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import DashboardLayout from '@/components/dashboard-layout';
 import { PatientPageContentSkeleton } from '@/components/patient-page-skeleton';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { fetchMyAlerts, fetchMyHealthSummary, fetchMyTrendCompare, fetchMyTrendInsight } from '@/lib/patient-role';
+import { fetchMyAiInsights, fetchMyAlerts, fetchMyHealthSummary, fetchMyTrendCompare, fetchMyTrendInsight } from '@/lib/patient-role';
 
 type Range = 'daily' | 'weekly' | 'monthly';
 
@@ -141,30 +141,36 @@ export default function VitalsHistoryPage() {
       setLoading(true);
       setError('');
       try {
-        const [trendRes, summaryRes, alertsRes] = await Promise.all([
-          fetchMyTrendInsight(),
-          fetchMyHealthSummary(7),
+        const [insightsRes, trendRes, summaryRes, alertsRes] = await Promise.all([
+          fetchMyAiInsights(1),
+          fetchMyTrendInsight({}, 'en', false),
+          fetchMyHealthSummary(7, {}, 'en', false),
           fetchMyAlerts(10),
         ]);
         if (!active) return;
 
         let nextError = '';
+        if (insightsRes.error) {
+          nextError = insightsRes.error;
+        } else {
+          const latestInsight = (insightsRes.insights ?? [])[0] ?? null;
+          setSummaryInsight(String(latestInsight?.text ?? '').trim());
+        }
         if (trendRes.error) {
-          nextError = trendRes.error;
+          if (!nextError) nextError = trendRes.error;
         } else {
           setHeartRates(trendRes.data?.trendData?.recentHeartRates ?? []);
           setBaseline(
             typeof trendRes.data?.trendData?.baseline === 'number' ? Number(trendRes.data?.trendData?.baseline) : null
           );
           setTrend(trendRes.data?.trendData?.trend ?? 'INSUFFICIENT_DATA');
-          setTrendInsight(String(trendRes.data?.insight ?? '').trim());
+          setTrendInsight('');
         }
 
         if (summaryRes.error) {
           if (!nextError) nextError = summaryRes.error;
         } else {
           setSummary(summaryRes.data?.summaryData ?? DEFAULT_SUMMARY);
-          setSummaryInsight(String(summaryRes.data?.insight ?? '').trim());
         }
 
         if (alertsRes.error) {

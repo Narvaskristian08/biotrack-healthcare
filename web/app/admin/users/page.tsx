@@ -263,7 +263,7 @@ export default function AdminUsersPage() {
     });
   };
 
-  const applyCoordinatesInternal = (lat: number, lng: number, pan = true, resolveCity = true) => {
+  const applyCoordinatesInternal = (lat: number, lng: number, pan = true, resolveCity = true, remember = true) => {
     setForm((prev) => ({
       ...prev,
       latitude: lat.toFixed(6),
@@ -273,15 +273,23 @@ export default function AdminUsersPage() {
     if (mapInstanceRef.current && markerRef.current && pan) {
       const next = { lat, lng };
       markerRef.current.setPosition(next);
+      if (typeof markerRef.current.setVisible === 'function') {
+        markerRef.current.setVisible(true);
+      }
       mapInstanceRef.current.panTo(next);
       mapInstanceRef.current.setZoom(15);
     }
 
     if (mapInstanceRef.current && markerRef.current && !pan) {
       markerRef.current.setPosition({ lat, lng });
+      if (typeof markerRef.current.setVisible === 'function') {
+        markerRef.current.setVisible(true);
+      }
     }
 
-    lastValidCoordinatesRef.current = { lat, lng };
+    if (remember) {
+      lastValidCoordinatesRef.current = { lat, lng };
+    }
 
     if (resolveCity) {
       reverseGeocodeCityMunicipality(lat, lng);
@@ -289,6 +297,9 @@ export default function AdminUsersPage() {
   };
 
   const validateMunicipalCoordinates = (lat: number, lng: number, pan = true) => {
+    // Always update the map UI immediately so the user sees feedback (even if the city check fails).
+    applyCoordinatesInternal(lat, lng, pan, false, false);
+
     const scopeCity = String(adminCityMunicipality || '').trim();
     if (!scopeCity) {
       setMapError('Municipal scope is missing a city/municipality. Contact a global admin to correct the account.');
@@ -307,6 +318,9 @@ export default function AdminUsersPage() {
       geocoderRef.current = new googleObj.maps.Geocoder();
     }
 
+    setMapError('');
+    setMapNotice(`Validating city / municipality for ${scopeCity}...`);
+
     const requestId = ++geocodeRequestRef.current;
     geocoderRef.current.geocode({ location: { lat, lng } }, (results: any, status: string) => {
       if (requestId !== geocodeRequestRef.current) return;
@@ -324,20 +338,12 @@ export default function AdminUsersPage() {
       if (!isSameCity(city, scopeCity)) {
         setMapError(`Selected location is in ${city}. Municipal admins can only set locations in ${scopeCity}.`);
         setMapNotice('');
-        const last = lastValidCoordinatesRef.current;
-        if (last && markerRef.current) {
-          markerRef.current.setPosition(last);
-        }
-        if (last && mapInstanceRef.current && pan) {
-          mapInstanceRef.current.panTo(last);
-          mapInstanceRef.current.setZoom(15);
-        }
         return;
       }
 
       setMapError('');
       setMapNotice(`City / Municipality validated: ${city}.`);
-      applyCoordinatesInternal(lat, lng, pan, false);
+      lastValidCoordinatesRef.current = { lat, lng };
     });
   };
 
@@ -404,11 +410,12 @@ export default function AdminUsersPage() {
 
     const startLat = Number(form.latitude);
     const startLng = Number(form.longitude);
-    const center = isValidCoordinate(startLat, startLng) ? { lat: startLat, lng: startLng } : PHILIPPINES_CENTER;
+    const hasStartCoordinates = isValidCoordinate(startLat, startLng);
+    const center = hasStartCoordinates ? { lat: startLat, lng: startLng } : PHILIPPINES_CENTER;
 
     const map = new googleObj.maps.Map(mapCanvasRef.current, {
       center,
-      zoom: isValidCoordinate(startLat, startLng) ? 15 : 11,
+      zoom: hasStartCoordinates ? 15 : 11,
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
@@ -419,10 +426,48 @@ export default function AdminUsersPage() {
       position: center,
       draggable: true,
       title: 'Barangay/Clinic Location',
+      visible: hasStartCoordinates,
     });
 
-    if (isValidCoordinate(startLat, startLng)) {
+    // In some layouts the map can render before the container size is finalized.
+    // Triggering a resize + recenter helps prevent a blank/partial map view.
+    if (googleObj?.maps?.event?.trigger) {
+      requestAnimationFrame(() => {
+        try {
+          googleObj.maps.event.trigger(map, 'resize');
+          map.setCenter(center);
+        } catch {
+          // ignore resize errors
+        }
+      });
+    }
+
+    if (hasStartCoordinates) {
       lastValidCoordinatesRef.current = { lat: startLat, lng: startLng };
+    }
+
+    if (isMunicipalAdmin && adminCityMunicipality.trim() && !hasStartCoordinates) {
+      if (!geocoderRef.current) {
+        geocoderRef.current = new googleObj.maps.Geocoder();
+      }
+      const requestId = ++geocodeRequestRef.current;
+      geocoderRef.current.geocode({ address: adminCityMunicipality.trim(), region: 'PH' }, (results: any, status: string) => {
+        if (requestId !== geocodeRequestRef.current) return;
+        if (status !== 'OK' || !Array.isArray(results) || !results[0]?.geometry?.location) return;
+        const loc = results[0].geometry.location;
+        const resolvedLat = Number(loc.lat?.());
+        const resolvedLng = Number(loc.lng?.());
+        if (!isValidCoordinate(resolvedLat, resolvedLng)) return;
+        const resolved = { lat: resolvedLat, lng: resolvedLng };
+        map.setCenter(resolved);
+        map.setZoom(12);
+        marker.setPosition(resolved);
+        if (typeof marker.setVisible === 'function') {
+          marker.setVisible(false);
+        }
+        setMapError('');
+        setMapNotice(`Map centered on ${adminCityMunicipality}. Click the map to set the facility location.`);
+      });
     }
 
     clickListenerRef.current = map.addListener('click', (event: any) => {
@@ -530,6 +575,9 @@ export default function AdminUsersPage() {
     if (!isValidCoordinate(lat, lng)) return;
     const next = { lat, lng };
     markerRef.current.setPosition(next);
+    if (typeof markerRef.current.setVisible === 'function') {
+      markerRef.current.setVisible(true);
+    }
     mapInstanceRef.current.panTo(next);
   }, [form.latitude, form.longitude, mapReady]);
 

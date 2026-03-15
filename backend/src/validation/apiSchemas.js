@@ -93,6 +93,7 @@ export const fallInsightSchema = z
 export const trendInsightQuerySchema = z.object({
   patientId: optionalObjectIdSchema,
   language: aiLanguageSchema,
+  includeInsight: booleanInputSchema.optional(),
 });
 
 export const trendCompareQuerySchema = z.object({
@@ -105,11 +106,17 @@ export const summaryInsightQuerySchema = z.object({
   patientId: optionalObjectIdSchema,
   days: z.coerce.number().int().min(1, 'days must be at least 1').max(30, 'days must be at most 30').optional(),
   language: aiLanguageSchema,
+  includeInsight: booleanInputSchema.optional(),
 });
 
 export const alertListQuerySchema = z.object({
   patientId: optionalObjectIdSchema,
   includeInsights: booleanInputSchema.optional(),
+  limit: z.coerce.number().int().min(1, 'limit must be at least 1').max(100, 'limit must be at most 100').optional(),
+});
+
+export const aiInsightListQuerySchema = z.object({
+  patientId: optionalObjectIdSchema,
   limit: z.coerce.number().int().min(1, 'limit must be at least 1').max(100, 'limit must be at most 100').optional(),
 });
 
@@ -217,6 +224,13 @@ export const adminLogsQuerySchema = z.object({
   page: z.coerce.number().int().min(1, 'page must be at least 1').max(100000, 'page is too large').optional(),
   limit: z.coerce.number().int().min(1, 'limit must be at least 1').max(500, 'limit must be at most 500').optional(),
 });
+
+export const adminSelfPasswordUpdateSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'currentPassword is required'),
+    newPassword: z.string().min(1, 'newPassword is required'),
+  })
+  .strict();
 
 export const blockchainMetricsQuerySchema = z.object({
   days: z.coerce.number().int().min(1, 'days must be at least 1').max(30, 'days must be at most 30').optional(),

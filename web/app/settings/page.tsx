@@ -15,7 +15,7 @@ import { getSession } from '@/lib/auth';
 import { useDashboardRole } from '@/hooks/use-dashboard-role';
 import { fetchMyPatientProfile, fetchMyPatientRecords, updateMyPatientProfile, downloadTextFile } from '@/lib/patient-role';
 import { fetchMyProviderProfile, updateMyProviderProfile } from '@/lib/provider-role';
-import { exportAdminJson, fetchGovernanceSettings, updateGovernanceSettings } from '@/lib/admin-role';
+import { exportAdminJson, fetchGovernanceSettings, updateGovernanceSettings, updateMyAdminPassword } from '@/lib/admin-role';
 
 type NotificationPrefs = { alerts: boolean; emails: boolean; sms: boolean };
 type PatientForm = {
@@ -51,6 +51,10 @@ export default function SettingsPage() {
   const router = useRouter();
   const { role, sessionUser, logout } = useDashboardRole();
   const session = getSession();
+  const adminScope = role === 'admin' ? (sessionUser?.adminScope ?? session?.adminScope ?? 'global') : undefined;
+  const isGlobalAdmin = role === 'admin' && adminScope === 'global';
+  const isMunicipalAdmin = role === 'admin' && adminScope === 'municipal';
+  const adminCoverageTierLabel = isMunicipalAdmin ? (sessionUser?.adminCoverageTierLabel ?? 'Starter Coverage') : '';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -63,6 +67,12 @@ export default function SettingsPage() {
   const [patientForm, setPatientForm] = useState<PatientForm | null>(null);
   const [providerForm, setProviderForm] = useState<ProviderForm | null>(null);
   const [adminForm, setAdminForm] = useState<AdminForm | null>(null);
+  const [adminPasswordSaving, setAdminPasswordSaving] = useState(false);
+  const [adminPasswordForm, setAdminPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmNewPassword: '',
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -138,31 +148,38 @@ export default function SettingsPage() {
         return;
       }
 
-      const res = await fetchGovernanceSettings();
-      if (!active) return;
-      if (res.error || !res.dataGovernance || !res.performanceThresholds) {
-        setError(res.error ?? 'Failed to load admin settings');
-      } else {
-        setAdminForm({
-          encryptionAtRest: res.dataGovernance.encryptionAtRest,
-          encryptionInTransit: res.dataGovernance.encryptionInTransit,
-          retentionDays: String(res.dataGovernance.retentionDays),
-          backupEnabled: res.dataGovernance.backupEnabled,
-          backupSchedule: res.dataGovernance.backupSchedule,
-          maxApiP95Ms: String(res.performanceThresholds.maxApiP95Ms),
-          suspiciousFailuresPerHour: String(res.performanceThresholds.suspiciousFailuresPerHour),
-        });
+      if (role === 'admin') {
+        if (isGlobalAdmin) {
+          const res = await fetchGovernanceSettings();
+          if (!active) return;
+          if (res.error || !res.dataGovernance || !res.performanceThresholds) {
+            setError(res.error ?? 'Failed to load admin settings');
+            setAdminForm(null);
+          } else {
+            setAdminForm({
+              encryptionAtRest: res.dataGovernance.encryptionAtRest,
+              encryptionInTransit: res.dataGovernance.encryptionInTransit,
+              retentionDays: String(res.dataGovernance.retentionDays),
+              backupEnabled: res.dataGovernance.backupEnabled,
+              backupSchedule: res.dataGovernance.backupSchedule,
+              maxApiP95Ms: String(res.performanceThresholds.maxApiP95Ms),
+              suspiciousFailuresPerHour: String(res.performanceThresholds.suspiciousFailuresPerHour),
+            });
+          }
+        } else {
+          setAdminForm(null);
+        }
+        setPatientForm(null);
+        setProviderForm(null);
+        setLoading(false);
       }
-      setPatientForm(null);
-      setProviderForm(null);
-      setLoading(false);
     };
 
     void load();
     return () => {
       active = false;
     };
-  }, [role, sessionUser?.email, sessionUser?.name]);
+  }, [isGlobalAdmin, role, sessionUser?.email, sessionUser?.name]);
   const saveRoleSettings = async () => {
     setSaving(true);
     setError('');
@@ -282,6 +299,37 @@ export default function SettingsPage() {
     setSaving(false);
   };
 
+  const updateAdminPassword = async () => {
+    if (role !== 'admin') return;
+    setAdminPasswordSaving(true);
+    setError('');
+    setMessage('');
+
+    const currentPassword = adminPasswordForm.currentPassword;
+    const newPassword = adminPasswordForm.newPassword;
+    const confirmNewPassword = adminPasswordForm.confirmNewPassword;
+
+    if (!currentPassword || !newPassword) {
+      setError('Enter your current password and a new password.');
+      setAdminPasswordSaving(false);
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setError('New passwords do not match.');
+      setAdminPasswordSaving(false);
+      return;
+    }
+
+    const res = await updateMyAdminPassword({ currentPassword, newPassword });
+    if (res.error || !res.ok) {
+      setError(res.error ?? 'Failed to update password.');
+    } else {
+      setMessage('Password updated.');
+      setAdminPasswordForm({ currentPassword: '', newPassword: '', confirmNewPassword: '' });
+    }
+    setAdminPasswordSaving(false);
+  };
+
   const updatePrefs = (patch: Partial<NotificationPrefs>) => {
     setPrefs((prev) => {
       const next = { ...prev, ...patch };
@@ -347,7 +395,7 @@ export default function SettingsPage() {
     if (loading || saving) return true;
     if (role === 'patient') return !patientForm;
     if (role === 'provider') return !providerForm;
-    return !adminForm;
+    return true;
   }, [adminForm, loading, patientForm, providerForm, role, saving]);
 
   return (
@@ -438,10 +486,22 @@ export default function SettingsPage() {
                 ) : null}
 
                 {role === 'admin' ? (
-                  <p className="text-sm text-muted-foreground">Admin profile identity is session-managed. Use System tab to change governance settings.</p>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="font-semibold">Email:</span> {session?.email ?? 'N/A'}</p>
+                    <p><span className="font-semibold">Scope:</span> {adminScope === 'municipal' ? 'Municipal' : 'Global'}</p>
+                    {isMunicipalAdmin ? (
+                      <p><span className="font-semibold">City / Municipality:</span> {sessionUser?.adminCityMunicipality ?? 'N/A'}</p>
+                    ) : null}
+                    {isMunicipalAdmin ? (
+                      <p><span className="font-semibold">Current Plan:</span> {adminCoverageTierLabel}</p>
+                    ) : null}
+                    <p className="text-sm text-muted-foreground">Admin profile identity is session-managed. Use Security tab to change your password.</p>
+                  </div>
                 ) : null}
 
-                <Button className="w-full" onClick={saveRoleSettings} disabled={saveDisabled}><Save className="h-4 w-4 mr-2" />{saving ? 'Saving...' : 'Save Changes'}</Button>
+                {role !== 'admin' ? (
+                  <Button className="w-full" onClick={saveRoleSettings} disabled={saveDisabled}><Save className="h-4 w-4 mr-2" />{saving ? 'Saving...' : 'Save Changes'}</Button>
+                ) : null}
               </CardContent>
             </Card>
           </TabsContent>
@@ -455,10 +515,78 @@ export default function SettingsPage() {
               <CardContent className="space-y-2 text-sm">
                 <p><span className="font-semibold">Role:</span> <span className="capitalize">{role}</span></p>
                 <p><span className="font-semibold">Email:</span> {session?.email ?? 'N/A'}</p>
+                {role === 'admin' ? (
+                  <>
+                    <p><span className="font-semibold">Scope:</span> {adminScope === 'municipal' ? 'Municipal' : 'Global'}</p>
+                    {isMunicipalAdmin ? (
+                      <p><span className="font-semibold">City / Municipality:</span> {sessionUser?.adminCityMunicipality ?? 'N/A'}</p>
+                    ) : null}
+                    {isMunicipalAdmin ? (
+                      <p><span className="font-semibold">Current Plan:</span> {adminCoverageTierLabel}</p>
+                    ) : null}
+                  </>
+                ) : null}
                 <p><span className="font-semibold">User ID:</span> {session?.id ?? 'N/A'}</p>
                 <p><span className="font-semibold">Login Time:</span> {session?.loginTime ? new Date(session.loginTime).toLocaleString() : 'N/A'}</p>
               </CardContent>
             </Card>
+
+            {role === 'admin' ? (
+              <Card className="glass">
+                <CardHeader>
+                  <CardTitle>Change Password</CardTitle>
+                  <CardDescription>Update your admin account password.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Current Password</Label>
+                      <Input
+                        type="password"
+                        autoComplete="current-password"
+                        value={adminPasswordForm.currentPassword}
+                        onChange={(e) => setAdminPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
+                        disabled={adminPasswordSaving || loading}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>New Password</Label>
+                      <Input
+                        type="password"
+                        autoComplete="new-password"
+                        value={adminPasswordForm.newPassword}
+                        onChange={(e) => setAdminPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                        disabled={adminPasswordSaving || loading}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Confirm New Password</Label>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      value={adminPasswordForm.confirmNewPassword}
+                      onChange={(e) => setAdminPasswordForm((prev) => ({ ...prev, confirmNewPassword: e.target.value }))}
+                      disabled={adminPasswordSaving || loading}
+                    />
+                  </div>
+
+                  <Button
+                    className="w-full"
+                    onClick={updateAdminPassword}
+                    disabled={
+                      loading ||
+                      adminPasswordSaving ||
+                      !adminPasswordForm.currentPassword ||
+                      !adminPasswordForm.newPassword ||
+                      adminPasswordForm.newPassword !== adminPasswordForm.confirmNewPassword
+                    }
+                  >
+                    {adminPasswordSaving ? 'Updating...' : 'Update Password'}
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : null}
           </TabsContent>
 
           <TabsContent value="notifications" className="space-y-4">
@@ -479,23 +607,33 @@ export default function SettingsPage() {
             <Card className="glass glow-cyan">
               <CardHeader>
                 <CardTitle>System Configuration</CardTitle>
-                <CardDescription>{role === 'admin' ? 'Live governance settings from backend.' : 'Read-only for non-admin roles.'}</CardDescription>
+                <CardDescription>
+                  {role !== 'admin'
+                    ? 'Read-only for non-admin roles.'
+                    : isGlobalAdmin
+                      ? 'Live governance settings from backend.'
+                      : 'Global admin scope is required to view governance settings.'}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {role === 'admin' ? (
-                  <>
-                    <div className="flex items-center justify-between"><Label>Encryption At Rest</Label><Switch checked={adminForm?.encryptionAtRest ?? false} onCheckedChange={(checked) => setAdminForm((prev) => (prev ? { ...prev, encryptionAtRest: checked } : prev))} disabled={!adminForm || loading} /></div>
-                    <div className="flex items-center justify-between"><Label>Encryption In Transit</Label><Switch checked={adminForm?.encryptionInTransit ?? false} onCheckedChange={(checked) => setAdminForm((prev) => (prev ? { ...prev, encryptionInTransit: checked } : prev))} disabled={!adminForm || loading} /></div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2"><Label>Retention Days</Label><Input value={adminForm?.retentionDays ?? ''} onChange={(e) => setAdminForm((prev) => (prev ? { ...prev, retentionDays: e.target.value } : prev))} disabled={!adminForm || loading} /></div>
-                      <div className="space-y-2"><Label>Backup Schedule</Label><Input value={adminForm?.backupSchedule ?? ''} onChange={(e) => setAdminForm((prev) => (prev ? { ...prev, backupSchedule: e.target.value } : prev))} disabled={!adminForm || loading} /></div>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2"><Label>Max API P95 (ms)</Label><Input value={adminForm?.maxApiP95Ms ?? ''} onChange={(e) => setAdminForm((prev) => (prev ? { ...prev, maxApiP95Ms: e.target.value } : prev))} disabled={!adminForm || loading} /></div>
-                      <div className="space-y-2"><Label>Suspicious Failures/Hr</Label><Input value={adminForm?.suspiciousFailuresPerHour ?? ''} onChange={(e) => setAdminForm((prev) => (prev ? { ...prev, suspiciousFailuresPerHour: e.target.value } : prev))} disabled={!adminForm || loading} /></div>
-                    </div>
-                    <Button className="w-full" onClick={saveRoleSettings} disabled={!adminForm || loading || saving}><Save className="h-4 w-4 mr-2" />{saving ? 'Saving...' : 'Save System Settings'}</Button>
-                  </>
+                  isGlobalAdmin ? (
+                    <>
+                      <div className="flex items-center justify-between"><Label>Encryption At Rest</Label><Switch checked={adminForm?.encryptionAtRest ?? false} onCheckedChange={(checked) => setAdminForm((prev) => (prev ? { ...prev, encryptionAtRest: checked } : prev))} disabled={!adminForm || loading} /></div>
+                      <div className="flex items-center justify-between"><Label>Encryption In Transit</Label><Switch checked={adminForm?.encryptionInTransit ?? false} onCheckedChange={(checked) => setAdminForm((prev) => (prev ? { ...prev, encryptionInTransit: checked } : prev))} disabled={!adminForm || loading} /></div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2"><Label>Retention Days</Label><Input value={adminForm?.retentionDays ?? ''} onChange={(e) => setAdminForm((prev) => (prev ? { ...prev, retentionDays: e.target.value } : prev))} disabled={!adminForm || loading} /></div>
+                        <div className="space-y-2"><Label>Backup Schedule</Label><Input value={adminForm?.backupSchedule ?? ''} onChange={(e) => setAdminForm((prev) => (prev ? { ...prev, backupSchedule: e.target.value } : prev))} disabled={!adminForm || loading} /></div>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2"><Label>Max API P95 (ms)</Label><Input value={adminForm?.maxApiP95Ms ?? ''} onChange={(e) => setAdminForm((prev) => (prev ? { ...prev, maxApiP95Ms: e.target.value } : prev))} disabled={!adminForm || loading} /></div>
+                        <div className="space-y-2"><Label>Suspicious Failures/Hr</Label><Input value={adminForm?.suspiciousFailuresPerHour ?? ''} onChange={(e) => setAdminForm((prev) => (prev ? { ...prev, suspiciousFailuresPerHour: e.target.value } : prev))} disabled={!adminForm || loading} /></div>
+                      </div>
+                      <Button className="w-full" onClick={saveRoleSettings} disabled={!adminForm || loading || saving}><Save className="h-4 w-4 mr-2" />{saving ? 'Saving...' : 'Save System Settings'}</Button>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Global admin scope is required to manage system governance.</p>
+                  )
                 ) : (
                   <p className="text-sm text-muted-foreground">System governance is managed by administrator accounts only.</p>
                 )}

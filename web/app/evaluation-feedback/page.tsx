@@ -5,6 +5,7 @@ import DashboardLayout from '@/components/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
+  fetchMyAiInsights,
   fetchMyAlerts,
   fetchMyHealthSummary,
   fetchMyPatientRecords,
@@ -45,23 +46,28 @@ export default function EvaluationFeedbackPage() {
     let active = true;
 
     (async () => {
-      const [summaryRes, trendRes, alertsRes, recordsRes] = await Promise.all([
-        fetchMyHealthSummary(30),
-        fetchMyTrendInsight(),
+      const [insightsRes, summaryRes, trendRes, alertsRes, recordsRes] = await Promise.all([
+        fetchMyAiInsights(1),
+        fetchMyHealthSummary(30, {}, 'en', false),
+        fetchMyTrendInsight({}, 'en', false),
         fetchMyAlerts(50),
         fetchMyPatientRecords(),
       ]);
 
       if (!active) return;
 
-      if (summaryRes.error && trendRes.error && alertsRes.error && recordsRes.error) {
-        setError(summaryRes.error || trendRes.error || alertsRes.error || recordsRes.error || 'Failed to load evaluation data.');
+      if (insightsRes.error && summaryRes.error && trendRes.error && alertsRes.error && recordsRes.error) {
+        setError(insightsRes.error || summaryRes.error || trendRes.error || alertsRes.error || recordsRes.error || 'Failed to load evaluation data.');
         setLoading(false);
         return;
       }
 
+      if (!insightsRes.error) {
+        const latestInsight = (insightsRes.insights ?? [])[0] ?? null;
+        setSummaryInsight(String(latestInsight?.text ?? '').trim());
+      }
+
       if (!summaryRes.error && summaryRes.data) {
-        setSummaryInsight(summaryRes.data.insight ?? '');
         setSummaryObservations(summaryRes.data.summaryData?.observations ?? []);
         setOverallRisk(summaryRes.data.summaryData?.overallRisk ?? 'LOW');
         setFallEvents(Number(summaryRes.data.summaryData?.fallEvents ?? 0));

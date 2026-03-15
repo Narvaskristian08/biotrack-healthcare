@@ -21,6 +21,7 @@ import {
 import StatsCard from './stats-card';
 import {
   downloadTextFile,
+  fetchMyAiInsights,
   fetchMyAlerts,
   fetchMyHealthSummary,
   fetchMyPatientRecords,
@@ -301,11 +302,12 @@ export default function PatientDashboard() {
           }
           : {};
 
-      const [recordsRes, trendRes, summaryRes, alertsRes] = await Promise.all([
+      const [recordsRes, trendRes, summaryRes, alertsRes, insightsRes] = await Promise.all([
         fetchMyPatientRecords(requestOptions),
-        fetchMyTrendInsight(requestOptions),
-        fetchMyHealthSummary(7, requestOptions),
+        fetchMyTrendInsight(requestOptions, 'en', false),
+        fetchMyHealthSummary(7, requestOptions, 'en', false),
         fetchMyAlerts(20, requestOptions),
+        fetchMyAiInsights(1, requestOptions),
       ]);
 
       if (!active) return;
@@ -331,8 +333,10 @@ export default function PatientDashboard() {
 
         const nextSummaryFallEvents = summaryRes.error ? prev.fallEvents : Number(summaryRes.data?.summaryData?.fallEvents ?? 0);
 
-        const errors = [recordsRes.error, trendRes.error, summaryRes.error, alertsRes.error].filter(Boolean);
-        const hasAnySuccess = [recordsRes.error, trendRes.error, summaryRes.error, alertsRes.error].some((error) => !error);
+        const errors = [recordsRes.error, trendRes.error, summaryRes.error, alertsRes.error, insightsRes.error].filter(Boolean);
+        const hasAnySuccess = [recordsRes.error, trendRes.error, summaryRes.error, alertsRes.error, insightsRes.error].some((error) => !error);
+
+        const latestInsight = insightsRes.error ? null : (insightsRes.insights ?? [])[0] ?? null;
 
         return {
           loading: false,
@@ -341,7 +345,7 @@ export default function PatientDashboard() {
           records: nextRecords,
           trend: nextTrend,
           trendLabel: nextTrendLabel,
-          summaryText: summaryRes.error ? prev.summaryText : summaryRes.data?.insight ?? '',
+          summaryText: insightsRes.error ? prev.summaryText : String(latestInsight?.text ?? ''),
           fallEvents: nextSummaryFallEvents,
           alerts: nextAlerts,
           lastUpdatedAt: hasAnySuccess ? new Date().toISOString() : prev.lastUpdatedAt,

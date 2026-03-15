@@ -393,6 +393,20 @@ export async function markRestore(): Promise<{ lastRestoreAt?: string; error?: s
   return { lastRestoreAt: result.data?.lastRestoreAt };
 }
 
+export async function updateMyAdminPassword(payload: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    assertAdminSession();
+    const result = await apiPatch<{ ok: boolean }>('/admin/me/password', payload);
+    if (result.error) return { error: result.error.message };
+    return { ok: Boolean(result.data?.ok) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update admin password' };
+  }
+}
+
 export function exportAdminJson(filename: string, payload: unknown) {
   downloadTextFile(filename, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
 }

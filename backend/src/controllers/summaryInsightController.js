@@ -8,15 +8,17 @@ export async function getHealthSummary(req, res, next) {
     const userId = await resolveInsightPatientId(req, { source: 'query', field: 'patientId' });
     const days = Number(req.query.days ?? 7);
     const language = normalizeAiLanguage(req.query?.language, 'en');
+    const includeInsight = req.query?.includeInsight !== undefined ? Boolean(req.query.includeInsight) : true;
 
     const summaryData = await buildHealthSummary(userId, days, req.context.healthCenterId);
-    const insight = await generateSummaryInsight(summaryData, { language });
+    const insight = includeInsight ? await generateSummaryInsight(summaryData, { language }) : '';
 
     res.json({
       success: true,
       summaryData,
       insight,
       language,
+      includeInsight,
     });
   } catch (err) {
     next(err);

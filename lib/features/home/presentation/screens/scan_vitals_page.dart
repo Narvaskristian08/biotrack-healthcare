@@ -206,28 +206,67 @@ class _ScanVitalsViewState extends State<_ScanVitalsView> {
           const SizedBox(height: 20),
 
           // Control Button
-          ElevatedButton(
-            onPressed: () {
-              if (controller.scanComplete) {
-                controller.startScan(); // Resets the scan
-              } else {
-                _handleFinish(controller); // Finishes early
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4C9A2A),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+          if (controller.scanComplete)
+            ElevatedButton(
+              onPressed: controller.startScan,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4C9A2A),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(26),
+                ),
+              ),
+              child: const Text('Scan Again'),
+            )
+          else
+            Row(
+              children: [
+                if (controller.canSwitchLens) ...[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: controller.restartWithNextLens,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF4C9A2A),
+                        side: const BorderSide(color: Color(0xFF4C9A2A)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(26),
+                        ),
+                      ),
+                      child: Text(controller.activeLensLabel),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _handleFinish(controller),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4C9A2A),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(26),
+                      ),
+                    ),
+                    child: const Text('Finish Early'),
+                  ),
+                ),
+              ],
             ),
-            child: Text(controller.scanComplete ? 'Scan Again' : 'Finish Early'),
-          ),
         ],
       ),
     );
   }
 
   Future<void> _showCompletionPopup(BuildContext context, ScanVitalsController controller, bool successfulScan, bool savedToServer, String? saveErrorMessage) async {
+    final failureMessage = !controller.torchAvailable
+        ? 'No finger was detected. Torch is unavailable on this camera—use a bright light source and cover the lens fully, then retry.'
+        : controller.canSwitchLens
+            ? 'No finger was detected. Cover the camera lens and flash fully, or tap ${controller.activeLensLabel} to try another back camera.'
+            : 'No finger was detected. Cover the camera lens and flash fully. Some phones have the flash too far from the camera for this scan to work.';
+
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -236,7 +275,7 @@ class _ScanVitalsViewState extends State<_ScanVitalsView> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(!successfulScan ? 'Scanning Unsuccessful' : 'Scan Successful'),
           content: Text(!successfulScan 
-            ? 'No finger was detected. Please place your fingertip over the camera and flash, then try again.' 
+            ? failureMessage
             : 'Your vitals have been recorded. ${savedToServer ? "" : "\n\nNote: $saveErrorMessage"}'),
           actions: [
             TextButton(

@@ -1,7 +1,8 @@
 import HealthRecord from '../models/HealthRecord.js';
 import Alert from '../models/Alert.js';
+import AiInsight from '../models/AiInsight.js';
 import { evaluateAlerts } from '../services/alertEngine.service.js';
-import { computeRiskLevel, runHealthInference } from '../services/ai/inference.service.js';
+import { computeRiskLevel, generateHealthInsight } from '../services/ai/inference.service.js';
 import { resolveInsightPatientId } from '../services/ai/subjectResolver.service.js';
 import { encryptHealthTelemetryForStorage } from '../services/healthTelemetryEncryption.service.js';
 import { analyzeUserTrend } from '../services/trendAnalysis.service.js';
@@ -59,9 +60,9 @@ export async function analyzeVitals(req, res, next) {
       fallDetected: toBoolean(vitals.fallDetected),
     };
 
-    const aiResult = await runHealthInference(normalizedVitals, { language });
     const riskLevel = computeRiskLevel(normalizedVitals);
     const activityLevel = normalizeActivityLevel(vitals.activity);
+    normalizedVitals.activityLevel = activityLevel;
 
     const previous = await HealthRecord.findOne({
       healthCenterId: req.context.healthCenterId,
@@ -93,10 +94,63 @@ export async function analyzeVitals(req, res, next) {
       trend: trendData.trend,
     });
 
+    const insightResult = await generateHealthInsight(normalizedVitals, {
+      language,
+      riskHint: riskLevel,
+      context: {
+        previousRiskLevel: previous?.riskLevel ?? null,
+        trendData,
+        alerts,
+      },
+    });
+
+    const aiResult = insightResult.text;
+    let insightId = null;
+
+    try {
+      const stored = await AiInsight.create({
+        healthCenterId: req.context.healthCenterId,
+        userId: patientId,
+        healthRecordId: record._id,
+        language,
+        riskLevel,
+        provider: 'openrouter',
+        model: insightResult.model,
+        promptVersion: insightResult.promptVersion,
+        usedFallback: Boolean(insightResult.usedFallback),
+        timedOut: Boolean(insightResult.timedOut),
+        aiRequestMs: typeof insightResult.aiRequestMs === 'number' ? insightResult.aiRequestMs : null,
+        validationIssues: Array.isArray(insightResult.validationIssues) ? insightResult.validationIssues : [],
+        inputContext: {
+          heartRate,
+          activityInput: vitals.activity ?? null,
+          activityLevel,
+          fallDetected: normalizedVitals.fallDetected,
+          ageRange: vitals.ageRange ?? null,
+          signalQuality: vitals.signalQuality ?? null,
+          fingerDetected: vitals.fingerDetected ?? null,
+          movementIntensity: vitals.movementIntensity ?? null,
+          previousRiskLevel: previous?.riskLevel ?? null,
+          trendData,
+          alerts: (alerts ?? []).map((alert) => ({
+            type: alert?.type ?? null,
+            severity: alert?.severity ?? null,
+          })),
+        },
+        output: insightResult.insight ?? null,
+        text: aiResult,
+      });
+
+      insightId = stored?._id ?? null;
+    } catch (err) {
+      console.error('AI INSIGHT SAVE ERROR:', err?.message || err);
+    }
+
     res.json({
       success: true,
       aiResult,
       language,
+      insightId,
       record: {
         id: record._id,
         userId: record.userId,
@@ -118,9 +172,10 @@ export async function clearMyMonitoringHistory(req, res, next) {
       return res.status(401).json({ error: { message: 'Patient session context is required' } });
     }
 
-    const [healthRecordResult, alertResult] = await Promise.all([
+    const [healthRecordResult, alertResult, insightResult] = await Promise.all([
       HealthRecord.deleteMany({ userId: patientId, healthCenterId }),
       Alert.deleteMany({ userId: patientId }),
+      AiInsight.deleteMany({ userId: patientId, healthCenterId }),
     ]);
 
     await writeAuditLog({
@@ -131,6 +186,7 @@ export async function clearMyMonitoringHistory(req, res, next) {
       after: {
         deletedHealthRecords: Number(healthRecordResult?.deletedCount ?? 0),
         deletedAlerts: Number(alertResult?.deletedCount ?? 0),
+        deletedAiInsights: Number(insightResult?.deletedCount ?? 0),
       },
     });
 
@@ -140,6 +196,7 @@ export async function clearMyMonitoringHistory(req, res, next) {
       deleted: {
         healthRecords: Number(healthRecordResult?.deletedCount ?? 0),
         alerts: Number(alertResult?.deletedCount ?? 0),
+        aiInsights: Number(insightResult?.deletedCount ?? 0),
       },
     });
   } catch (err) {

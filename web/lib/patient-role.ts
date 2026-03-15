@@ -99,6 +99,18 @@ export interface AlertEntry {
   createdAt: string;
 }
 
+export interface AiInsightEntry {
+  id: string;
+  healthRecordId: string;
+  riskLevel: string;
+  language: string;
+  text: string;
+  usedFallback: boolean;
+  model?: string;
+  validationIssues?: string[];
+  createdAt: string;
+}
+
 export interface TrendInsightResponse {
   success: boolean;
   trendData: {
@@ -152,6 +164,7 @@ export interface ClearMonitoringHistoryResponse {
   deleted?: {
     healthRecords: number;
     alerts: number;
+    aiInsights?: number;
   };
 }
 
@@ -268,12 +281,15 @@ export async function requestMyRecordExtractionOnChain(
 
 export async function fetchMyTrendInsight(
   requestOptions: RequestInit = {},
-  language = 'en'
+  language = 'en',
+  includeInsight = true
 ): Promise<{ data?: TrendInsightResponse; error?: string }> {
   try {
     // Ensure bearer token is present before calling protected endpoints.
     getPatientIdFromSession();
-    const endpoint = `/ai/trend-insight?language=${encodeURIComponent(language)}`;
+    const query = new URLSearchParams({ language: String(language ?? 'en') });
+    if (!includeInsight) query.set('includeInsight', 'false');
+    const endpoint = `/ai/trend-insight?${query.toString()}`;
     const result = await apiGet<TrendInsightResponse>(endpoint, requestOptions);
     if (result.error) return { error: result.error.message };
     return { data: result.data };
@@ -285,16 +301,34 @@ export async function fetchMyTrendInsight(
 export async function fetchMyHealthSummary(
   days = 7,
   requestOptions: RequestInit = {},
-  language = 'en'
+  language = 'en',
+  includeInsight = true
 ): Promise<{ data?: SummaryInsightResponse; error?: string }> {
   try {
     getPatientIdFromSession();
-    const endpoint = `/ai/summary?days=${days}&language=${encodeURIComponent(language)}`;
+    const query = new URLSearchParams({ days: String(days), language: String(language ?? 'en') });
+    if (!includeInsight) query.set('includeInsight', 'false');
+    const endpoint = `/ai/summary?${query.toString()}`;
     const result = await apiGet<SummaryInsightResponse>(endpoint, requestOptions);
     if (result.error) return { error: result.error.message };
     return { data: result.data };
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to fetch health summary' };
+  }
+}
+
+export async function fetchMyAiInsights(
+  limit = 20,
+  requestOptions: RequestInit = {}
+): Promise<{ insights?: AiInsightEntry[]; error?: string }> {
+  try {
+    getPatientIdFromSession();
+    const endpoint = `/ai/insights?limit=${encodeURIComponent(String(limit))}`;
+    const result = await apiGet<{ success: boolean; insights: AiInsightEntry[] }>(endpoint, requestOptions);
+    if (result.error) return { error: result.error.message };
+    return { insights: result.data?.insights ?? [] };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to fetch AI insights' };
   }
 }
 

@@ -399,6 +399,54 @@ export async function loginAdmin(req, res) {
   });
 }
 
+export async function updateMyAdminPassword(req, res) {
+  const adminId = req.context?.adminId;
+  if (!adminId) {
+    return res.status(401).json({ error: { message: 'Admin authentication is required' } });
+  }
+
+  const { currentPassword, newPassword } = req.body ?? {};
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: { message: 'currentPassword and newPassword are required' } });
+  }
+
+  const admin = await Admin.findById(adminId);
+  if (!admin) {
+    return res.status(401).json({ error: { message: 'Admin account not found' } });
+  }
+
+  const ok = await verifyPassword(String(currentPassword), admin.passwordHash);
+  if (!ok) {
+    await writeAuditLog({
+      req,
+      action: 'ADMIN.PASSWORD.UPDATE_SELF',
+      entityType: 'Admin',
+      entityId: admin._id,
+      outcome: 'failure',
+      reason: 'Invalid current password',
+    });
+    return res.status(400).json({ error: { message: 'Current password is incorrect' } });
+  }
+
+  const passwordCheck = validatePasswordPolicy(newPassword);
+  if (!passwordCheck.ok) {
+    return res.status(400).json({ error: { message: passwordCheck.message } });
+  }
+
+  admin.passwordHash = await hashPassword(String(newPassword));
+  await admin.save();
+
+  await writeAuditLog({
+    req,
+    action: 'ADMIN.PASSWORD.UPDATE_SELF',
+    entityType: 'Admin',
+    entityId: admin._id,
+    outcome: 'success',
+  });
+
+  return res.json({ ok: true });
+}
+
 export async function adminCreateHealthCenter(req, res) {
   const scopeContext = resolveAdminScopeContext(req);
   if (!ensureMunicipalScope(scopeContext, res)) return;

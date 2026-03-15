@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import DashboardLayout from '@/components/dashboard-layout';
 import { PatientPageContentSkeleton } from '@/components/patient-page-skeleton';
-import { downloadTextFile, fetchMyHealthSummary, fetchMyPatientRecords, type PatientRecord } from '@/lib/patient-role';
+import { downloadTextFile, fetchMyAiInsights, fetchMyPatientRecords, type PatientRecord } from '@/lib/patient-role';
 
 type HeartRatePoint = {
   label: string;
@@ -379,7 +379,7 @@ export default function ReportsDownloadsPage() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const [recordsRes, summaryRes] = await Promise.all([fetchMyPatientRecords(), fetchMyHealthSummary(30)]);
+      const [recordsRes, insightsRes] = await Promise.all([fetchMyPatientRecords(), fetchMyAiInsights(1)]);
       if (!active) return;
       setLoading(false);
       if (recordsRes.error) {
@@ -387,7 +387,12 @@ export default function ReportsDownloadsPage() {
         return;
       }
       setRecords(recordsRes.records ?? []);
-      setSummary(summaryRes.data?.insight ?? '');
+      if (insightsRes.error) {
+        setSummary('');
+        return;
+      }
+      const latestInsight = (insightsRes.insights ?? [])[0] ?? null;
+      setSummary(String(latestInsight?.text ?? '').trim());
     })();
     return () => {
       active = false;

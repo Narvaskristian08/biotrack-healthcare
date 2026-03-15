@@ -143,7 +143,8 @@ Quick fixes:
 2. Warm finger first, then retry.
 3. Try index finger, then thumb.
 4. Ensure flashlight is on and lens is fully covered.
-5. Retest with minimal movement for full 25 seconds.
+5. If your phone has multiple back cameras, tap `Switch Lens` and retry (some lenses sit closer to the flash).
+6. Retest with minimal movement for full 25 seconds.
 
 ## 8. Motion/Fall Indicator Checks
 

@@ -20,6 +20,7 @@ class ScanVitalsController extends ChangeNotifier {
   static const int _clearBpmAfterLowQualityFrames = 42;
   static const int _minFrameIntervalMs = 80;
   static const int _maxLiveBpmSamples = 7;
+  static const Duration _hardwareHintDelay = Duration(seconds: 6);
 
   final HeartRateEstimator _heartRateEstimator = HeartRateEstimator(
     minSamplesForEstimate: 28,
@@ -31,6 +32,12 @@ class ScanVitalsController extends ChangeNotifier {
   StreamSubscription<AccelerometerEvent>? _accelerometerSub;
   StreamSubscription<GyroscopeEvent>? _gyroscopeSub;
   Timer? _progressTicker;
+
+  List<CameraDescription> _candidateCameras = const <CameraDescription>[];
+  int _preferredCameraIndex = 0;
+  int _activeCameraIndex = 0;
+  bool torchAvailable = true;
+  bool torchEnabled = false;
 
   bool initializing = true;
   bool scanComplete = false;
@@ -54,6 +61,9 @@ class ScanVitalsController extends ChangeNotifier {
   int _lowQualityFrameStreak = 0;
 
   Future<void> startScan() async {
+    scanComplete = true; // Stop any in-flight frame processing before teardown.
+    await _teardownCameraBestEffort();
+
     _resetState();
     notifyListeners();
 
@@ -108,26 +118,93 @@ class ScanVitalsController extends ChangeNotifier {
     final cameras = await availableCameras();
     if (cameras.isEmpty) throw Exception('No camera found');
 
-    final selected = cameras.firstWhere(
-      (c) => c.lensDirection == CameraLensDirection.back,
-      orElse: () => cameras.first,
+    final candidates = cameras
+        .where((c) => c.lensDirection == CameraLensDirection.back)
+        .toList(growable: true);
+    if (candidates.isEmpty) {
+      candidates.addAll(cameras);
+    }
+    candidates.sort(
+      (a, b) => _cameraSortScore(a.name).compareTo(_cameraSortScore(b.name)),
     );
+    _candidateCameras = candidates.toList(growable: false);
+    if (_preferredCameraIndex < 0 || _preferredCameraIndex >= _candidateCameras.length) {
+      _preferredCameraIndex = 0;
+    }
 
-    cameraController = CameraController(
-      selected,
-      ResolutionPreset.medium,
-      enableAudio: false,
-      imageFormatGroup: Platform.isIOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
-    );
+    final ordered = <CameraDescription>[
+      ..._candidateCameras.skip(_preferredCameraIndex),
+      ..._candidateCameras.take(_preferredCameraIndex),
+    ];
 
-    await cameraController!.initialize();
-    await cameraController!.lockCaptureOrientation(DeviceOrientation.portraitUp);
-    await cameraController!.setFlashMode(FlashMode.torch);
-    
-    try { await cameraController!.setExposureMode(ExposureMode.locked); } catch (_) {}
-    try { await cameraController!.setFocusMode(FocusMode.locked); } catch (_) {}
-    
-    await cameraController!.startImageStream(_onCameraFrame);
+    CameraController? selectedController;
+    CameraDescription? selectedCamera;
+    bool selectedTorchAvailable = true;
+    bool selectedTorchEnabled = false;
+
+    // Prefer a camera that supports torch; fall back to any camera if none do.
+    Object? lastError;
+    for (final requireTorch in <bool>[true, false]) {
+      for (final candidate in ordered) {
+        final controller = CameraController(
+          candidate,
+          ResolutionPreset.medium,
+          enableAudio: false,
+          imageFormatGroup:
+              Platform.isIOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
+        );
+
+        try {
+          await controller.initialize();
+          await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+
+          var torchOk = false;
+          var torchAvail = true;
+          try {
+            await controller.setFlashMode(FlashMode.torch);
+            torchOk = true;
+          } catch (_) {
+            torchAvail = false;
+          }
+
+          if (requireTorch && !torchOk) {
+            await controller.dispose();
+            continue;
+          }
+
+          try {
+            await controller.setExposureMode(ExposureMode.locked);
+          } catch (_) {}
+          try {
+            await controller.setFocusMode(FocusMode.locked);
+          } catch (_) {}
+
+          await controller.startImageStream(_onCameraFrame);
+
+          selectedController = controller;
+          selectedCamera = candidate;
+          selectedTorchAvailable = torchAvail;
+          selectedTorchEnabled = torchOk;
+          break;
+        } catch (e) {
+          lastError = e;
+          try {
+            await controller.dispose();
+          } catch (_) {}
+        }
+      }
+      if (selectedController != null) break;
+    }
+
+    if (selectedController == null || selectedCamera == null) {
+      throw Exception('Unable to initialize camera: ${lastError ?? "unknown error"}');
+    }
+
+    cameraController = selectedController;
+    _activeCameraIndex = _candidateCameras.indexWhere((c) => c.name == selectedCamera.name);
+    if (_activeCameraIndex < 0) _activeCameraIndex = 0;
+    torchAvailable = selectedTorchAvailable;
+    torchEnabled = selectedTorchEnabled;
   }
 
   void _onCameraFrame(CameraImage image) {
@@ -304,6 +381,38 @@ class ScanVitalsController extends ChangeNotifier {
   }
 
   double get signalQualityScore => (_heartRateEstimator.signalStrength * 24).clamp(0.0, 1.0);
+
+  bool get canSwitchLens => _candidateCameras.length > 1;
+  String get activeLensLabel {
+    if (_candidateCameras.isEmpty) return 'Switch Lens';
+    return 'Switch Lens (${_activeCameraIndex + 1}/${_candidateCameras.length})';
+  }
+
+  Future<void> restartWithNextLens() async {
+    if (_candidateCameras.length <= 1) return;
+    _preferredCameraIndex = (_activeCameraIndex + 1) % _candidateCameras.length;
+    await startScan();
+  }
+
+  Future<void> _teardownCameraBestEffort() async {
+    final controller = cameraController;
+    cameraController = null;
+    torchAvailable = true;
+    torchEnabled = false;
+
+    if (controller == null) return;
+    try {
+      if (controller.value.isStreamingImages) {
+        await controller.stopImageStream();
+      }
+    } catch (_) {}
+    try {
+      await controller.setFlashMode(FlashMode.off);
+    } catch (_) {}
+    try {
+      await controller.dispose();
+    } catch (_) {}
+  }
   
   String get movementLabel => VitalsScannerLogic.getMovementLabel(movementIntensity);
   String get timeLabel => VitalsScannerLogic.getTimeLabel(scanProgress, scanDuration);
@@ -333,6 +442,20 @@ class ScanVitalsController extends ChangeNotifier {
 
   String get qualityCoachMessage {
     if (!fingerDetected) {
+      if (!torchAvailable) {
+        return 'Cover the camera lens with your fingertip. Torch is unavailable—scan works best in bright light.';
+      }
+      final startedAt = scanStartedAt;
+      final shouldShowHardwareHint =
+          torchEnabled &&
+          startedAt != null &&
+          DateTime.now().difference(startedAt) >= _hardwareHintDelay;
+      if (shouldShowHardwareHint) {
+        if (canSwitchLens) {
+          return 'Cover the camera and flash fully. If your flash is far from the lens, tap Switch Lens and retry.';
+        }
+        return 'Cover the camera and flash fully. Some phones have the flash too far from the camera for this scan to work.';
+      }
       return 'Cover the camera and flash fully with your fingertip.';
     }
     if (movementIntensity > 2.8) {
@@ -361,5 +484,12 @@ class ScanVitalsController extends ChangeNotifier {
     _gyroscopeSub?.cancel();
     cameraController?.dispose();
     super.dispose();
+  }
+
+  static int _cameraSortScore(String name) {
+    final digits = RegExp(r'([0-9]+)').firstMatch(name)?.group(1);
+    final parsed = digits == null ? null : int.tryParse(digits);
+    if (parsed != null) return parsed;
+    return 999;
   }
 }
