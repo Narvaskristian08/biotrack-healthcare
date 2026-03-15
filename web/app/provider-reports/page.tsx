@@ -171,7 +171,7 @@ export default function ProviderReportsPage() {
           <CardHeader>
             <CardTitle className="text-base">Role Restrictions</CardTitle>
             <CardDescription>
-              Providers can export summaries and monitoring data, but cannot modify blockchain records, edit AI outputs, or change system-level configurations.
+              Providers can review assigned patient records, verify integrity proofs, and export care summaries, but they cannot manage system governance, municipal/global audit scope, or alter immutable on-chain history.
             </CardDescription>
           </CardHeader>
         </Card>

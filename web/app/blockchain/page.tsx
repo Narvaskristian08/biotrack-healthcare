@@ -84,8 +84,8 @@ export default function BlockchainPage() {
     return (
       <DashboardLayout>
         <div className="space-y-6">
-          <h1 className="text-3xl font-bold">Blockchain Management</h1>
-          <p className="text-muted-foreground">Provider/Admin blockchain tooling can be managed from this area.</p>
+          <h1 className="text-3xl font-bold">Blockchain Verification</h1>
+          <p className="text-muted-foreground">This view is reserved for patient proof review. Providers verify assigned records from the Records area, and admins supervise proof logs from Blockchain Management.</p>
         </div>
       </DashboardLayout>
     );

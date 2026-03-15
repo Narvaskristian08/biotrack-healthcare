@@ -34,8 +34,8 @@ test('patient self-registration keeps selected health center in persistence path
   const source = readSource('src/controllers/patientAuthController.js');
 
   assert.match(source, /patient = await Patient\.create\(\{[\s\S]*?healthCenterId,/);
-  assert.match(source, /Patient\.findOne\(\{ healthCenterId, email: normalizedEmail \}\)/);
-  assert.match(source, /Patient\.findOne\(\{ healthCenterId, contactNumber: normalizedContactNumber \}\)/);
+  assert.match(source, /Patient\.findOne\(\{ healthCenterId, emailHash: emailFields\.hash \}\)/);
+  assert.match(source, /Patient\.findOne\(\{ healthCenterId, contactNumberHash: contactFields\.hash \}\)/);
 });
 
 test('provider patient list is scoped to provider health center', async () => {
@@ -69,14 +69,16 @@ test('provider patient list is scoped to provider health center', async () => {
     await listPatients(req, res);
 
     assert.equal(res.statusCode, 200);
-    assert.deepEqual(res.body, {
-      patients: [{ _id: 'patient-1', healthCenterId: 'hc-001', firstName: 'Ana' }],
-    });
+    assert.equal(Array.isArray(res.body?.patients), true);
+    assert.equal(res.body?.patients?.length, 1);
+    assert.equal(res.body?.patients?.[0]?._id, 'patient-1');
+    assert.equal(res.body?.patients?.[0]?.healthCenterId, 'hc-001');
+    assert.equal(res.body?.patients?.[0]?.firstName, 'Ana');
     assert.equal(capturedQuery.healthCenterId, 'hc-001');
     assert.equal(capturedQuery.status, 'active');
     assert.deepEqual(
       capturedQuery.$or.map((entry) => Object.keys(entry)[0]),
-      ['lastName', 'firstName', 'email', 'mrn']
+      ['lastName', 'firstName', 'emailHash', 'mrnHash']
     );
   } finally {
     Patient.find = originalFind;

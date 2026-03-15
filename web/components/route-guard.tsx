@@ -21,13 +21,13 @@ const PUBLIC_PATHS = new Set([
 const AUTH_PAGES = new Set(['/login', '/register', '/forgot-password'])
 
 const COMMON_PROTECTED_PATHS = new Set([
-  '/blockchain',
-  '/blockchain-verification',
   '/help-support',
   '/settings',
 ])
 
 const PATIENT_PATHS = new Set([
+  '/blockchain',
+  '/blockchain-verification',
   '/patient-dashboard',
   '/ai-health-advisory',
   '/evaluation-feedback',

@@ -39,6 +39,8 @@ Protected (admin token required):
 - `GET /logs`
 - `GET /monitoring`
 - `GET /blockchain/overview`
+- `GET /blockchain/metrics`
+- `POST /blockchain/archive`
 - `GET /governance`
 - `PATCH /governance`
 - `POST /governance/backup`
@@ -47,6 +49,7 @@ Protected (admin token required):
 Notes:
 
 - Many admin routes also require capability checks via policy (`canManageUsers`, `canManagePolicies`, etc.).
+- Blockchain admin routes are for supervision and governance operations; admin accounts do not currently have per-admin blockchain identities.
 
 ## Health Centers (`/api/healthcenters`)
 
@@ -94,6 +97,7 @@ Notes:
 
 - Patient self-access enforcement is applied where relevant.
 - Role restrictions apply per endpoint (`healthcenter`, `patient`, or both).
+- `POST /:patientId/records` supports patient self-monitoring uploads and provider-side clinical entry; downstream integrity verification still uses the stored hash plus blockchain proof when available.
 
 ## Audit Logs (`/api/auditlogs`)
 

@@ -255,7 +255,7 @@ export default function ProfileSettingsPage() {
           <CardHeader>
             <CardTitle className="text-base">Restrictions Enforced</CardTitle>
             <CardDescription>
-              Patient accounts cannot access other patient data, cannot modify blockchain records, and cannot change system configuration.
+              Patient accounts can access only their own data. They may submit self-monitoring records through patient tools, but cannot manage other users, supervise system-wide blockchain logs, or change system configuration.
             </CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">

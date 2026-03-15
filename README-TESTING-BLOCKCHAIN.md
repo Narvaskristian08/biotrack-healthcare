@@ -16,6 +16,13 @@ The backend now supports:
 - Record hash anchoring on-chain when records are created
 - A verification endpoint that checks DB hash integrity plus blockchain proof
 
+Role intent:
+- `Patient`: patient-facing verification plus self-monitoring record sync from patient tools
+- `HealthCenter`: identity verification, patient record creation, and proof verification
+- `Municipal Admin`: blockchain supervision within allowed municipal scope and pricing tier
+- `Global Admin`: system-wide blockchain supervision plus governance oversight
+- Admin governance actions such as RBAC/governance changes can also be anchored through audit-log proofs
+
 Main files involved:
 - `backend/src/services/blockchain/client.js`
 - `backend/src/services/blockchain/identity.service.js`
@@ -39,6 +46,10 @@ Main files involved:
 - `POST /api/patients/:patientId/records`
 - `GET /api/patients/:patientId/records/:recordId/verify`
 - `GET /api/auditlogs`
+
+Role notes:
+- `POST /api/patients/:patientId/records` may be used by a patient session for self-monitoring uploads or by a healthcenter session for clinical record entry.
+- Admin accounts do not receive a per-admin blockchain identity in the current design; they supervise proof logs and governance activity.
 
 ## 3. Prerequisites
 

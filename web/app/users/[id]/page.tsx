@@ -180,7 +180,7 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
-                Provider role cannot modify blockchain records, alter AI outputs, or change system-level configuration.
+                Provider role can verify assigned patient record proofs and prepare clinical summaries, but it cannot manage governance settings or alter immutable blockchain history.
               </CardContent>
             </Card>
 

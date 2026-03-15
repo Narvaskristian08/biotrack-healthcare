@@ -116,10 +116,6 @@ const PROVIDER_NAV_GROUPS: NavGroup[] = [
     label: 'Analytics',
     items: [{ label: 'Analytics', href: '/analytics', icon: BarChart3 }],
   },
-  {
-    label: 'Security',
-    items: [{ label: 'Blockchain', href: '/blockchain', icon: Lock }],
-  },
 ]
 
 const ADMIN_NAV_GROUPS: NavGroup[] = [

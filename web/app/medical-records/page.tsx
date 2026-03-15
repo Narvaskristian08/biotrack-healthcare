@@ -373,7 +373,7 @@ export default function MedicalRecordsPage() {
               <div>
                 <CardTitle className="text-base">Read-Only Access</CardTitle>
                 <CardDescription className="mt-2">
-                  Records are read-only for patient accounts. Record creation, edits, and blockchain anchoring are restricted to authorized healthcare roles.
+                  Patients can review records here and verify their proof history. Self-monitoring vitals may sync from patient tools, while clinical record management and governance actions remain restricted to authorized healthcare and admin roles.
                 </CardDescription>
               </div>
             </div>
