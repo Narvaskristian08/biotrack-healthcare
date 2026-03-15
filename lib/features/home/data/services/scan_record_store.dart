@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/app_preferences_service.dart';
+import '../../../../core/services/timeout_http_client.dart';
 import '../../../auth/data/services/auth_session_store.dart';
 import '../models/scan_record.dart';
 
@@ -43,7 +44,10 @@ class _PatientSessionContext {
 class ScanRecordStore {
   ScanRecordStore._();
 
-  static final http.Client _client = http.Client();
+  static final http.Client _client = TimeoutHttpClient(
+    http.Client(),
+    AppConfig.apiRequestTimeout,
+  );
   static const String _pendingQueueStorageKey = 'scan.pending_queue.v1';
   static const int _maxQueuedItems = 60;
 
@@ -488,7 +492,9 @@ class ScanRecordStore {
     }
   }
 
-  static Future<void> _writePendingQueue(List<Map<String, dynamic>> queue) async {
+  static Future<void> _writePendingQueue(
+    List<Map<String, dynamic>> queue,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     if (queue.isEmpty) {
       await prefs.remove(_pendingQueueStorageKey);

@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_radii.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/health_formatters.dart';
+import '../../../../core/widgets/app_ui.dart';
 import '../../data/models/scan_record.dart';
 import '../../data/services/scan_record_store.dart';
 
@@ -100,91 +104,28 @@ class _RecordDetailPageState extends State<RecordDetailPage> {
     }
   }
 
-  Future<void> _copyHash(String value) async {
+  Future<void> _copyValue(String value, String label) async {
     final normalized = value.trim();
     if (normalized.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: normalized));
     if (!mounted) return;
     setState(() {
-      _notice = 'Record hash copied to clipboard.';
+      _notice = '$label copied to clipboard.';
     });
   }
 
-  String _formatTime(DateTime dateTime) {
-    final hour24 = dateTime.hour;
-    final minute = dateTime.minute.toString().padLeft(2, '0');
-    final meridiem = hour24 >= 12 ? 'PM' : 'AM';
-    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
-    return '$hour12:$minute $meridiem';
-  }
-
-  String _formatDate(DateTime? dateTime) {
-    if (dateTime == null) return 'N/A';
-    return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
-  }
-
-  String _statusLabel(String status) {
+  AppTone _statusTone(String status) {
     final normalized = status.trim().toLowerCase();
     if (normalized == 'anchored' || normalized == 'verified') {
-      return 'Verified';
+      return AppTone.success;
     }
     if (normalized == 'local_hash_only') {
-      return 'Verified Locally';
+      return AppTone.warning;
     }
     if (normalized == 'tampered' || normalized == 'anchor_mismatch') {
-      return 'Needs Review';
+      return AppTone.danger;
     }
-    return 'Pending';
-  }
-
-  Color _statusColor(String status) {
-    final normalized = status.trim().toLowerCase();
-    if (normalized == 'anchored' || normalized == 'verified') {
-      return AppColors.primaryGreenDark;
-    }
-    if (normalized == 'local_hash_only') {
-      return const Color(0xFFA86C00);
-    }
-    if (normalized == 'tampered' || normalized == 'anchor_mismatch') {
-      return AppColors.danger;
-    }
-    return AppColors.bodyText;
-  }
-
-  Widget _metricCard({
-    required String title,
-    required String value,
-    Color? valueColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.mutedBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.secondaryText,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: valueColor ?? AppColors.darkText,
-            ),
-          ),
-        ],
-      ),
-    );
+    return AppTone.neutral;
   }
 
   @override
@@ -192,232 +133,255 @@ class _RecordDetailPageState extends State<RecordDetailPage> {
     final record = _record;
     final verification = _verification;
     final status =
-        verification?.status ?? record?.blockchain.verificationStatus ?? 'pending';
-    final anchoredAt = verification?.verifiedAt ??
+        verification?.status ??
+        record?.blockchain.verificationStatus ??
+        'pending';
+    final anchoredAt =
+        verification?.verifiedAt ??
         record?.blockchain.lastVerifiedAt ??
         record?.blockchain.anchoredAt;
 
     return Scaffold(
       backgroundColor: AppColors.softBackground,
-      appBar: AppBar(
-        backgroundColor: AppColors.softBackground,
-        elevation: 0,
-        title: const Text(
-          'Medical Record',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
-        ),
-      ),
+      appBar: AppBar(title: const Text('Medical Record')),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadRecord,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.xl,
+            ),
             children: [
-              if (_loading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: Center(child: CircularProgressIndicator()),
-                )
+              if (_loading && record == null)
+                const _RecordDetailLoadingSkeleton()
               else if (_errorMessage.isNotEmpty)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      _errorMessage,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: AppColors.bodyText,
-                      ),
-                    ),
+                AppEmptyState(
+                  icon: Icons.error_outline,
+                  title: 'Unable to load this record',
+                  subtitle: _errorMessage,
+                  action: ElevatedButton(
+                    onPressed: _loadRecord,
+                    child: const Text('Retry'),
                   ),
                 )
               else if (record == null)
-                const Center(
-                  child: Text(
-                    'Record not found.',
-                    style: TextStyle(fontSize: 14, color: AppColors.bodyText),
-                  ),
+                const AppEmptyState(
+                  icon: Icons.folder_open_outlined,
+                  title: 'Record not found',
+                  subtitle: 'This medical record is no longer available.',
                 )
               else ...[
                 if (_notice.isNotEmpty) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF8EA),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      _notice,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primaryGreenDark,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                  AppInfoBanner(message: _notice, tone: AppTone.success),
+                  const SizedBox(height: AppSpacing.md),
                 ],
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.mutedBorder),
-                  ),
+                AppCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        record.type.trim().isEmpty ? 'Vitals' : record.type,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  HealthFormatters.formatRecordType(
+                                    record.type,
+                                  ),
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.headlineMedium,
+                                ),
+                                const SizedBox(height: AppSpacing.xs),
+                                Text(
+                                  'Captured ${HealthFormatters.formatDate(record.scannedAt)} at ${HealthFormatters.formatTime(record.scannedAt)}',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          AppStatusBadge(
+                            label: HealthFormatters.statusLabel(status),
+                            tone: _statusTone(status),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpacing.md),
                       Text(
-                        'Captured on ${_formatDate(record.scannedAt)} | ${_formatTime(record.scannedAt)}',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.bodyText,
-                        ),
+                        record.bpm == null
+                            ? 'No stable heart-rate estimate was captured for this scan.'
+                            : 'Recorded heart rate: ${record.bpm} bpm',
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _metricCard(
-                        title: 'Heart Rate',
-                        value:
-                            record.bpm == null ? '-- bpm' : '${record.bpm} bpm',
-                        valueColor: AppColors.primaryGreenDark,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _metricCard(
-                        title: 'Activity',
-                        value:
-                            '${record.activityLabel} (${record.movementIntensity.toStringAsFixed(2)})',
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: AppSpacing.md),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final tileWidth =
+                        (constraints.maxWidth - AppSpacing.sm) / 2;
+                    return Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        SizedBox(
+                          width: tileWidth,
+                          child: AppMetricCard(
+                            icon: Icons.favorite_outline_rounded,
+                            label: 'Heart rate',
+                            value: record.bpm == null
+                                ? '-- bpm'
+                                : '${record.bpm} bpm',
+                            helper:
+                                'Signal quality ${record.signalQuality.toStringAsFixed(2)}',
+                            tone: AppTone.accent,
+                          ),
+                        ),
+                        SizedBox(
+                          width: tileWidth,
+                          child: AppMetricCard(
+                            icon: Icons.directions_walk_outlined,
+                            label: 'Activity',
+                            value: record.activityLabel,
+                            helper:
+                                'Movement ${record.movementIntensity.toStringAsFixed(2)}',
+                            tone: AppTone.info,
+                          ),
+                        ),
+                        SizedBox(
+                          width: tileWidth,
+                          child: AppMetricCard(
+                            icon: Icons.health_and_safety_outlined,
+                            label: 'Fall status',
+                            value: record.fallDetected ? 'Detected' : 'No fall',
+                            helper:
+                                'Gyro ${record.gyroMagnitude.toStringAsFixed(2)}',
+                            tone: record.fallDetected
+                                ? AppTone.danger
+                                : AppTone.success,
+                          ),
+                        ),
+                        SizedBox(
+                          width: tileWidth,
+                          child: AppMetricCard(
+                            icon: Icons.fingerprint_rounded,
+                            label: 'Finger confidence',
+                            value:
+                                '${(record.fingerConfidence * 100).toStringAsFixed(0)}%',
+                            helper: record.fingerDetected
+                                ? 'Finger detected during capture'
+                                : 'Finger detection was unstable',
+                            tone: record.fingerDetected
+                                ? AppTone.success
+                                : AppTone.warning,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _metricCard(
-                        title: 'Fall Status',
-                        value: record.fallDetected ? 'Detected' : 'No fall',
-                        valueColor:
-                            record.fallDetected ? Colors.red : Colors.green,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _metricCard(
-                        title: 'Signal Quality',
-                        value: record.signalQuality.toStringAsFixed(2),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _metricCard(
-                        title: 'Finger Confidence',
-                        value:
-                            '${(record.fingerConfidence * 100).toStringAsFixed(0)}%',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _metricCard(
-                        title: 'Gyro',
-                        value: record.gyroMagnitude.toStringAsFixed(2),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.mutedBorder),
-                  ),
+                const SizedBox(height: AppSpacing.md),
+                AppCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Authenticity & Blockchain',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _statusColor(status).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          _statusLabel(status),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: _statusColor(status),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Authenticity and blockchain',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
                           ),
+                          AppStatusBadge(
+                            label: HealthFormatters.statusLabel(status),
+                            tone: _statusTone(status),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      _DetailRow(
+                        label: 'Verification time',
+                        value: anchoredAt == null
+                            ? 'Not yet verified'
+                            : HealthFormatters.formatDateTime(anchoredAt),
+                      ),
+                      _DetailRow(
+                        label: 'Integrity match',
+                        value: verification == null
+                            ? 'Not checked in this session'
+                            : verification.integrityMatch
+                            ? 'Confirmed'
+                            : 'Mismatch detected',
+                      ),
+                      if (verification?.blockNumber != null)
+                        _DetailRow(
+                          label: 'Block number',
+                          value: '${verification!.blockNumber}',
                         ),
+                      if (verification?.reason.trim().isNotEmpty == true)
+                        _DetailRow(
+                          label: 'Verification note',
+                          value: verification!.reason,
+                        ),
+                      const SizedBox(height: AppSpacing.sm),
+                      _HashField(
+                        label: 'Record hash',
+                        value: record.recordHash.isNotEmpty
+                            ? record.recordHash
+                            : 'N/A',
+                        onCopy: record.recordHash.trim().isEmpty
+                            ? null
+                            : () =>
+                                  _copyValue(record.recordHash, 'Record hash'),
                       ),
-                      const SizedBox(height: 12),
-                      _DetailLine(
-                        label: 'Record Hash',
-                        value:
-                            record.recordHash.isNotEmpty ? record.recordHash : 'N/A',
-                      ),
-                      _DetailLine(
+                      const SizedBox(height: AppSpacing.sm),
+                      _HashField(
                         label: 'Transaction ID',
                         value: verification?.txId.isNotEmpty == true
                             ? verification!.txId
                             : record.blockchain.txId.isNotEmpty
-                                ? record.blockchain.txId
-                                : 'N/A',
+                            ? record.blockchain.txId
+                            : 'N/A',
+                        onCopy:
+                            (verification?.txId.isNotEmpty == true ||
+                                record.blockchain.txId.isNotEmpty)
+                            ? () => _copyValue(
+                                verification?.txId.isNotEmpty == true
+                                    ? verification!.txId
+                                    : record.blockchain.txId,
+                                'Transaction ID',
+                              )
+                            : null,
                       ),
-                      _DetailLine(
-                        label: 'Verified / Anchored At',
-                        value: anchoredAt == null
-                            ? 'Not yet verified'
-                            : '${_formatDate(anchoredAt)} ${_formatTime(anchoredAt)}',
-                      ),
-                      if (verification != null) ...[
-                        _DetailLine(
-                          label: 'Integrity Match',
-                          value: verification.integrityMatch ? 'Yes' : 'No',
-                        ),
-                        if (verification.reason.trim().isNotEmpty)
-                          _DetailLine(
-                            label: 'Verification Note',
-                            value: verification.reason,
+                      if (record.blockchain.contractAddress
+                          .trim()
+                          .isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        _HashField(
+                          label: 'Contract address',
+                          value: record.blockchain.contractAddress,
+                          onCopy: () => _copyValue(
+                            record.blockchain.contractAddress,
+                            'Contract address',
                           ),
+                        ),
                       ],
-                      const SizedBox(height: 12),
-                      Row(
+                      const SizedBox(height: AppSpacing.md),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
                         children: [
-                          Expanded(
+                          SizedBox(
+                            width: 220,
                             child: OutlinedButton.icon(
                               onPressed: _verifying ? null : _verifyRecord,
                               icon: _verifying
@@ -432,40 +396,24 @@ class _RecordDetailPageState extends State<RecordDetailPage> {
                               label: Text(
                                 _verifying
                                     ? 'Verifying...'
-                                    : 'Verify Authenticity',
+                                    : 'Verify authenticity',
                               ),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppColors.primaryGreenDark,
-                                side: const BorderSide(
-                                  color: AppColors.primaryGreenDark,
-                                ),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton.icon(
+                          SizedBox(
+                            width: 180,
+                            child: ElevatedButton.icon(
                               onPressed: record.recordHash.trim().isEmpty
                                   ? null
-                                  : () => _copyHash(record.recordHash),
+                                  : () => _copyValue(
+                                      record.recordHash,
+                                      'Record hash',
+                                    ),
                               icon: const Icon(Icons.copy_outlined),
-                              label: const Text('Copy Hash'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.darkText,
-                                side: const BorderSide(
-                                  color: AppColors.mutedBorder,
-                                ),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
+                              label: const Text('Copy hash'),
                             ),
                           ),
                         ],
@@ -482,11 +430,8 @@ class _RecordDetailPageState extends State<RecordDetailPage> {
   }
 }
 
-class _DetailLine extends StatelessWidget {
-  const _DetailLine({
-    required this.label,
-    required this.value,
-  });
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -494,28 +439,161 @@ class _DetailLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.secondaryText,
-            ),
-          ),
-          const SizedBox(height: 2),
-          SelectableText(
-            value,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.darkText,
-              height: 1.35,
-            ),
-          ),
+          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(value, style: Theme.of(context).textTheme.bodyMedium),
         ],
       ),
+    );
+  }
+}
+
+class _HashField extends StatelessWidget {
+  const _HashField({required this.label, required this.value, this.onCopy});
+
+  final String label;
+  final String value;
+  final VoidCallback? onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelMedium),
+        const SizedBox(height: AppSpacing.xs),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceMuted,
+            borderRadius: BorderRadius.circular(AppRadii.lg),
+            border: Border.all(color: AppColors.mutedBorder),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SelectableText(
+                  value,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.darkText,
+                    fontFamily: 'Roboto',
+                  ),
+                ),
+              ),
+              if (onCopy != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                IconButton(
+                  onPressed: onCopy,
+                  tooltip: 'Copy',
+                  icon: const Icon(Icons.copy_outlined),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecordDetailLoadingSkeleton extends StatelessWidget {
+  const _RecordDetailLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        AppSkeletonCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              AppSkeletonParagraph(
+                lines: 2,
+                lineHeight: 14,
+                lastLineFactor: 0.44,
+              ),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonBlock(width: 140, height: 12, radius: AppRadii.pill),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: List.generate(
+            4,
+            (index) => SizedBox(
+              width: (MediaQuery.sizeOf(context).width - 52) / 2,
+              child: const AppSkeletonCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AppSkeletonBlock(
+                      width: 36,
+                      height: 36,
+                      radius: AppRadii.md,
+                    ),
+                    SizedBox(height: AppSpacing.sm),
+                    AppSkeletonBlock(
+                      width: 86,
+                      height: 18,
+                      radius: AppRadii.pill,
+                    ),
+                    SizedBox(height: AppSpacing.xs),
+                    AppSkeletonBlock(
+                      width: 94,
+                      height: 12,
+                      radius: AppRadii.pill,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        const AppSkeletonCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppSkeletonParagraph(
+                lines: 2,
+                lineHeight: 12,
+                lastLineFactor: 0.52,
+              ),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonParagraph(
+                lines: 5,
+                lineHeight: 12,
+                lastLineFactor: 0.66,
+              ),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonBlock(height: 54, radius: AppRadii.lg),
+              SizedBox(height: AppSpacing.sm),
+              AppSkeletonBlock(height: 54, radius: AppRadii.lg),
+              SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppSkeletonBlock(height: 48, radius: AppRadii.lg),
+                  ),
+                  SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: AppSkeletonBlock(height: 48, radius: AppRadii.lg),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

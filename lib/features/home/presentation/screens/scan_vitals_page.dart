@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_radii.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/app_ui.dart';
 import '../controllers/scan_vitals_controller.dart';
 
 class ScanVitalsPage extends StatelessWidget {
@@ -28,18 +32,32 @@ class _ScanVitalsView extends StatefulWidget {
 
 class _ScanVitalsViewState extends State<_ScanVitalsView> {
   bool _isShowingPopup = false;
+  ScanVitalsController? _observedController;
+  VoidCallback? _controllerListener;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final controller = context.read<ScanVitalsController>();
-      controller.addListener(() {
+      _observedController = controller;
+      _controllerListener = () {
         if (controller.scanComplete && !_isShowingPopup && mounted) {
           _handleFinish(controller);
         }
-      });
+      };
+      controller.addListener(_controllerListener!);
     });
+  }
+
+  @override
+  void dispose() {
+    final controller = _observedController;
+    final listener = _controllerListener;
+    if (controller != null && listener != null) {
+      controller.removeListener(listener);
+    }
+    super.dispose();
   }
 
   Future<void> _handleFinish(ScanVitalsController controller) async {
@@ -68,29 +86,42 @@ class _ScanVitalsViewState extends State<_ScanVitalsView> {
     }
   }
 
+  AppTone _signalTone(ScanVitalsController controller) {
+    if (controller.scanComplete) return AppTone.success;
+    if (!controller.fingerDetected) return AppTone.warning;
+    if (controller.movementIntensity > 2.8) return AppTone.warning;
+    if (controller.hrConfidence >= 0.12) return AppTone.success;
+    return AppTone.info;
+  }
+
+  AppTone _qualityTone(ScanVitalsController controller) {
+    final score = controller.qualityCoachScore;
+    if (score >= 0.75) return AppTone.success;
+    if (score >= 0.5) return AppTone.accent;
+    if (score >= 0.3) return AppTone.warning;
+    return AppTone.danger;
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ScanVitalsController>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F8EF),
+      backgroundColor: AppColors.softBackground,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF4F8EF),
-        elevation: 0,
-        leading: IconButton(
-          onPressed: () => context.pop(),
-          icon: const Icon(Icons.arrow_back),
-        ),
-        title: const Text(
-          'Live Vital Scan',
-          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black),
-        ),
+        backgroundColor: AppColors.softBackground,
+        title: const Text('Live Vital Scan'),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
           child: controller.initializing
-              ? const Center(child: CircularProgressIndicator())
+              ? const _LoadingState()
               : controller.errorMessage != null
               ? _ErrorView(
                   message: controller.errorMessage!,
@@ -106,203 +137,206 @@ class _ScanVitalsViewState extends State<_ScanVitalsView> {
     BuildContext context,
     ScanVitalsController controller,
   ) {
+    final qualityTone = _qualityTone(controller);
+    final signalTone = _signalTone(controller);
+    final progress = controller.scanProgress;
+    final signalQuality = (controller.signalQualityScore * 100)
+        .clamp(0, 100)
+        .round();
+    final fingerConfidence = (controller.fingerConfidence * 100)
+        .clamp(0, 100)
+        .round();
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            height: 220,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child:
-                controller.cameraController != null &&
-                    controller.cameraController!.value.isInitialized
-                ? CameraPreview(controller.cameraController!)
-                : const Center(
-                    child: Text(
-                      'Camera unavailable',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            controller.scanComplete
-                ? 'Scan complete'
-                : 'Scanning in progress (${controller.timeLabel} remaining)',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: controller.scanProgress,
-            minHeight: 8,
-            color: const Color(0xFF4C9A2A),
-            borderRadius: BorderRadius.circular(12),
-            backgroundColor: const Color(0xFFE4E9DE),
-          ),
-          const SizedBox(height: 16),
-          _MetricCard(
-            title: 'Heart Rate',
-            value: controller.estimatedBpm == null
-                ? '-- bpm'
-                : '${controller.estimatedBpm} bpm',
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _MetricCard(
-                  title: 'Finger Cover',
-                  value: controller.fingerDetected
-                      ? 'Detected'
-                      : 'Not detected',
-                  valueColor: controller.fingerDetected
-                      ? Colors.green
-                      : Colors.red,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MetricCard(
-                  title: 'Finger Confidence',
-                  value:
-                      '${(controller.fingerConfidence * 100).toStringAsFixed(0)}%',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _MetricCard(
-                  title: 'Activity',
-                  value: controller.movementLabel,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MetricCard(
-                  title: 'Gyro',
-                  value: controller.gyroMagnitude.toStringAsFixed(2),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _MetricCard(
-                  title: 'Fall Status',
-                  value: controller.fallDetected ? 'Possible fall' : 'Normal',
-                  valueColor: controller.fallDetected
-                      ? Colors.red
-                      : Colors.green,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MetricCard(
-                  title: 'Signal State',
-                  value: controller.signalLabel,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-            ),
+          _ScanPreviewCard(controller: controller, tone: signalTone),
+          const SizedBox(height: AppSpacing.md),
+          AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Quality Coach',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppStatusBadge(
+                            label: controller.scanComplete
+                                ? 'Scan complete'
+                                : controller.signalLabel,
+                            tone: signalTone,
+                            icon: controller.scanComplete
+                                ? Icons.check_circle_outline
+                                : Icons.monitor_heart_outlined,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            controller.estimatedBpm == null
+                                ? '-- bpm'
+                                : '${controller.estimatedBpm} bpm',
+                            style: Theme.of(context).textTheme.headlineLarge
+                                ?.copyWith(color: AppColors.darkText),
+                          ),
+                          const SizedBox(height: AppSpacing.xxs),
+                          Text(
+                            controller.scanComplete
+                                ? 'Final heart-rate estimate'
+                                : 'Live estimate from your current pulse signal',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${(controller.qualityCoachScore * 100).toStringAsFixed(0)}% - ${controller.qualityCoachLevel}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.black54,
+                    const SizedBox(width: AppSpacing.md),
+                    SizedBox(
+                      width: 72,
+                      height: 72,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          CircularProgressIndicator(
+                            value: progress,
+                            strokeWidth: 7,
+                            backgroundColor: AppColors.surfaceTint,
+                            color: AppColors.primaryGreen,
+                          ),
+                          Center(
+                            child: Text(
+                              '${(progress * 100).round()}%',
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: AppSpacing.md),
                 Text(
-                  controller.qualityCoachMessage,
-                  style: const TextStyle(fontSize: 13, color: Colors.black87),
+                  controller.scanComplete
+                      ? 'Measurement saved. You can start another scan or review your records.'
+                      : '${controller.timeLabel} remaining. Keep your fingertip steady for the most reliable reading.',
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  controller.sensorHealthLabel,
-                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                const SizedBox(height: AppSpacing.md),
+                LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 8,
+                  backgroundColor: AppColors.surfaceTint,
+                  borderRadius: BorderRadius.circular(AppRadii.pill),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.md),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final tileWidth = (constraints.maxWidth - AppSpacing.sm) / 2;
+              return Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  SizedBox(
+                    width: tileWidth,
+                    child: AppMetricCard(
+                      icon: controller.fingerDetected
+                          ? Icons.fingerprint_rounded
+                          : Icons.touch_app_outlined,
+                      label: 'Finger contact',
+                      value: controller.fingerDetected
+                          ? 'Detected'
+                          : 'Adjust finger',
+                      helper: 'Confidence $fingerConfidence%',
+                      tone: controller.fingerDetected
+                          ? AppTone.success
+                          : AppTone.warning,
+                    ),
+                  ),
+                  SizedBox(
+                    width: tileWidth,
+                    child: AppMetricCard(
+                      icon: Icons.tune_rounded,
+                      label: 'Signal quality',
+                      value: '$signalQuality%',
+                      helper: controller.hrConfidence <= 0
+                          ? 'Awaiting a cleaner pulse trace'
+                          : 'HR confidence ${(controller.hrConfidence * 100).round()}%',
+                      tone: qualityTone,
+                    ),
+                  ),
+                  SizedBox(
+                    width: tileWidth,
+                    child: AppMetricCard(
+                      icon: Icons.motion_photos_auto_outlined,
+                      label: 'Movement',
+                      value: controller.movementLabel,
+                      helper:
+                          'Gyro ${controller.gyroMagnitude.toStringAsFixed(2)} rad/s',
+                      tone: controller.movementIntensity > 2.8
+                          ? AppTone.warning
+                          : AppTone.success,
+                    ),
+                  ),
+                  SizedBox(
+                    width: tileWidth,
+                    child: AppMetricCard(
+                      icon: Icons.health_and_safety_outlined,
+                      label: 'Safety context',
+                      value: controller.fallDetected
+                          ? 'Review posture'
+                          : 'Stable',
+                      helper: controller.sensorHealthLabel,
+                      tone: controller.fallDetected
+                          ? AppTone.danger
+                          : AppTone.info,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _QualityCoachCard(
+            level: controller.qualityCoachLevel,
+            score: '${(controller.qualityCoachScore * 100).round()}%',
+            message: controller.qualityCoachMessage,
+            helper: controller.sensorHealthLabel,
+            tone: qualityTone,
+          ),
+          const SizedBox(height: AppSpacing.lg),
           if (controller.scanComplete)
             ElevatedButton(
               onPressed: controller.startScan,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4C9A2A),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(26),
-                ),
-              ),
-              child: const Text('Scan Again'),
+              child: const Text('Start another scan'),
             )
           else
-            Row(
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
               children: [
-                if (controller.canSwitchLens) ...[
-                  Expanded(
-                    child: OutlinedButton(
+                if (controller.canSwitchLens)
+                  SizedBox(
+                    width: controller.canSwitchLens
+                        ? (MediaQuery.sizeOf(context).width - 52) / 2
+                        : double.infinity,
+                    child: OutlinedButton.icon(
                       onPressed: controller.restartWithNextLens,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF4C9A2A),
-                        side: const BorderSide(color: Color(0xFF4C9A2A)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(26),
-                        ),
-                      ),
-                      child: Text(controller.activeLensLabel),
+                      icon: const Icon(Icons.cameraswitch_outlined),
+                      label: Text(controller.activeLensLabel),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: ElevatedButton(
+                SizedBox(
+                  width: controller.canSwitchLens
+                      ? (MediaQuery.sizeOf(context).width - 52) / 2
+                      : double.infinity,
+                  child: ElevatedButton.icon(
                     onPressed: () => _handleFinish(controller),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4C9A2A),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(26),
-                      ),
-                    ),
-                    child: const Text('Finish Early'),
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text('Finish scan'),
                   ),
                 ),
               ],
@@ -323,12 +357,12 @@ class _ScanVitalsViewState extends State<_ScanVitalsView> {
     final failureMessage = switch (failureReason) {
       'no_finger' =>
         !controller.torchAvailable
-            ? 'No finger was detected. Torch is unavailable on this camera - use a bright light source and cover the lens fully, then retry.'
+            ? 'No finger was detected. Torch is unavailable on this camera, so use bright ambient light and cover the lens fully before retrying.'
             : controller.canSwitchLens
-            ? 'No finger was detected. Cover the camera lens and flash fully, or tap ${controller.activeLensLabel} to try another back camera.'
-            : 'No finger was detected. Cover the camera lens and flash fully. Some phones have the flash too far from the camera for this scan to work.',
+            ? 'No finger was detected. Cover the camera and flash fully, or try switching to another back camera before retrying.'
+            : 'No finger was detected. Cover the camera and flash fully. Some devices place the flash too far from the camera for this type of scan.',
       'weak_contact' =>
-        'Finger contact was too weak to extract a reliable pulse. Cover the camera and flash more fully, then hold steady.',
+        'Finger contact was too weak to extract a reliable pulse. Cover the camera and flash more fully, then keep your hand steady.',
       _ =>
         'A finger was detected, but the pulse signal was not stable enough to produce a reliable BPM. Hold still, keep steady pressure, and retry.',
     };
@@ -338,21 +372,56 @@ class _ScanVitalsViewState extends State<_ScanVitalsView> {
       barrierDismissible: false,
       builder: (dialogContext) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+          titlePadding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.xl,
+            AppSpacing.xl,
+            AppSpacing.sm,
           ),
-          title: Text(
-            !successfulScan ? 'Scanning Unsuccessful' : 'Scan Successful',
+          contentPadding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            0,
+            AppSpacing.xl,
+            AppSpacing.xl,
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: successfulScan
+                      ? AppColors.primaryGreenLight
+                      : AppColors.danger.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppRadii.lg),
+                ),
+                child: Icon(
+                  successfulScan
+                      ? Icons.check_circle_outline
+                      : Icons.error_outline,
+                  color: successfulScan
+                      ? AppColors.primaryGreenDark
+                      : AppColors.danger,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  successfulScan ? 'Scan completed' : 'Scan needs another try',
+                ),
+              ),
+            ],
           ),
           content: Text(
-            !successfulScan
-                ? failureMessage
-                : 'Your vitals have been recorded. ${savedToServer ? "" : "\n\nNote: $saveErrorMessage"}',
+            successfulScan
+                ? 'Your vitals have been recorded.${savedToServer ? '' : ' The scan result is available, but syncing reported: $saveErrorMessage'}'
+                : failureMessage,
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Close', style: TextStyle(color: Colors.grey)),
+              child: Text(successfulScan ? 'Close' : 'Try again later'),
             ),
             if (successfulScan)
               ElevatedButton(
@@ -360,13 +429,7 @@ class _ScanVitalsViewState extends State<_ScanVitalsView> {
                   Navigator.pop(dialogContext);
                   context.go('/records');
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4C9A2A),
-                ),
-                child: const Text(
-                  'View Records',
-                  style: TextStyle(color: Colors.white),
-                ),
+                child: const Text('View records'),
               ),
           ],
         );
@@ -375,41 +438,302 @@ class _ScanVitalsViewState extends State<_ScanVitalsView> {
   }
 }
 
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.title,
-    required this.value,
-    this.valueColor,
-  });
+class _ScanPreviewCard extends StatelessWidget {
+  const _ScanPreviewCard({required this.controller, required this.tone});
 
-  final String title;
-  final String value;
-  final Color? valueColor;
+  final ScanVitalsController controller;
+  final AppTone tone;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      height: 290,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 12, color: Colors.black54),
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(AppRadii.xl),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow.withValues(alpha: 0.12),
+            blurRadius: 28,
+            offset: const Offset(0, 18),
           ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: valueColor ?? Colors.black87,
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (controller.cameraController != null &&
+              controller.cameraController!.value.isInitialized)
+            CameraPreview(controller.cameraController!)
+          else
+            Container(
+              color: const Color(0xFF101512),
+              alignment: Alignment.center,
+              child: const Text(
+                'Camera unavailable',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+          IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[
+                    Colors.black.withValues(alpha: 0.30),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.45),
+                  ],
+                ),
+              ),
             ),
           ),
+          Positioned(
+            top: AppSpacing.md,
+            left: AppSpacing.md,
+            child: AppStatusBadge(
+              label: controller.fingerDetected
+                  ? 'Finger detected'
+                  : 'Position fingertip',
+              tone: tone,
+            ),
+          ),
+          Positioned(
+            top: AppSpacing.md,
+            right: AppSpacing.md,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(AppRadii.pill),
+              ),
+              child: Text(
+                controller.timeLabel,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: Colors.white),
+              ),
+            ),
+          ),
+          Center(
+            child: Container(
+              width: 132,
+              height: 132,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    blurRadius: 18,
+                    spreadRadius: 8,
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.fingerprint_rounded,
+                  size: 42,
+                  color: Colors.white.withValues(alpha: 0.85),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: AppSpacing.md,
+            right: AppSpacing.md,
+            bottom: AppSpacing.md,
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppRadii.lg),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.monitor_heart_outlined, color: Colors.white),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'Keep your finger steady over the camera and flash until the progress completes.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QualityCoachCard extends StatelessWidget {
+  const _QualityCoachCard({
+    required this.level,
+    required this.score,
+    required this.message,
+    required this.helper,
+    required this.tone,
+  });
+
+  final String level;
+  final String score;
+  final String message;
+  final String helper;
+  final AppTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      color: appToneBackground(tone).withValues(alpha: 0.55),
+      borderColor: appToneForeground(tone).withValues(alpha: 0.18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: appToneBackground(tone),
+              borderRadius: BorderRadius.circular(AppRadii.md),
+            ),
+            child: Icon(
+              Icons.auto_awesome_outlined,
+              color: appToneForeground(tone),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Quality coach',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                    AppStatusBadge(label: '$score | $level', tone: tone),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(message, style: Theme.of(context).textTheme.bodyMedium),
+                const SizedBox(height: AppSpacing.xs),
+                Text(helper, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadingState extends StatelessWidget {
+  const _LoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: const [
+          AppSkeletonCard(
+            padding: EdgeInsets.zero,
+            child: SizedBox(
+              height: 290,
+              child: AppSkeletonBlock(height: 290, radius: AppRadii.xl),
+            ),
+          ),
+          SizedBox(height: AppSpacing.md),
+          AppSkeletonCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: AppSkeletonParagraph(
+                        lines: 4,
+                        lineHeight: 13,
+                        lastLineFactor: 0.58,
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.md),
+                    AppSkeletonBlock(
+                      width: 72,
+                      height: 72,
+                      radius: AppRadii.pill,
+                    ),
+                  ],
+                ),
+                SizedBox(height: AppSpacing.md),
+                AppSkeletonBlock(height: 8, radius: AppRadii.pill),
+              ],
+            ),
+          ),
+          SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(child: _ScanMetricSkeleton()),
+              SizedBox(width: AppSpacing.sm),
+              Expanded(child: _ScanMetricSkeleton()),
+            ],
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(child: _ScanMetricSkeleton()),
+              SizedBox(width: AppSpacing.sm),
+              Expanded(child: _ScanMetricSkeleton()),
+            ],
+          ),
+          SizedBox(height: AppSpacing.md),
+          AppSkeletonCard(
+            child: AppSkeletonParagraph(
+              lines: 4,
+              lineHeight: 12,
+              lastLineFactor: 0.62,
+            ),
+          ),
+          SizedBox(height: AppSpacing.lg),
+          AppSkeletonBlock(height: 52, radius: AppRadii.lg),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScanMetricSkeleton extends StatelessWidget {
+  const _ScanMetricSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSkeletonCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          AppSkeletonBlock(width: 36, height: 36, radius: AppRadii.md),
+          SizedBox(height: AppSpacing.sm),
+          AppSkeletonBlock(width: 82, height: 18, radius: AppRadii.pill),
+          SizedBox(height: AppSpacing.xs),
+          AppSkeletonBlock(width: 92, height: 12, radius: AppRadii.pill),
         ],
       ),
     );
@@ -425,15 +749,14 @@ class _ErrorView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.error_outline, color: Colors.red, size: 48),
-          const SizedBox(height: 16),
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: 14),
-          ElevatedButton(onPressed: onRetry, child: const Text('Try Again')),
-        ],
+      child: AppEmptyState(
+        icon: Icons.error_outline,
+        title: 'Unable to start the scan',
+        subtitle: message,
+        action: ElevatedButton(
+          onPressed: onRetry,
+          child: const Text('Try again'),
+        ),
       ),
     );
   }

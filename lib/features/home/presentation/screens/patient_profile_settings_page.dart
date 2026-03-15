@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_radii.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/health_formatters.dart';
+import '../../../../core/widgets/app_ui.dart';
 import '../../../auth/data/services/auth_api_service.dart';
 import '../../../auth/data/services/auth_session_store.dart';
 
@@ -12,7 +16,8 @@ class PatientProfileSettingsPage extends StatefulWidget {
       _PatientProfileSettingsPageState();
 }
 
-class _PatientProfileSettingsPageState extends State<PatientProfileSettingsPage> {
+class _PatientProfileSettingsPageState
+    extends State<PatientProfileSettingsPage> {
   final AuthApiService _api = AuthApiService();
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
@@ -62,7 +67,8 @@ class _PatientProfileSettingsPageState extends State<PatientProfileSettingsPage>
 
     try {
       final profile = await _api.fetchMyPatientProfile();
-      List<PatientLoginHistoryEntry> history = const <PatientLoginHistoryEntry>[];
+      List<PatientLoginHistoryEntry> history =
+          const <PatientLoginHistoryEntry>[];
       try {
         history = await _api.fetchMyLoginHistory(limit: 20);
       } on AuthApiException {
@@ -154,13 +160,7 @@ class _PatientProfileSettingsPageState extends State<PatientProfileSettingsPage>
 
   String _formatDateTime(DateTime? value) {
     if (value == null) return 'N/A';
-    final local = value.toLocal();
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    final meridiem = local.hour >= 12 ? 'PM' : 'AM';
-    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
-    return '${local.year}-$month-$day $hour:$minute $meridiem';
+    return HealthFormatters.formatDateTime(value.toLocal());
   }
 
   Widget _buildTextField({
@@ -172,42 +172,12 @@ class _PatientProfileSettingsPageState extends State<PatientProfileSettingsPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: AppColors.darkText,
-          ),
-        ),
-        const SizedBox(height: 6),
+        Text(label, style: Theme.of(context).textTheme.labelMedium),
+        const SizedBox(height: AppSpacing.xs),
         TextField(
           controller: controller,
           keyboardType: keyboardType,
           maxLines: maxLines,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.mutedBorder),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.mutedBorder),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(
-                color: AppColors.primaryGreenDark,
-                width: 1.5,
-              ),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
-          ),
         ),
       ],
     );
@@ -215,6 +185,12 @@ class _PatientProfileSettingsPageState extends State<PatientProfileSettingsPage>
 
   @override
   Widget build(BuildContext context) {
+    final showInitialSkeleton =
+        _loading &&
+        _profile == null &&
+        _history.isEmpty &&
+        _errorMessage.isEmpty &&
+        _successMessage.isEmpty;
     final assignedCenter = _profile?.assignedHealthCenter;
     final centerContact = assignedCenter == null
         ? ''
@@ -224,279 +200,230 @@ class _PatientProfileSettingsPageState extends State<PatientProfileSettingsPage>
 
     return Scaffold(
       backgroundColor: AppColors.softBackground,
-      appBar: AppBar(
-        backgroundColor: AppColors.softBackground,
-        elevation: 0,
-        title: const Text(
-          'Profile & Settings',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
-        ),
-      ),
+      appBar: AppBar(title: const Text('Profile and Settings')),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadData,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.xl,
+            ),
             children: [
+              const AppPageHeader(
+                eyebrow: 'PROFILE MANAGEMENT',
+                title: 'Update your patient details and session history',
+                subtitle:
+                    'BioTrack keeps profile information, emergency contacts, and recent logins grouped into clear sections.',
+              ),
+              const SizedBox(height: AppSpacing.lg),
               if (_errorMessage.isNotEmpty) ...[
-                _InlineNotice(
-                  message: _errorMessage,
-                  backgroundColor: const Color(0xFFFFF1F1),
-                  textColor: AppColors.danger,
-                ),
-                const SizedBox(height: 12),
+                AppInfoBanner(message: _errorMessage, tone: AppTone.danger),
+                const SizedBox(height: AppSpacing.md),
               ],
               if (_successMessage.isNotEmpty) ...[
-                _InlineNotice(
-                  message: _successMessage,
-                  backgroundColor: const Color(0xFFEFF8EA),
-                  textColor: AppColors.primaryGreenDark,
-                ),
-                const SizedBox(height: 12),
+                AppInfoBanner(message: _successMessage, tone: AppTone.success),
+                const SizedBox(height: AppSpacing.md),
               ],
-              if (assignedCenter != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.mutedBorder),
+              if (showInitialSkeleton) ...[
+                const _ProfileSettingsLoadingSkeleton(),
+              ] else ...[
+                if (assignedCenter != null) ...[
+                  AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const AppSectionHeader(
+                          title: 'Assigned healthcare location',
+                          subtitle:
+                              'This location is connected to your patient profile and record routing.',
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          assignedCenter.displayName,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        if (assignedCenter.locationLabel.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            assignedCenter.locationLabel,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                        if (assignedCenter.address.trim().isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            assignedCenter.address,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                        if (centerContact.trim().isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            centerContact,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                AppCard(
+                  child: (_loading && _profile == null)
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(
+                            vertical: AppSpacing.xxl,
+                          ),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const AppSectionHeader(
+                              title: 'Personal information',
+                              subtitle:
+                                  'Keep your primary patient identity and contact details current.',
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                            _buildTextField(
+                              label: 'First name',
+                              controller: _firstNameController,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            _buildTextField(
+                              label: 'Last name',
+                              controller: _lastNameController,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            _buildTextField(
+                              label: 'Middle initial',
+                              controller: _middleInitialController,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            _buildTextField(
+                              label: 'Email',
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            _buildTextField(
+                              label: 'Contact number',
+                              controller: _contactNumberController,
+                              keyboardType: TextInputType.phone,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            _buildTextField(
+                              label: 'Address',
+                              controller: _addressController,
+                              maxLines: 2,
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                            const AppSectionHeader(
+                              title: 'Emergency contact',
+                              subtitle:
+                                  'These details support follow-up communication when needed.',
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            _buildTextField(
+                              label: 'Emergency contact name',
+                              controller: _emergencyContactNameController,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            _buildTextField(
+                              label: 'Emergency contact phone',
+                              controller: _emergencyContactPhoneController,
+                              keyboardType: TextInputType.phone,
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _saving ? null : _saveProfile,
+                                child: Text(
+                                  _saving
+                                      ? 'Saving profile...'
+                                      : 'Save profile',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                AppCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Assigned Healthcare Location',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      const AppSectionHeader(
+                        title: 'Login history',
+                        subtitle:
+                            'Recent sessions help you verify where and when your patient account was accessed.',
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        assignedCenter.displayName,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.darkText,
-                        ),
-                      ),
-                      if (assignedCenter.locationLabel.isNotEmpty) ...[
-                        const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.md),
+                      if (_loading)
                         Text(
-                          assignedCenter.locationLabel,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.bodyText,
+                          'Loading session history...',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        )
+                      else if (_history.isEmpty)
+                        Text(
+                          'No login history is available yet.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        )
+                      else
+                        ..._history.map(
+                          (entry) => Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: AppCard(
+                              color: AppColors.surfaceMuted,
+                              borderColor: AppColors.mutedBorder,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _formatDateTime(entry.loginAt),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Text(
+                                    'IP: ${entry.ip.isEmpty ? 'N/A' : entry.ip}',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                  const SizedBox(height: AppSpacing.xxs),
+                                  Text(
+                                    'Session expires: ${_formatDateTime(entry.expiresAt)}',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                  if (entry.userAgent.trim().isNotEmpty) ...[
+                                    const SizedBox(height: AppSpacing.xxs),
+                                    Text(
+                                      entry.userAgent,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                      ],
-                      if (assignedCenter.address.trim().isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Address: ${assignedCenter.address}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.bodyText,
-                          ),
-                        ),
-                      ],
-                      if (centerContact.trim().isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Contact: $centerContact',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.bodyText,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
               ],
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.mutedBorder),
-                ),
-                child: _loading
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 20),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Personal Information',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            label: 'First Name',
-                            controller: _firstNameController,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            label: 'Last Name',
-                            controller: _lastNameController,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            label: 'Middle Initial',
-                            controller: _middleInitialController,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            label: 'Email',
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            label: 'Contact Number',
-                            controller: _contactNumberController,
-                            keyboardType: TextInputType.phone,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            label: 'Address',
-                            controller: _addressController,
-                            maxLines: 2,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            label: 'Emergency Contact Name',
-                            controller: _emergencyContactNameController,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            label: 'Emergency Contact Phone',
-                            controller: _emergencyContactPhoneController,
-                            keyboardType: TextInputType.phone,
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _saving ? null : _saveProfile,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryGreenDark,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              child: Text(
-                                _saving ? 'Saving...' : 'Save Profile',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.mutedBorder),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Login History',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (_loading)
-                      const Text(
-                        'Loading session history...',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.bodyText,
-                        ),
-                      )
-                    else if (_history.isEmpty)
-                      const Text(
-                        'No login history available yet.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.bodyText,
-                        ),
-                      )
-                    else
-                      ..._history.map(
-                        (entry) => Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF7FAF5),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.mutedBorder),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _formatDateTime(entry.loginAt),
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.darkText,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'IP: ${entry.ip.isEmpty ? 'N/A' : entry.ip}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.bodyText,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Expires: ${_formatDateTime(entry.expiresAt)}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.bodyText,
-                                ),
-                              ),
-                              if (entry.userAgent.trim().isNotEmpty) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  entry.userAgent,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.secondaryText,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),
@@ -505,33 +432,83 @@ class _PatientProfileSettingsPageState extends State<PatientProfileSettingsPage>
   }
 }
 
-class _InlineNotice extends StatelessWidget {
-  const _InlineNotice({
-    required this.message,
-    required this.backgroundColor,
-    required this.textColor,
-  });
-
-  final String message;
-  final Color backgroundColor;
-  final Color textColor;
+class _ProfileSettingsLoadingSkeleton extends StatelessWidget {
+  const _ProfileSettingsLoadingSkeleton();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        message,
-        style: TextStyle(
-          color: textColor,
-          fontWeight: FontWeight.w600,
+    return Column(
+      children: const [
+        AppSkeletonCard(
+          child: AppSkeletonParagraph(
+            lines: 5,
+            lineHeight: 12,
+            lastLineFactor: 0.5,
+          ),
         ),
-      ),
+        SizedBox(height: AppSpacing.md),
+        AppSkeletonCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppSkeletonParagraph(
+                lines: 2,
+                lineHeight: 12,
+                lastLineFactor: 0.54,
+              ),
+              SizedBox(height: AppSpacing.lg),
+              AppSkeletonBlock(height: 54, radius: AppRadii.lg),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonBlock(height: 54, radius: AppRadii.lg),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonBlock(height: 54, radius: AppRadii.lg),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonBlock(height: 54, radius: AppRadii.lg),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonBlock(height: 54, radius: AppRadii.lg),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonBlock(height: 72, radius: AppRadii.lg),
+              SizedBox(height: AppSpacing.lg),
+              AppSkeletonParagraph(
+                lines: 2,
+                lineHeight: 12,
+                lastLineFactor: 0.48,
+              ),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonBlock(height: 54, radius: AppRadii.lg),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonBlock(height: 54, radius: AppRadii.lg),
+              SizedBox(height: AppSpacing.lg),
+              AppSkeletonBlock(height: 52, radius: AppRadii.lg),
+            ],
+          ),
+        ),
+        SizedBox(height: AppSpacing.md),
+        AppSkeletonCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppSkeletonParagraph(
+                lines: 2,
+                lineHeight: 12,
+                lastLineFactor: 0.52,
+              ),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonParagraph(
+                lines: 4,
+                lineHeight: 12,
+                lastLineFactor: 0.62,
+              ),
+              SizedBox(height: AppSpacing.sm),
+              AppSkeletonParagraph(
+                lines: 4,
+                lineHeight: 12,
+                lastLineFactor: 0.58,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

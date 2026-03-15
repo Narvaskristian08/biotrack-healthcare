@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_radii.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/health_formatters.dart';
+import '../../../../core/widgets/app_ui.dart';
 import '../../data/models/scan_record.dart';
 import '../../data/services/ai_insights_api_service.dart';
 import '../../data/services/scan_record_store.dart';
@@ -79,16 +83,21 @@ class _PatientReportsPageState extends State<PatientReportsPage> {
   }
 
   String _buildReportText() {
-    final bpmValues = _records.map((record) => record.bpm).whereType<int>().toList();
+    final bpmValues = _records
+        .map((record) => record.bpm)
+        .whereType<int>()
+        .toList();
     final latestRecord = _records.isNotEmpty ? _records.first : null;
-    final verifiedCount = _records.where((record) => record.blockchain.isVerified).length;
+    final verifiedCount = _records
+        .where((record) => record.blockchain.isVerified)
+        .length;
     final averageBpm = bpmValues.isEmpty
         ? null
         : (bpmValues.reduce((a, b) => a + b) / bpmValues.length).round();
 
     final lines = <String>[
       'BioTrack Mobile Patient Report',
-      'Generated: ${_formatDateTime(DateTime.now())}',
+      'Generated: ${HealthFormatters.formatDateTime(DateTime.now())}',
       '',
       'Records captured: ${_records.length}',
       'Verified records: $verifiedCount',
@@ -128,7 +137,7 @@ class _PatientReportsPageState extends State<PatientReportsPage> {
         ..add('Recent Records');
       for (final record in _records.take(5)) {
         lines.add(
-          '- ${_formatRecordType(record.type)} | ${_formatDateTime(record.scannedAt)} | ${record.bpm != null ? '${record.bpm} bpm' : 'No BPM'} | ${_statusLabel(record.blockchain.verificationStatus)}',
+          '- ${HealthFormatters.formatRecordType(record.type)} | ${HealthFormatters.formatDateTime(record.scannedAt)} | ${record.bpm != null ? '${record.bpm} bpm' : 'No BPM'} | ${HealthFormatters.statusLabel(record.blockchain.verificationStatus)}',
         );
       }
     }
@@ -136,58 +145,24 @@ class _PatientReportsPageState extends State<PatientReportsPage> {
     return lines.join('\n');
   }
 
-  String _statusLabel(String status) {
-    final normalized = status.trim().toLowerCase();
-    if (normalized == 'anchored' || normalized == 'verified') {
-      return 'Verified';
-    }
-    if (normalized == 'local_hash_only') {
-      return 'Verified Locally';
-    }
-    if (normalized == 'tampered' || normalized == 'anchor_mismatch') {
-      return 'Needs Review';
-    }
-    return 'Pending';
-  }
-
-  String _formatRecordType(String type) {
-    final normalized = type.trim().toLowerCase();
-    if (normalized.isEmpty) return 'Health record';
-    return normalized
-        .replaceAll('_', ' ')
-        .split(' ')
-        .where((part) => part.isNotEmpty)
-        .map(
-          (part) => '${part[0].toUpperCase()}${part.substring(1)}',
-        )
-        .join(' ');
-  }
-
-  String _formatDateTime(DateTime value) {
-    final local = value.toLocal();
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    final meridiem = local.hour >= 12 ? 'PM' : 'AM';
-    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
-    return '${local.year}-$month-$day $hour:$minute $meridiem';
-  }
-
   @override
   Widget build(BuildContext context) {
     final reportText = _buildReportText();
-    final verifiedCount = _records.where((record) => record.blockchain.isVerified).length;
+    final verifiedCount = _records
+        .where((record) => record.blockchain.isVerified)
+        .length;
     final latestBpm = _records.isNotEmpty ? _records.first.bpm : null;
+    final showInitialSkeleton =
+        _loading &&
+        _records.isEmpty &&
+        _insights == null &&
+        _errorMessage.isEmpty &&
+        _notice.isEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.softBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.softBackground,
-        elevation: 0,
-        title: const Text(
-          'Reports & Summary',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
-        ),
+        title: const Text('Reports and Summary'),
         actions: [
           IconButton(
             tooltip: 'Refresh report',
@@ -201,112 +176,104 @@ class _PatientReportsPageState extends State<PatientReportsPage> {
           onRefresh: _loadData,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.xl,
+            ),
             children: [
+              const AppPageHeader(
+                eyebrow: 'EXPORT AND SHARING',
+                title: 'Generate a concise mobile patient summary',
+                subtitle:
+                    'This page combines recent record history and AI observations into a copy-ready report for follow-up or sharing.',
+              ),
+              const SizedBox(height: AppSpacing.lg),
               if (_errorMessage.isNotEmpty) ...[
-                _ReportNotice(
-                  message: _errorMessage,
-                  backgroundColor: const Color(0xFFFFF1F1),
-                  textColor: AppColors.danger,
-                ),
-                const SizedBox(height: 12),
+                AppInfoBanner(message: _errorMessage, tone: AppTone.danger),
+                const SizedBox(height: AppSpacing.md),
               ],
               if (_notice.isNotEmpty) ...[
-                _ReportNotice(
-                  message: _notice,
-                  backgroundColor: const Color(0xFFEFF8EA),
-                  textColor: AppColors.primaryGreenDark,
-                ),
-                const SizedBox(height: 12),
+                AppInfoBanner(message: _notice, tone: AppTone.success),
+                const SizedBox(height: AppSpacing.md),
               ],
-              if (_loading)
+              if (showInitialSkeleton)
+                const _ReportsLoadingSkeleton()
+              else if (_loading)
                 const LinearProgressIndicator(minHeight: 3)
               else ...[
                 Row(
                   children: [
                     Expanded(
-                      child: _StatCard(
-                        title: 'Records',
+                      child: AppMetricCard(
+                        icon: Icons.folder_outlined,
+                        label: 'Records',
                         value: '${_records.length}',
-                        helper: 'Backend-backed history',
+                        helper: 'Available for this summary',
+                        tone: AppTone.info,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
-                      child: _StatCard(
-                        title: 'Verified',
+                      child: AppMetricCard(
+                        icon: Icons.verified_outlined,
+                        label: 'Verified',
                         value: '$verifiedCount',
-                        helper: 'Authenticity checks passed',
+                        helper: 'Integrity checks passed',
+                        tone: AppTone.success,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
-                      child: _StatCard(
-                        title: 'Latest BPM',
+                      child: AppMetricCard(
+                        icon: Icons.favorite_outline_rounded,
+                        label: 'Latest BPM',
                         value: latestBpm == null ? '--' : '$latestBpm',
-                        helper: 'Most recent record',
+                        helper: 'Most recent scan',
+                        tone: AppTone.accent,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.mutedBorder),
-                  ),
+                const SizedBox(height: AppSpacing.md),
+                AppCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Mobile Report',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      const AppSectionHeader(
+                        title: 'Copy-ready report',
+                        subtitle:
+                            'Use this text as a mobile-friendly summary for notes, chat, or email.',
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'This mobile view condenses the same patient data used on the web into a copy-ready summary.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.bodyText,
-                          height: 1.35,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: AppSpacing.md),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: reportText.trim().isEmpty ? null : _copyReport,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primaryGreenDark,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          icon: const Icon(Icons.copy, color: Colors.white),
-                          label: const Text(
-                            'Copy Report Text',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                          onPressed: reportText.trim().isEmpty
+                              ? null
+                              : _copyReport,
+                          icon: const Icon(Icons.copy_outlined),
+                          label: const Text('Copy report text'),
                         ),
                       ),
-                      const SizedBox(height: 14),
-                      SelectableText(
-                        reportText.isEmpty
-                            ? 'No report data available yet.'
-                            : reportText,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          height: 1.45,
-                          color: AppColors.bodyText,
+                      const SizedBox(height: AppSpacing.md),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceMuted,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: SelectableText(
+                          reportText.isEmpty
+                              ? 'No report data is available yet.'
+                              : reportText,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.darkText,
+                                height: 1.5,
+                              ),
                         ),
                       ),
                     ],
@@ -321,86 +288,59 @@ class _PatientReportsPageState extends State<PatientReportsPage> {
   }
 }
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.title,
-    required this.value,
-    required this.helper,
-  });
-
-  final String title;
-  final String value;
-  final String helper;
+class _ReportsLoadingSkeleton extends StatelessWidget {
+  const _ReportsLoadingSkeleton();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.mutedBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: AppColors.darkText,
-            ),
+    return Column(
+      children: const [
+        Row(
+          children: [
+            Expanded(child: _ReportsMetricSkeleton()),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(child: _ReportsMetricSkeleton()),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(child: _ReportsMetricSkeleton()),
+          ],
+        ),
+        SizedBox(height: AppSpacing.md),
+        AppSkeletonCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppSkeletonParagraph(
+                lines: 2,
+                lineHeight: 12,
+                lastLineFactor: 0.54,
+              ),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonBlock(height: 52, radius: AppRadii.lg),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonBlock(height: 220, radius: AppRadii.lg),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.secondaryText,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            helper,
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.bodyText,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _ReportNotice extends StatelessWidget {
-  const _ReportNotice({
-    required this.message,
-    required this.backgroundColor,
-    required this.textColor,
-  });
-
-  final String message;
-  final Color backgroundColor;
-  final Color textColor;
+class _ReportsMetricSkeleton extends StatelessWidget {
+  const _ReportsMetricSkeleton();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        message,
-        style: TextStyle(
-          color: textColor,
-          fontWeight: FontWeight.w600,
-        ),
+    return AppSkeletonCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          AppSkeletonBlock(width: 36, height: 36, radius: AppRadii.md),
+          SizedBox(height: AppSpacing.sm),
+          AppSkeletonBlock(width: 70, height: 18, radius: AppRadii.pill),
+          SizedBox(height: AppSpacing.xs),
+          AppSkeletonBlock(width: 88, height: 12, radius: AppRadii.pill),
+        ],
       ),
     );
   }

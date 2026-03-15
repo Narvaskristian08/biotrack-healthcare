@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/app_preferences_service.dart';
+import '../../../../core/services/timeout_http_client.dart';
 import '../../../auth/data/services/auth_session_store.dart';
 
 class AiInsightsApiException implements Exception {
@@ -68,7 +69,9 @@ class ClearMonitoringHistoryResult {
 
 class AiInsightsApiService {
   AiInsightsApiService({http.Client? client})
-    : _client = client ?? http.Client();
+    : _client =
+          client ??
+          TimeoutHttpClient(http.Client(), AppConfig.apiRequestTimeout);
 
   final http.Client _client;
 
@@ -110,10 +113,18 @@ class AiInsightsApiService {
     try {
       responses = await Future.wait<http.Response>([
         _client.get(
-          _buildUri('/api/ai/summary', <String, String>{'days': '$days', 'language': language}),
+          _buildUri('/api/ai/summary', <String, String>{
+            'days': '$days',
+            'language': language,
+          }),
           headers: headers,
         ),
-        _client.get(_buildUri('/api/ai/trend-insight', <String, String>{'language': language}), headers: headers),
+        _client.get(
+          _buildUri('/api/ai/trend-insight', <String, String>{
+            'language': language,
+          }),
+          headers: headers,
+        ),
         _client.get(
           _buildUri('/api/ai/alerts', <String, String>{'limit': '$alertLimit'}),
           headers: headers,

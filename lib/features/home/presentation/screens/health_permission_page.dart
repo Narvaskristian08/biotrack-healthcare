@@ -1,7 +1,10 @@
+import 'package:biotrack_healthcare/core/services/permission_service.dart';
+import 'package:biotrack_healthcare/core/theme/app_colors.dart';
+import 'package:biotrack_healthcare/core/theme/app_radii.dart';
+import 'package:biotrack_healthcare/core/theme/app_spacing.dart';
+import 'package:biotrack_healthcare/core/widgets/app_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:biotrack_healthcare/core/theme/app_colors.dart';
-import 'package:biotrack_healthcare/core/services/permission_service.dart';
 
 class HealthPermissionPage extends StatefulWidget {
   const HealthPermissionPage({super.key});
@@ -16,21 +19,23 @@ class _HealthPermissionPageState extends State<HealthPermissionPage> {
   bool _notificationGranted = false;
   bool _busy = false;
 
-  // Show confirmation dialog for a permission
-  void _confirmPermission(
-    BuildContext context, {
+  void _confirmPermission({
     required String title,
     required Future<bool> Function() requestPermission,
     required void Function(bool granted) onResult,
-    String? nextRoute,
   }) {
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(title),
-        content: const Text('Allow this permission now?'),
+        title: Text('Allow $title?'),
+        content: const Text(
+          'BioTrack will request this permission from the system now.',
+        ),
         actions: [
-          TextButton(onPressed: () => context.pop(), child: const Text('No')),
+          TextButton(
+            onPressed: () => context.pop(),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () {
               context.pop();
@@ -39,99 +44,8 @@ class _HealthPermissionPageState extends State<HealthPermissionPage> {
                 requestPermission: requestPermission,
                 onResult: onResult,
               );
-
-              // Navigate to next page if provided
-              if (nextRoute != null) {
-                context.go(nextRoute);
-              }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color.fromARGB(255, 169, 238, 152),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text(
-              'Yes',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _permissionCard({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    required String description,
-    required Future<bool> Function() requestPermission,
-    required void Function(bool granted) onResult,
-    required bool granted,
-    String? nextRoute,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: AppColors.primaryBlue, size: 28),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  description,
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: ElevatedButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _confirmPermission(
-                            context,
-                            title: title,
-                            requestPermission: requestPermission,
-                            onResult: onResult,
-                            nextRoute: nextRoute,
-                          ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: granted
-                          ? Colors.green
-                          : AppColors.primaryBlue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                    ),
-                    child: Text(
-                      granted ? 'Granted' : 'Allow',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            child: const Text('Continue'),
           ),
         ],
       ),
@@ -145,9 +59,7 @@ class _HealthPermissionPageState extends State<HealthPermissionPage> {
   }) async {
     setState(() => _busy = true);
     final granted = await requestPermission();
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     onResult(granted);
     setState(() => _busy = false);
@@ -162,73 +74,205 @@ class _HealthPermissionPageState extends State<HealthPermissionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final grantedCount = <bool>[
+      _cameraGranted,
+      _motionGranted,
+      _notificationGranted,
+    ].where((value) => value).length;
+
     return Scaffold(
+      backgroundColor: AppColors.softBackground,
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.pop()),
-        title: const Text(
-          'Enable Health Permission',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
+        title: const Text('Health Permissions'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            AppSpacing.xl,
+          ),
           children: [
-            const Text(
-              'To accurately monitor your health, BioTrack needs access to the following features. '
-              'Your data is encrypted, private, and always under your control.',
-              style: TextStyle(color: Colors.grey, fontSize: 13, height: 1.4),
+            const AppPageHeader(
+              eyebrow: 'DEVICE ACCESS',
+              title: 'Enable the permissions needed for health monitoring',
+              subtitle:
+                  'BioTrack uses camera, motion, and notification access to deliver scans, safety context, and timely alerts.',
             ),
-            const SizedBox(height: 24),
-
-            _permissionCard(
-              context: context,
-              icon: Icons.camera_alt,
-              title: 'Camera & Flash',
+            const SizedBox(height: AppSpacing.lg),
+            AppCard(
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryGreenLight,
+                      borderRadius: BorderRadius.circular(AppRadii.lg),
+                    ),
+                    child: const Icon(
+                      Icons.shield_outlined,
+                      color: AppColors.primaryGreenDark,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Permission status',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          '$grantedCount of 3 permissions granted',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  AppStatusBadge(
+                    label: grantedCount == 3 ? 'Ready' : 'Needs review',
+                    tone: grantedCount == 3 ? AppTone.success : AppTone.warning,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _PermissionCard(
+              icon: Icons.camera_alt_outlined,
+              title: 'Camera and flash',
               description:
-                  'Used to measure your heart rate by detecting subtle changes in blood flow.',
-              requestPermission: PermissionService.requestCameraPermission,
-              onResult: (granted) => setState(() => _cameraGranted = granted),
+                  'Used to measure your heart rate by reading pulse-related light changes through your fingertip.',
               granted: _cameraGranted,
+              busy: _busy,
+              onPressed: () => _confirmPermission(
+                title: 'Camera and flash',
+                requestPermission: PermissionService.requestCameraPermission,
+                onResult: (granted) => setState(() => _cameraGranted = granted),
+              ),
             ),
-
-            const SizedBox(height: 16),
-
-            _permissionCard(
-              context: context,
-              icon: Icons.directions_run,
-              title: 'Motion Sensors',
+            const SizedBox(height: AppSpacing.sm),
+            _PermissionCard(
+              icon: Icons.directions_run_outlined,
+              title: 'Motion sensors',
               description:
-                  'Allows BioTrack to detect physical activity, movement patterns, and possible fall events.',
-              requestPermission: PermissionService.requestMotionPermission,
-              onResult: (granted) => setState(() => _motionGranted = granted),
+                  'Lets BioTrack track movement quality during scans and observe potential fall-related changes.',
               granted: _motionGranted,
+              busy: _busy,
+              onPressed: () => _confirmPermission(
+                title: 'Motion sensors',
+                requestPermission: PermissionService.requestMotionPermission,
+                onResult: (granted) => setState(() => _motionGranted = granted),
+              ),
             ),
-
-            const SizedBox(height: 16),
-
-            _permissionCard(
-              context: context,
-              icon: Icons.notifications_active,
+            const SizedBox(height: AppSpacing.sm),
+            _PermissionCard(
+              icon: Icons.notifications_active_outlined,
               title: 'Notifications',
               description:
-                  'Receive alerts when unusual vital signs are detected or when immediate attention is required.',
-              requestPermission:
-                  PermissionService.requestNotificationPermission,
-              onResult: (granted) =>
-                  setState(() => _notificationGranted = granted),
+                  'Allows BioTrack to surface high-priority health alerts and monitoring reminders.',
               granted: _notificationGranted,
+              busy: _busy,
+              onPressed: () => _confirmPermission(
+                title: 'Notifications',
+                requestPermission:
+                    PermissionService.requestNotificationPermission,
+                onResult: (granted) =>
+                    setState(() => _notificationGranted = granted),
+              ),
             ),
-            const SizedBox(height: 20),
-            Text(
-              'Current status: Camera ${_cameraGranted ? "granted" : "pending"} | '
-              'Motion ${_motionGranted ? "granted" : "pending"} | '
-              'Notifications ${_notificationGranted ? "granted" : "pending"}',
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            const SizedBox(height: AppSpacing.md),
+            const AppInfoBanner(
+              title: 'Privacy reminder',
+              message:
+                  'Permissions can be changed later from the operating system if you need to review or revoke access.',
+              tone: AppTone.info,
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PermissionCard extends StatelessWidget {
+  const _PermissionCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.granted,
+    required this.busy,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final bool granted;
+  final bool busy;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: granted
+                  ? AppColors.primaryGreenLight
+                  : AppColors.surfaceMuted,
+              borderRadius: BorderRadius.circular(AppRadii.md),
+            ),
+            child: Icon(
+              icon,
+              color: granted
+                  ? AppColors.primaryGreenDark
+                  : AppColors.secondaryText,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                    AppStatusBadge(
+                      label: granted ? 'Granted' : 'Pending',
+                      tone: granted ? AppTone.success : AppTone.warning,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(description, style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: AppSpacing.md),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: busy ? null : onPressed,
+                    child: Text(
+                      granted ? 'Review permission' : 'Allow permission',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

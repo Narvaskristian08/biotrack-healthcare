@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_radii.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/health_formatters.dart';
+import '../../../../core/widgets/app_ui.dart';
 import '../../data/services/ai_insights_api_service.dart';
 
 class AiInsightsPage extends StatefulWidget {
@@ -76,17 +80,11 @@ class _AiInsightsPageState extends State<AiInsightsPage> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _errors = const <String>['Failed to load AI insights. Please try again.'];
+        _errors = const <String>[
+          'Failed to load AI insights. Please try again.',
+        ];
       });
     }
-  }
-
-  String _formatTime(DateTime value) {
-    final hour24 = value.hour;
-    final minute = value.minute.toString().padLeft(2, '0');
-    final meridiem = hour24 >= 12 ? 'PM' : 'AM';
-    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
-    return '$hour12:$minute $meridiem';
   }
 
   Future<void> _clearMonitoringHistory() async {
@@ -96,17 +94,19 @@ class _AiInsightsPageState extends State<AiInsightsPage> {
         return AlertDialog(
           title: const Text('Clear monitoring history?'),
           content: const Text(
-            'This removes your synced monitoring samples and generated alerts from the backend.',
+            'This removes synced monitoring samples and generated alerts from the backend so you can rebuild a fresh baseline.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancel'),
             ),
-            TextButton(
+            ElevatedButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-              child: const Text('Clear'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+              ),
+              child: const Text('Clear history'),
             ),
           ],
         );
@@ -137,7 +137,7 @@ class _AiInsightsPageState extends State<AiInsightsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${result.message} (${result.deletedHealthRecords} samples, ${result.deletedAlerts} alerts)',
+            '${result.message} (${result.deletedHealthRecords} samples, ${result.deletedAlerts} alerts removed)',
           ),
         ),
       );
@@ -162,60 +162,470 @@ class _AiInsightsPageState extends State<AiInsightsPage> {
     }
   }
 
-  Color _severityColor(String severity) {
+  AppTone _severityTone(String severity) {
     switch (severity.toUpperCase()) {
       case 'CRITICAL':
       case 'HIGH':
-        return AppColors.danger;
+        return AppTone.danger;
       case 'MODERATE':
-        return const Color(0xFFA86C00);
+        return AppTone.warning;
+      case 'LOW':
+        return AppTone.success;
       default:
-        return AppColors.primaryGreenDark;
+        return AppTone.info;
     }
   }
 
-  Widget _metricCard({
-    required IconData icon,
-    required String label,
-    required String value,
-    required String helper,
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.mutedBorder),
+  String _recommendedAction() {
+    final risk = _overallRisk.toUpperCase();
+    if (risk == 'CRITICAL' || risk == 'HIGH') {
+      return 'Review symptoms now, repeat the scan in a resting position, and contact your clinician or assigned healthcare location if the pattern continues.';
+    }
+    if (_alerts.isNotEmpty) {
+      return 'Open the latest alerts, compare them with your recent scans, and repeat monitoring later today to confirm whether the change persists.';
+    }
+    if (_recentHeartRates.isEmpty) {
+      return 'Continue capturing daily scans so BioTrack can build a stronger baseline for future guidance.';
+    }
+    return 'Continue routine monitoring and repeat a scan whenever your symptoms, activity level, or wellbeing noticeably changes.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final latestHeartRate = _recentHeartRates.isNotEmpty
+        ? _recentHeartRates.last
+        : null;
+    final showInitialSkeleton =
+        _loading &&
+        _lastUpdatedAt == null &&
+        _errors.isEmpty &&
+        _summaryInsight.trim().isEmpty &&
+        _summaryObservations.isEmpty &&
+        _recentHeartRates.isEmpty &&
+        _alerts.isEmpty;
+    final hasInsightContent =
+        _summaryInsight.trim().isNotEmpty ||
+        _trendInsight.trim().isNotEmpty ||
+        _alerts.isNotEmpty ||
+        _summaryObservations.isNotEmpty;
+
+    return Scaffold(
+      backgroundColor: AppColors.softBackground,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text('AI Insights'),
+      ),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () => _loadInsights(showLoader: false),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              120,
+            ),
+            children: [
+              const AppPageHeader(
+                eyebrow: 'AI HEALTH ADVISORY',
+                title: 'Your latest interpreted health summary',
+                subtitle:
+                    'BioTrack groups recent signal patterns, risk level, and advisory alerts into one readable report.',
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              if (_loading) ...[
+                const LinearProgressIndicator(minHeight: 3),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              if (_errors.isNotEmpty) ...[
+                AppInfoBanner(
+                  title: 'Insight sync issue',
+                  message: _errors.join(' '),
+                  tone: AppTone.danger,
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              if (showInitialSkeleton)
+                const _AiInsightsLoadingSkeleton()
+              else ...[
+                _AiSummaryHero(
+                  overallRisk: _overallRisk,
+                  summaryInsight: _summaryInsight.isNotEmpty
+                      ? _summaryInsight
+                      : 'No AI advisory summary is available yet.',
+                  updatedAt: _lastUpdatedAt,
+                  riskTone: _severityTone(_overallRisk),
+                  onRefresh: _loading
+                      ? null
+                      : () => _loadInsights(showLoader: false),
+                  onClear: (_loading || _clearing)
+                      ? null
+                      : _clearMonitoringHistory,
+                  clearing: _clearing,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppMetricCard(
+                        icon: Icons.favorite_outline_rounded,
+                        label: 'Latest BPM',
+                        value: latestHeartRate == null
+                            ? '--'
+                            : '$latestHeartRate',
+                        helper: _recentHeartRates.isEmpty
+                            ? 'Awaiting more scans'
+                            : '${_recentHeartRates.length} recent sample(s)',
+                        tone: AppTone.accent,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: AppMetricCard(
+                        icon: Icons.trending_up_rounded,
+                        label: 'Trend',
+                        value: HealthFormatters.sentenceCase(_trendStatus),
+                        helper: latestHeartRate == null
+                            ? 'No recent comparison yet'
+                            : 'Based on current pulse history',
+                        tone: _severityTone(_overallRisk),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: AppMetricCard(
+                        icon: Icons.warning_amber_rounded,
+                        label: 'Alerts',
+                        value: '${_alerts.length}',
+                        helper: 'Fall events: $_fallEvents',
+                        tone: _alerts.isEmpty
+                            ? AppTone.success
+                            : AppTone.warning,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                if (!hasInsightContent && !_loading)
+                  AppEmptyState(
+                    icon: Icons.auto_awesome_outlined,
+                    title: 'Not enough AI data yet',
+                    subtitle:
+                        'Complete more scans and keep monitoring enabled to build stronger trend analysis and alert history.',
+                    action: OutlinedButton(
+                      onPressed: () => _loadInsights(showLoader: false),
+                      child: const Text('Refresh insights'),
+                    ),
+                  )
+                else ...[
+                  AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const AppSectionHeader(
+                          title: 'Trend interpretation',
+                          subtitle:
+                              'How BioTrack reads your recent pulse direction and movement context.',
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          _trendInsight.isNotEmpty
+                              ? _trendInsight
+                              : 'No trend interpretation is available yet.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        if (_recentHeartRates.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Wrap(
+                            spacing: AppSpacing.xs,
+                            runSpacing: AppSpacing.xs,
+                            children: _recentHeartRates
+                                .take(8)
+                                .map(
+                                  (value) => AppStatusBadge(
+                                    label: '$value bpm',
+                                    tone: AppTone.neutral,
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const AppSectionHeader(
+                          title: 'Recommended next step',
+                          subtitle:
+                              'A concise action to help you interpret the current AI result calmly.',
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          _recommendedAction(),
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const AppSectionHeader(
+                          title: 'Key observations',
+                          subtitle:
+                              'Short highlights extracted from your recent monitoring window.',
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        if (_summaryObservations.isEmpty)
+                          Text(
+                            'No observations are available yet.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          )
+                        else
+                          Wrap(
+                            spacing: AppSpacing.xs,
+                            runSpacing: AppSpacing.xs,
+                            children: _summaryObservations
+                                .map(
+                                  (entry) => AppStatusBadge(
+                                    label: entry,
+                                    tone: AppTone.info,
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.md,
+                            AppSpacing.md,
+                            AppSpacing.md,
+                            AppSpacing.sm,
+                          ),
+                          child: const AppSectionHeader(
+                            title: 'Alert history',
+                            subtitle:
+                                'Severity-based alerts are grouped below so they stay readable instead of stacking into one long text block.',
+                          ),
+                        ),
+                        if (_alerts.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.md,
+                              AppSpacing.sm,
+                              AppSpacing.md,
+                              AppSpacing.md,
+                            ),
+                            child: Text(
+                              'No advisory alerts are active right now.',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          )
+                        else
+                          ..._alerts.map(
+                            (alert) => _AlertTile(
+                              alert: alert,
+                              tone: _severityTone(alert.severity),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+              const SizedBox(height: AppSpacing.md),
+              const AppInfoBanner(
+                title: 'Advisory reminder',
+                message:
+                    'AI insights support awareness and follow-up planning, but they do not replace professional medical evaluation.',
+                tone: AppTone.info,
+              ),
+            ],
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+    );
+  }
+}
+
+class _AiInsightsLoadingSkeleton extends StatelessWidget {
+  const _AiInsightsLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        AppSkeletonCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              AppSkeletonBlock(width: 110, height: 14, radius: AppRadii.pill),
+              SizedBox(height: AppSpacing.md),
+              AppSkeletonParagraph(
+                lines: 3,
+                lineHeight: 13,
+                lastLineFactor: 0.7,
+              ),
+              SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppSkeletonBlock(height: 12, radius: AppRadii.pill),
+                  ),
+                  SizedBox(width: AppSpacing.sm),
+                  AppSkeletonBlock(width: 92, height: 40, radius: AppRadii.lg),
+                ],
+              ),
+              SizedBox(height: AppSpacing.sm),
+              AppSkeletonBlock(height: 48, radius: AppRadii.lg),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        const Row(
           children: [
-            Icon(icon, size: 20, color: AppColors.primaryGreenDark),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: AppColors.darkText,
+            Expanded(child: _AiMetricSkeleton()),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(child: _AiMetricSkeleton()),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(child: _AiMetricSkeleton()),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        const _AiSectionSkeleton(chipCount: 5),
+        const SizedBox(height: AppSpacing.md),
+        const _AiSectionSkeleton(),
+        const SizedBox(height: AppSpacing.md),
+        const _AiSectionSkeleton(chipCount: 4),
+        const SizedBox(height: AppSpacing.md),
+        AppSkeletonCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: const [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                ),
+                child: AppSkeletonParagraph(
+                  lines: 2,
+                  lineHeight: 12,
+                  lastLineFactor: 0.55,
+                ),
+              ),
+              _AiAlertSkeleton(),
+              _AiAlertSkeleton(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AiMetricSkeleton extends StatelessWidget {
+  const _AiMetricSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSkeletonCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          AppSkeletonBlock(width: 36, height: 36, radius: AppRadii.md),
+          SizedBox(height: AppSpacing.sm),
+          AppSkeletonBlock(width: 64, height: 18, radius: AppRadii.pill),
+          SizedBox(height: AppSpacing.xs),
+          AppSkeletonBlock(width: 84, height: 12, radius: AppRadii.pill),
+          SizedBox(height: AppSpacing.xs),
+          AppSkeletonBlock(width: 72, height: 12, radius: AppRadii.pill),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiSectionSkeleton extends StatelessWidget {
+  const _AiSectionSkeleton({this.chipCount = 0});
+
+  final int chipCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSkeletonCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const AppSkeletonParagraph(
+            lines: 2,
+            lineHeight: 12,
+            lastLineFactor: 0.58,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const AppSkeletonParagraph(
+            lines: 4,
+            lineHeight: 13,
+            lastLineFactor: 0.72,
+          ),
+          if (chipCount > 0) ...[
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: List.generate(
+                chipCount,
+                (index) => AppSkeletonBlock(
+                  width: 66 + (index % 3) * 18,
+                  height: 28,
+                  radius: AppRadii.pill,
+                ),
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.bodyText,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              helper,
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.secondaryText,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AiAlertSkeleton extends StatelessWidget {
+  const _AiAlertSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.sm,
+        0,
+        AppSpacing.sm,
+        AppSpacing.sm,
+      ),
+      child: AppSkeletonCard(
+        child: Row(
+          children: const [
+            AppSkeletonBlock(width: 38, height: 38, radius: AppRadii.md),
+            SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: AppSkeletonParagraph(
+                lines: 3,
+                lineHeight: 12,
+                lastLineFactor: 0.62,
               ),
             ),
           ],
@@ -223,341 +633,172 @@ class _AiInsightsPageState extends State<AiInsightsPage> {
       ),
     );
   }
+}
+
+class _AiSummaryHero extends StatelessWidget {
+  const _AiSummaryHero({
+    required this.overallRisk,
+    required this.summaryInsight,
+    required this.updatedAt,
+    required this.riskTone,
+    required this.onRefresh,
+    required this.onClear,
+    required this.clearing,
+  });
+
+  final String overallRisk;
+  final String summaryInsight;
+  final DateTime? updatedAt;
+  final AppTone riskTone;
+  final VoidCallback? onRefresh;
+  final VoidCallback? onClear;
+  final bool clearing;
 
   @override
   Widget build(BuildContext context) {
-    final latestHeartRate = _recentHeartRates.isNotEmpty ? _recentHeartRates.last : null;
-
-    return Scaffold(
-      backgroundColor: AppColors.softBackground,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: AppColors.softBackground,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          'AI Insights',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh insights',
-            onPressed: _loading ? null : () => _loadInsights(showLoader: false),
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () => _loadInsights(showLoader: false),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_loading) ...[
-                const LinearProgressIndicator(minHeight: 3),
-                const SizedBox(height: 12),
-              ],
-              if (_lastUpdatedAt != null) ...[
-                Text(
-                  'Updated ${_formatTime(_lastUpdatedAt!)}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-              if (_errors.isNotEmpty) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF1F1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFF0B7B7)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: _errors
-                        .map(
-                          (error) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Text(
-                              error,
-                              style: const TextStyle(
-                                color: AppColors.danger,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.mutedBorder),
-                ),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Monitoring Controls',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                              color: AppColors.darkText,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Clear backend-generated monitoring samples and alerts when you need a fresh baseline.',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              color: AppColors.bodyText,
-                              height: 1.35,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton(
-                      onPressed: _loading || _clearing ? null : _clearMonitoringHistory,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.danger,
-                        side: const BorderSide(color: AppColors.danger),
-                      ),
-                      child: Text(_clearing ? 'Clearing...' : 'Clear'),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  _metricCard(
-                    icon: Icons.favorite_outline,
-                    label: 'Trend',
-                    value: _trendStatus,
-                    helper: latestHeartRate != null ? 'Latest: $latestHeartRate bpm' : 'No recent BPM',
-                  ),
-                  const SizedBox(width: 10),
-                  _metricCard(
-                    icon: Icons.health_and_safety_outlined,
-                    label: 'Risk Level',
-                    value: _overallRisk,
-                    helper: 'Fall events: $_fallEvents',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.mutedBorder),
-                ),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Trend Interpretation',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: AppColors.darkText,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     Text(
-                      _trendInsight.isNotEmpty
-                          ? _trendInsight
-                          : 'No trend interpretation available yet.',
-                      style: const TextStyle(
-                        fontSize: 13.5,
-                        color: AppColors.bodyText,
-                        height: 1.4,
-                      ),
+                      'Latest status',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.mutedBorder),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'AI Summary',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: AppColors.darkText,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
-                      _summaryInsight.isNotEmpty
-                          ? _summaryInsight
-                          : 'No AI advisory summary available yet.',
-                      style: const TextStyle(
-                        fontSize: 13.5,
-                        color: AppColors.bodyText,
-                        height: 1.4,
-                      ),
+                      summaryInsight,
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    if (_summaryObservations.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      ..._summaryObservations.map(
-                        (entry) => Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text(
-                            '- $entry',
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              color: AppColors.secondaryText,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.mutedBorder),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Alerts',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: AppColors.darkText,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (_alerts.isEmpty)
-                      const Text(
-                        'No advisory alerts available.',
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          color: AppColors.bodyText,
-                        ),
-                      )
-                    else
-                      ..._alerts.map(
-                        (alert) => Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF7FAF5),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.mutedBorder),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _severityColor(alert.severity).withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  alert.severity,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: _severityColor(alert.severity),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      alert.type.replaceAll('_', ' '),
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12.5,
-                                        color: AppColors.darkText,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      alert.message,
-                                      style: const TextStyle(
-                                        fontSize: 12.5,
-                                        color: AppColors.bodyText,
-                                        height: 1.35,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryGreenLight,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.mutedBorder),
-                ),
-                child: const Text(
-                  'AI insights are advisory only and should not replace professional medical evaluation.',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: AppColors.bodyText,
-                    height: 1.35,
-                  ),
-                ),
+              const SizedBox(width: AppSpacing.sm),
+              AppStatusBadge(
+                label: HealthFormatters.sentenceCase(overallRisk),
+                tone: riskTone,
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              if (updatedAt != null)
+                Expanded(
+                  child: Text(
+                    'Updated ${HealthFormatters.formatTime(updatedAt!)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                )
+              else
+                const Spacer(),
+              const SizedBox(width: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Refresh'),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onClear,
+              icon: Icon(
+                clearing ? Icons.hourglass_top_rounded : Icons.delete_outline,
+                color: AppColors.danger,
+              ),
+              label: Text(
+                clearing ? 'Clearing history...' : 'Clear backend history',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.danger,
+                side: const BorderSide(color: AppColors.danger),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AlertTile extends StatelessWidget {
+  const _AlertTile({required this.alert, required this.tone});
+
+  final AiAlertItem alert;
+  final AppTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.sm,
+        0,
+        AppSpacing.sm,
+        AppSpacing.sm,
+      ),
+      child: Material(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadii.lg),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs,
+          ),
+          childrenPadding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            0,
+            AppSpacing.md,
+            AppSpacing.md,
+          ),
+          backgroundColor: AppColors.surfaceMuted,
+          collapsedBackgroundColor: AppColors.surfaceMuted,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.lg),
+          ),
+          collapsedShape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.lg),
+          ),
+          leading: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: appToneBackground(tone),
+              borderRadius: BorderRadius.circular(AppRadii.md),
+            ),
+            child: Icon(
+              Icons.priority_high_rounded,
+              color: appToneForeground(tone),
+            ),
+          ),
+          title: Text(
+            HealthFormatters.humanize(alert.type),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xxs),
+            child: AppStatusBadge(
+              label: HealthFormatters.sentenceCase(alert.severity),
+              tone: tone,
+            ),
+          ),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                alert.message,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
         ),
       ),
     );
