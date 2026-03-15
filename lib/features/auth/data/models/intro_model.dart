@@ -6,6 +6,8 @@ class IntroData {
   final String description;
   final IconData icon;
   final List<String> pills;
+  final String visualTitle;
+  final List<String> visualPoints;
 
   const IntroData({
     required this.kicker,
@@ -13,5 +15,7 @@ class IntroData {
     required this.description,
     required this.icon,
     required this.pills,
+    required this.visualTitle,
+    required this.visualPoints,
   });
 }
