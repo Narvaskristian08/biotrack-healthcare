@@ -1,4 +1,5 @@
 import { HealthCenter } from '../models/HealthCenter.js';
+import { env } from '../config/env.js';
 import { signHealthCenterToken, verifyPassword } from '../services/authService.js';
 import { writeAuditLog } from '../services/auditService.js';
 import { ensureBlockchainIdentityForDocument, verifyBlockchainIdentity } from '../services/blockchain/identity.service.js';
@@ -30,6 +31,61 @@ const PROVIDER_PROFILE_SELECT = [
   'contactNumberEncrypted',
   'updatedAt',
 ].join(' ');
+
+function buildQueuedBlockchainIdentityPayload() {
+  return {
+    identityId: '',
+    verificationStatus: 'pending',
+    txId: '',
+  };
+}
+
+async function persistHealthCenterBlockchainProvisionFailure(healthCenterId, error) {
+  const message = resolveErrorMessage(error);
+  try {
+    await HealthCenter.updateOne(
+      { _id: healthCenterId },
+      {
+        $set: {
+          'blockchainIdentity.verificationStatus': 'failed',
+          'blockchainIdentity.errorMessage': message,
+        },
+      }
+    );
+  } catch (updateError) {
+    // eslint-disable-next-line no-console
+    console.error('[HEALTHCENTER_BLOCKCHAIN] Failed to persist provisioning error:', resolveErrorMessage(updateError));
+  }
+  return message;
+}
+
+function resolveErrorMessage(error) {
+  if (!error) return 'Unknown error';
+  if (typeof error === 'string') return error;
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error?.message === 'string') return error.message;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function isRecoverableBlockchainFailure(error) {
+  const statusCode = Number(error?.statusCode ?? error?.status ?? 0);
+  if (statusCode === 502) return true;
+  const code = String(error?.code ?? '').trim();
+  return code.startsWith('BLOCKCHAIN_');
+}
+
+function buildBlockchainIdentityVerificationFallback(error) {
+  return {
+    verified: false,
+    onChain: false,
+    reason: 'IDENTITY_VERIFY_ERROR',
+    error: resolveErrorMessage(error),
+  };
+}
 
 function resolveEmail(doc) {
   return resolvePiiField({ encrypted: doc?.emailEncrypted, fallback: doc?.email, field: 'email' });
@@ -136,15 +192,41 @@ export async function loginHealthCenter(req, res) {
 
   const resolvedEmail = resolveEmail(hc) || normalizedEmail;
 
-  const { identity } = await ensureBlockchainIdentityForDocument({
-    doc: hc,
-    subjectType: 'healthcenter',
-    uniqueSeed: resolvedEmail,
-  });
-  const identityVerification = await verifyBlockchainIdentity(identity, {
-    subjectType: 'healthcenter',
-    subjectId: hc._id,
-  });
+  let identity = hc.blockchainIdentity ?? buildQueuedBlockchainIdentityPayload();
+  try {
+    ({ identity } = await ensureBlockchainIdentityForDocument({
+      doc: hc,
+      subjectType: 'healthcenter',
+      uniqueSeed: resolvedEmail,
+    }));
+  } catch (error) {
+    if (env.NODE_ENV === 'production' || !isRecoverableBlockchainFailure(error)) {
+      throw error;
+    }
+    const message = await persistHealthCenterBlockchainProvisionFailure(hc._id, error);
+    // eslint-disable-next-line no-console
+    console.error('[HEALTHCENTER_LOGIN] Blockchain identity provisioning skipped:', message);
+    identity = {
+      ...(hc.blockchainIdentity ?? buildQueuedBlockchainIdentityPayload()),
+      verificationStatus: 'failed',
+      errorMessage: message,
+    };
+  }
+
+  let identityVerification;
+  try {
+    identityVerification = await verifyBlockchainIdentity(identity, {
+      subjectType: 'healthcenter',
+      subjectId: hc._id,
+    });
+  } catch (error) {
+    if (env.NODE_ENV === 'production' || !isRecoverableBlockchainFailure(error)) {
+      throw error;
+    }
+    // eslint-disable-next-line no-console
+    console.error('[HEALTHCENTER_LOGIN] Blockchain identity verification skipped:', resolveErrorMessage(error));
+    identityVerification = buildBlockchainIdentityVerificationFallback(error);
+  }
 
   if (blockchainEnabled() && blockchainStrictMode() && identityVerification.onChain && !identityVerification.verified) {
     await writeAuditLog({
