@@ -17,12 +17,26 @@ const GOVERNANCE_ANCHOR_ACTIONS = new Set([
   'ADMIN.GOVERNANCE.UPDATE',
   'ADMIN.BACKUP.RUN',
   'ADMIN.BACKUP.RESTORE',
+  'ADMIN.BLOCKCHAIN.LOGS.ARCHIVE',
+  'ADMIN.USER.CREATE',
+  'ADMIN.USER.UPDATE',
+  'ADMIN.USER.IDENTITY.PROVISION',
+  'HEALTHCENTER.CREATE',
+  'HEALTHCENTER.IDENTITY.PROVISION',
+  'PATIENT.CREATE',
+  'PATIENT.UPDATE',
+  'PATIENT.IDENTITY.PROVISION',
+  'PATIENT.MONITORING_HISTORY.CLEAR',
+  'RECORD.ADD',
+  'RECORD.DELETE',
+  'RECORD.UPLOAD.VALIDATE',
+  'RECORD.VERIFY',
 ]);
 
-const GOVERNANCE_ANCHOR_SCHEMA = 'biotrack.governance.auditlog.v1';
+const GOVERNANCE_ANCHOR_SCHEMA = 'biotrack.auditlog.v1';
 const GOVERNANCE_ANCHOR_SCHEMA_VERSION = 1;
-const GOVERNANCE_IDENTITY_ID = 'did:biotrack:governance:v1';
-const GOVERNANCE_PATIENT_ID = 'GOVERNANCE';
+const GOVERNANCE_IDENTITY_ID = 'did:biotrack:audit:v1';
+const GOVERNANCE_PATIENT_ID = 'AUDIT';
 
 function safeErrorMessage(err) {
   return err?.message ?? 'Unknown blockchain error';
@@ -112,7 +126,9 @@ async function writeProofLog(payload) {
 }
 
 export function shouldAnchorGovernanceAction(action) {
-  return GOVERNANCE_ANCHOR_ACTIONS.has(String(action ?? '').trim());
+  const normalized = String(action ?? '').trim();
+  if (!normalized) return false;
+  return GOVERNANCE_ANCHOR_ACTIONS.has(normalized);
 }
 
 export async function anchorGovernanceAuditLog(auditLogDoc) {
@@ -128,7 +144,7 @@ export async function anchorGovernanceAuditLog(auditLogDoc) {
   const recordHash = sha256Hex(canonicalJsonStringify(payload));
 
   const baseLog = {
-    kind: 'governance',
+    kind: 'audit',
     healthCenterId: auditLog?.healthCenterId ?? null,
     subjectType: 'auditlog',
     subjectId: auditLogId,

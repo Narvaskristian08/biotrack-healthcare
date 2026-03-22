@@ -7,6 +7,7 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "ai:timing": "node scripts/ai-track-timing.js",
+    "ai:evaluate": "node scripts/ai-evaluate.mjs",
     "blockchain:deploy": "node scripts/deploy-registries.mjs",
     "blockchain:repair": "node scripts/repair-blockchain-state.mjs",
     "test": "node --test test/**/*.test.js",

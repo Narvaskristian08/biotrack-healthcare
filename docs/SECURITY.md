@@ -40,6 +40,7 @@ This document tracks the Category 1/2/3 security checklist with code evidence an
   Evidence: `backend/src/services/databaseBackup.service.js:85`, `backend/src/services/databaseBackup.service.js:99`, `backend/src/controllers/adminController.js:871`
 - [x] Audit logging enabled
   Evidence: `backend/src/services/auditService.js:3`, `backend/src/models/AuditLog.js:32`, `backend/src/routes/auditLogRoutes.js:10`
+  Note: critical governance and record-changing actions are eligible for blockchain anchoring via `backend/src/services/blockchain/governanceProof.service.js`.
 - [x] TLS database connections
   Evidence: `backend/src/config/db.js:32`, `backend/src/config/db.js:50`, `backend/src/config/env.js:64`
 - [x] Database hardening

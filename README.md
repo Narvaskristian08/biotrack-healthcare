@@ -150,6 +150,7 @@ For detailed one-click Docker/Dev Container startup of MongoDB + backend + web +
 ## Documentation Hub
 
 - Main index: `docs/README.md`
+- Threat model: `docs/THREAT_MODEL.md`
 - Security documentation: `docs/SECURITY.md`
 - API documentation: `docs/API_REFERENCE.md`
 - Deployment guide: `docs/DEPLOYMENT.md`

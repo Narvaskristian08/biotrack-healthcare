@@ -6,6 +6,10 @@ This folder centralizes operational and technical documentation for the BioTrack
 
 - `docs/SECURITY.md`
   - Security implementation summary and control mapping.
+- `docs/THREAT_MODEL.md`
+  - System-wide DFD/STRIDE-style threat model, OWASP mapping, and risk scoring matrix.
+- `docs/AI_EVALUATION.md`
+  - AI design goals, validation dataset, quantitative metrics, behavioral coverage, and explainability notes.
 - `docs/API_REFERENCE.md`
   - Backend API endpoint reference grouped by module.
 - `docs/DEPLOYMENT.md`
@@ -28,9 +32,11 @@ This folder centralizes operational and technical documentation for the BioTrack
 
 1. `README.md`
 2. `README-ENV.md`
-3. `docs/DEPLOYMENT.md`
-4. `docs/API_REFERENCE.md`
-5. `docs/SECURITY.md`
-6. `docs/TROUBLESHOOTING.md`
-7. `docs/MAINTENANCE.md`
+3. `docs/THREAT_MODEL.md`
+4. `docs/AI_EVALUATION.md`
+5. `docs/DEPLOYMENT.md`
+6. `docs/API_REFERENCE.md`
+7. `docs/SECURITY.md`
+8. `docs/TROUBLESHOOTING.md`
+9. `docs/MAINTENANCE.md`
 
