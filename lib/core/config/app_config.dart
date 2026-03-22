@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 class AppConfig {
   const AppConfig._();
 
-  static const String _currentLanApiBaseUrl = 'http://192.168.254.123:3000';
+  static const String _currentLanApiBaseUrl = 'http://192.168.254.112:3000';
 
   static const String _apiBaseUrlOverride = String.fromEnvironment(
     'API_BASE_URL',
@@ -15,7 +15,7 @@ class AppConfig {
   );
 
   // Override with:
-  // flutter run --dart-define=API_BASE_URL=http://192.168.254.123:3000
+  // flutter run --dart-define=API_BASE_URL=http://192.168.254.112:3000
   static String get apiBaseUrl {
     final configured = _apiBaseUrlOverride.trim();
     if (configured.isNotEmpty) {
