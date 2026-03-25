@@ -157,7 +157,7 @@ export default function ForgotPasswordModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-full max-w-md overflow-hidden rounded-2xl border border-[#c7e6d7] bg-white p-0 shadow-[0_30px_70px_rgba(8,35,25,0.24)]">
-        <div className="border-b border-[#d9ede2] bg-gradient-to-r from-[#effaf4] to-[#ffffff] px-6 py-5">
+        <div className="border-b border-[#d9ede2] bg-linear-to-r from-[#effaf4] to-[#ffffff] px-6 py-5">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
               <DialogTitle className="text-xl text-[#15392b]">{title}</DialogTitle>

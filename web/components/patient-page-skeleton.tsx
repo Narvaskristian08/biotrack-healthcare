@@ -56,32 +56,32 @@ export function PatientPageContentSkeleton({
 
       {chartCards > 0
         ? Array.from({ length: chartCards }).map((_, idx) => (
-            <Card key={`chart-card-skeleton-${idx}`}>
-              <CardHeader className="space-y-2">
-                <Skeleton className="h-5 w-44" />
-                <Skeleton className="h-4 w-64" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-72 w-full rounded-lg" />
-              </CardContent>
-            </Card>
-          ))
+          <Card key={`chart-card-skeleton-${idx}`}>
+            <CardHeader className="space-y-2">
+              <Skeleton className="h-5 w-44" />
+              <Skeleton className="h-4 w-64" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-72 w-full rounded-lg" />
+            </CardContent>
+          </Card>
+        ))
         : null}
 
       {listCards > 0
         ? Array.from({ length: listCards }).map((_, cardIdx) => (
-            <Card key={`list-card-skeleton-${cardIdx}`}>
-              <CardHeader className="space-y-2">
-                <Skeleton className="h-5 w-52" />
-                <Skeleton className="h-4 w-60" />
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {Array.from({ length: listRows }).map((_, rowIdx) => (
-                  <Skeleton key={`list-row-skeleton-${cardIdx}-${rowIdx}`} className="h-14 w-full rounded-lg" />
-                ))}
-              </CardContent>
-            </Card>
-          ))
+          <Card key={`list-card-skeleton-${cardIdx}`}>
+            <CardHeader className="space-y-2">
+              <Skeleton className="h-5 w-52" />
+              <Skeleton className="h-4 w-60" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {Array.from({ length: listRows }).map((_, rowIdx) => (
+                <Skeleton key={`list-row-skeleton-${cardIdx}-${rowIdx}`} className="h-14 w-full rounded-lg" />
+              ))}
+            </CardContent>
+          </Card>
+        ))
         : null}
 
       {actionButtons > 0 ? (

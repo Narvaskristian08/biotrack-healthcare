@@ -374,7 +374,7 @@ export default function MunicipalOnboardingLandingPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="relative overflow-hidden border-b border-slate-200/70 bg-gradient-to-br from-[#0c6c45] via-[#13935f] to-[#1bb376] text-white">
+      <header className="relative overflow-hidden border-b border-slate-200/70 bg-linear-to-br from-[#0c6c45] via-[#13935f] to-[#1bb376] text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.22),transparent_45%),radial-gradient(circle_at_85%_20%,rgba(255,255,255,0.15),transparent_46%)]" />
         <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-16 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-xl space-y-6">
@@ -734,7 +734,7 @@ export default function MunicipalOnboardingLandingPage() {
                   <textarea
                     id="message"
                     name="message"
-                    className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                    className="min-h-30 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                     placeholder="Share any notes about your timeline, contacts, or city requirements."
                     value={formData.message}
                     onChange={(event) => updateForm('message', event.target.value)}
@@ -795,11 +795,10 @@ export default function MunicipalOnboardingLandingPage() {
                     {attachments.map((entry, index) => (
                       <div
                         key={entry.id}
-                        className={`space-y-2 rounded-lg border p-3 ${
-                          entry.status === 'error' || (submitAttempted && entry.required && !entry.file)
+                        className={`space-y-2 rounded-lg border p-3 ${entry.status === 'error' || (submitAttempted && entry.required && !entry.file)
                             ? 'border-destructive/40 bg-destructive/5'
                             : 'border-slate-200 bg-white'
-                        }`}
+                          }`}
                       >
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
@@ -895,9 +894,8 @@ export default function MunicipalOnboardingLandingPage() {
 
                 <div
                   ref={authorizationRef}
-                  className={`flex items-start gap-3 rounded-xl border bg-slate-50/70 p-4 ${
-                    submitAttempted && !authorized ? 'border-destructive/40' : 'border-slate-200'
-                  }`}
+                  className={`flex items-start gap-3 rounded-xl border bg-slate-50/70 p-4 ${submitAttempted && !authorized ? 'border-destructive/40' : 'border-slate-200'
+                    }`}
                 >
                   <Checkbox
                     id="authorized"

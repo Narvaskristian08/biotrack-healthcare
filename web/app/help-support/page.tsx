@@ -71,14 +71,14 @@ export default function HelpSupportPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex items-center gap-3 p-3 rounded-lg border border-border">
-                <Mail className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <Mail className="h-5 w-5 text-muted-foreground shrink-0" />
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Email</p>
                   <p className="text-sm font-medium">support@biotrack.example</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg border border-border">
-                <Phone className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <Phone className="h-5 w-5 text-muted-foreground shrink-0" />
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Phone</p>
                   <p className="text-sm font-medium">+1 (555) 555-5555</p>

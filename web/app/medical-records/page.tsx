@@ -380,7 +380,7 @@ export default function MedicalRecordsPage() {
         <Card className="border-primary/30 bg-primary/5">
           <CardHeader>
             <div className="flex gap-3">
-              <Lock className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+              <Lock className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div>
                 <CardTitle className="text-base">Read-Only Access</CardTitle>
                 <CardDescription className="mt-2">

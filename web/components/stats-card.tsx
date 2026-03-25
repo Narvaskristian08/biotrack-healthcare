@@ -22,7 +22,7 @@ export default function StatsCard({ title, value, change, icon, trend }: StatsCa
             <p className="text-sm font-medium text-muted-foreground">{title}</p>
             <p className="text-2xl font-bold text-foreground">{value}</p>
           </div>
-          <div className="w-10 h-10 bg-gradient-to-br from-primary/20 to-accent/20 rounded-lg flex items-center justify-center text-primary">
+          <div className="w-10 h-10 bg-linear-to-br from-primary/20 to-accent/20 rounded-lg flex items-center justify-center text-primary">
             {icon}
           </div>
         </div>

@@ -79,15 +79,15 @@ function loadGoogleIdentityScript(): Promise<void> {
 
 function LoginHeroPanel() {
   return (
-    <aside className="relative hidden overflow-hidden bg-gradient-to-br from-[#33c481] via-[#1fae6e] to-[#0f7a4e] lg:flex lg:items-center lg:justify-center lg:p-12">
+    <aside className="relative hidden overflow-hidden bg-linear-to-br from-[#33c481] via-[#1fae6e] to-[#0f7a4e] lg:flex lg:items-center lg:justify-center lg:p-12">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_12%,rgba(255,255,255,0.26),transparent_36%),radial-gradient(circle_at_86%_86%,rgba(255,255,255,0.14),transparent_46%)]" />
       <img
         src="/assets/sdg/sdg-wheel-official.svg"
         alt="Official UN SDG wheel"
-        className="pointer-events-none absolute -right-28 top-10 h-[26rem] w-[26rem] opacity-20 auth-wheel-spin"
+        className="pointer-events-none absolute -right-28 top-10 h-104 w-104 opacity-20 auth-wheel-spin"
       />
 
-      <div className="relative z-10 w-full max-w-[560px] auth-enter-right">
+      <div className="relative z-10 w-full max-w-140 auth-enter-right">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-white/90 backdrop-blur-sm">
           <ShieldCheck className="h-3.5 w-3.5" />
           Official Health Goal Artwork
@@ -341,9 +341,9 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#eef8f2]">
       <div className="grid min-h-screen lg:grid-cols-2">
         <section className="flex items-center justify-center px-6 py-10 sm:px-10 lg:px-16 xl:px-24">
-          <div className="w-full max-w-[460px] auth-enter-left">
+          <div className="w-full max-w-115 auth-enter-left">
             <Link href="/" className="mb-8 inline-flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#12935f] to-[#33c481] text-white shadow-lg shadow-[#12935f]/35">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-[#12935f] to-[#33c481] text-white shadow-lg shadow-[#12935f]/35">
                 <Heart className="h-6 w-6" />
               </span>
               <span className="text-[2rem] font-semibold tracking-tight text-[#111f1a]">BioTrack</span>
@@ -371,114 +371,114 @@ export default function LoginPage() {
                 </div>
               ) : null}
 
-                <form onSubmit={handleSubmit} className="mt-6 space-y-5 auth-enter-left" style={{ animationDelay: '110ms' }}>
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="text-sm font-semibold text-[#163428]">Email address</Label>
-                    <div className="auth-input-shell relative rounded-xl">
+              <form onSubmit={handleSubmit} className="mt-6 space-y-5 auth-enter-left" style={{ animationDelay: '110ms' }}>
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm font-semibold text-[#163428]">Email address</Label>
+                  <div className="auth-input-shell relative rounded-xl">
                     <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8f83]" />
-                      <Input
-                        id="email"
-                        name="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={handleChange}
-                        placeholder="your@gmail.com or your@yahoo.com"
-                        className="h-12 border-0 bg-transparent pl-11 text-[#163428] placeholder:text-[#93a79d] shadow-none focus-visible:ring-0"
-                        disabled={Boolean(mfaChallenge)}
-                        required
-                      />
-                    </div>
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="your@gmail.com or your@yahoo.com"
+                      className="h-12 border-0 bg-transparent pl-11 text-[#163428] placeholder:text-[#93a79d] shadow-none focus-visible:ring-0"
+                      disabled={Boolean(mfaChallenge)}
+                      required
+                    />
                   </div>
+                </div>
 
-                  {!mfaChallenge ? (
-                    <div className="space-y-5">
-                      <div className="space-y-2">
-                        <Label htmlFor="password" className="text-sm font-semibold text-[#163428]">Password</Label>
-                        <div className="auth-input-shell relative rounded-xl">
-                          <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8f83]" />
-                          <Input
-                            id="password"
-                            name="password"
-                            type={showPassword ? 'text' : 'password'}
-                            value={formData.password}
-                            onChange={handleChange}
-                            placeholder="********"
-                            className="h-12 border-0 bg-transparent pl-11 pr-12 text-[#163428] placeholder:text-[#93a79d] shadow-none focus-visible:ring-0"
-                            required
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword((prev) => !prev)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-[#628175] transition-colors hover:text-[#173328]"
-                            aria-label={showPassword ? 'Hide password' : 'Show password'}
-                          >
-                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-4 text-sm">
-                        <label className="inline-flex items-center gap-2.5 text-[#1f3c30]">
-                          <input
-                            type="checkbox"
-                            checked={rememberMe}
-                            onChange={(e) => setRememberMe(e.target.checked)}
-                            className="h-4 w-4 rounded border-[#aacfc0] text-[#12935f] focus:ring-[#12935f]/30"
-                          />
-                          Remember for 30 days
-                        </label>
+                {!mfaChallenge ? (
+                  <div className="space-y-5">
+                    <div className="space-y-2">
+                      <Label htmlFor="password" className="text-sm font-semibold text-[#163428]">Password</Label>
+                      <div className="auth-input-shell relative rounded-xl">
+                        <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8f83]" />
+                        <Input
+                          id="password"
+                          name="password"
+                          type={showPassword ? 'text' : 'password'}
+                          value={formData.password}
+                          onChange={handleChange}
+                          placeholder="********"
+                          className="h-12 border-0 bg-transparent pl-11 pr-12 text-[#163428] placeholder:text-[#93a79d] shadow-none focus-visible:ring-0"
+                          required
+                        />
                         <button
                           type="button"
-                          onClick={() => setForgotOpen(true)}
-                          className="font-medium text-[#0f8f60] underline-offset-4 hover:underline"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-[#628175] transition-colors hover:text-[#173328]"
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
                         >
-                          Forgot password
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="rounded-xl border border-[#bde7d2] bg-[#eef9f3] px-4 py-3 text-sm text-[#1f5c43]">
-                        Enter the 6-digit code sent to {mfaChallenge.recipientMasked || 'your account'}.
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="mfaCode" className="text-sm font-semibold text-[#163428]">Verification code</Label>
-                        <Input
-                          id="mfaCode"
-                          name="mfaCode"
-                          type="text"
-                          inputMode="numeric"
-                          value={mfaCode}
-                          onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                          placeholder="123456"
-                          className="h-12 rounded-xl border-[#cfe5d9] bg-white text-center text-lg tracking-[0.35em] text-[#163428]"
-                          required
+
+                    <div className="flex items-center justify-between gap-4 text-sm">
+                      <label className="inline-flex items-center gap-2.5 text-[#1f3c30]">
+                        <input
+                          type="checkbox"
+                          checked={rememberMe}
+                          onChange={(e) => setRememberMe(e.target.checked)}
+                          className="h-4 w-4 rounded border-[#aacfc0] text-[#12935f] focus:ring-[#12935f]/30"
                         />
-                      </div>
+                        Remember for 30 days
+                      </label>
                       <button
                         type="button"
-                        onClick={() => {
-                          setMfaChallenge(null)
-                          setMfaCode('')
-                          setSuccess('')
-                          setError('')
-                        }}
-                        className="text-sm font-medium text-[#0f8f60] underline-offset-4 hover:underline"
+                        onClick={() => setForgotOpen(true)}
+                        className="font-medium text-[#0f8f60] underline-offset-4 hover:underline"
                       >
-                        Use a different account
+                        Forgot password
                       </button>
                     </div>
-                  )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="rounded-xl border border-[#bde7d2] bg-[#eef9f3] px-4 py-3 text-sm text-[#1f5c43]">
+                      Enter the 6-digit code sent to {mfaChallenge.recipientMasked || 'your account'}.
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="mfaCode" className="text-sm font-semibold text-[#163428]">Verification code</Label>
+                      <Input
+                        id="mfaCode"
+                        name="mfaCode"
+                        type="text"
+                        inputMode="numeric"
+                        value={mfaCode}
+                        onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="123456"
+                        className="h-12 rounded-xl border-[#cfe5d9] bg-white text-center text-lg tracking-[0.35em] text-[#163428]"
+                        required
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMfaChallenge(null)
+                        setMfaCode('')
+                        setSuccess('')
+                        setError('')
+                      }}
+                      className="text-sm font-medium text-[#0f8f60] underline-offset-4 hover:underline"
+                    >
+                      Use a different account
+                    </button>
+                  </div>
+                )}
 
-                 <Button
-                   type="submit"
-                   disabled={isLoading}
-                   className="h-[3.15rem] w-full rounded-xl bg-[#0f8f60] text-base font-medium text-white shadow-md shadow-[#0f8f60]/30 transition-all hover:-translate-y-0.5 hover:bg-[#0c7a52]"
-                 >
-                   {isLoading ? (mfaChallenge ? 'Verifying...' : 'Signing in...') : (mfaChallenge ? 'Verify code' : 'Sign in')}
-                   <ArrowRight className="ml-2 h-4 w-4" />
-                 </Button>
-               </form>
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="h-[3.15rem] w-full rounded-xl bg-[#0f8f60] text-base font-medium text-white shadow-md shadow-[#0f8f60]/30 transition-all hover:-translate-y-0.5 hover:bg-[#0c7a52]"
+                >
+                  {isLoading ? (mfaChallenge ? 'Verifying...' : 'Signing in...') : (mfaChallenge ? 'Verify code' : 'Sign in')}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </form>
 
               <div className="my-7 flex items-center gap-4">
                 <div className="h-px flex-1 bg-[#cfe5d9]" />

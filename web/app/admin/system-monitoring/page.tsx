@@ -183,27 +183,27 @@ export default function AdminSystemMonitoringPage() {
               ) : null}
               {!loading
                 ? highlightedAudit.map((log) => (
-                    <div key={log._id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium">{log.action}</p>
-                            <Badge variant={log.outcome === 'failure' ? 'destructive' : 'secondary'}>{log.outcome}</Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {log.actorType || 'unknown'}{log.actorName ? ` • ${log.actorName}` : ''} • {formatTimestamp(log.createdAt)}
-                          </p>
-                          <p className="text-sm text-slate-700">{log.reason || 'No reason recorded.'}</p>
+                  <div key={log._id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">{log.action}</p>
+                          <Badge variant={log.outcome === 'failure' ? 'destructive' : 'secondary'}>{log.outcome}</Badge>
                         </div>
-                        <Button asChild variant="ghost" size="sm">
-                          <Link href="/admin/logs">
-                            Open logs
-                            <ArrowRight className="h-4 w-4" />
-                          </Link>
-                        </Button>
+                        <p className="text-sm text-muted-foreground">
+                          {log.actorType || 'unknown'}{log.actorName ? ` • ${log.actorName}` : ''} • {formatTimestamp(log.createdAt)}
+                        </p>
+                        <p className="text-sm text-slate-700">{log.reason || 'No reason recorded.'}</p>
                       </div>
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href="/admin/logs">
+                          Open logs
+                          <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      </Button>
                     </div>
-                  ))
+                  </div>
+                ))
                 : null}
             </CardContent>
           </Card>

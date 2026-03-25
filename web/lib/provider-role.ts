@@ -34,15 +34,15 @@ export interface ProviderPatientRecord {
 
 export interface ProviderPatientRecordCreateInput {
   type?:
-    | 'consultation'
-    | 'vitals'
-    | 'immunization'
-    | 'prenatal'
-    | 'lab'
-    | 'medication'
-    | 'referral'
-    | 'note'
-    | 'other';
+  | 'consultation'
+  | 'vitals'
+  | 'immunization'
+  | 'prenatal'
+  | 'lab'
+  | 'medication'
+  | 'referral'
+  | 'note'
+  | 'other';
   data: Record<string, unknown>;
   capturedAt?: string;
 }

@@ -240,7 +240,7 @@ function PatientDashboardSkeleton() {
             <Skeleton className="h-4 w-48" />
           </CardHeader>
           <CardContent>
-            <Skeleton className="h-[280px] w-full rounded-lg" />
+            <Skeleton className="h-70 w-full rounded-lg" />
           </CardContent>
         </Card>
 
@@ -263,7 +263,7 @@ function PatientDashboardSkeleton() {
           <Skeleton className="h-4 w-64" />
         </CardHeader>
         <CardContent>
-          <Skeleton className="h-[260px] w-full rounded-lg" />
+          <Skeleton className="h-65 w-full rounded-lg" />
         </CardContent>
       </Card>
     </div>

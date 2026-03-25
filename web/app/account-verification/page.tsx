@@ -42,11 +42,11 @@ const CODE_LENGTH = 6
 
 function VerificationHeroPanel() {
   return (
-    <aside className="relative hidden overflow-hidden bg-gradient-to-br from-[#33c481] via-[#1fae6e] to-[#0f7a4e] lg:flex lg:items-center lg:justify-center lg:p-12">
+    <aside className="relative hidden overflow-hidden bg-linear-to-br from-[#33c481] via-[#1fae6e] to-[#0f7a4e] lg:flex lg:items-center lg:justify-center lg:p-12">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_12%,rgba(255,255,255,0.28),transparent_35%),radial-gradient(circle_at_80%_85%,rgba(255,255,255,0.18),transparent_42%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(115deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0)_58%)]" />
 
-      <div className="relative z-10 w-full max-w-[560px]">
+      <div className="relative z-10 w-full max-w-140">
         <div className="mb-12 grid grid-cols-5 gap-4 text-white/55">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/35 bg-white/10 backdrop-blur-sm">
             <MessageSquare className="h-5 w-5" />
@@ -65,7 +65,7 @@ function VerificationHeroPanel() {
           </div>
         </div>
 
-        <div className="relative mx-auto w-full max-w-[470px]">
+        <div className="relative mx-auto w-full max-w-117.5">
           <div className="relative overflow-hidden rounded-[2.4rem] border border-white/45 bg-[#0b3a2a] px-8 pb-10 pt-12 shadow-[0_30px_60px_rgba(15,8,36,0.45)]">
             <div className="pointer-events-none absolute -left-8 top-24 flex h-24 w-24 items-center justify-center rounded-full border-2 border-white/55 bg-white/15 backdrop-blur-sm">
               <Check className="h-11 w-11 text-white" />
@@ -75,14 +75,14 @@ function VerificationHeroPanel() {
               <Shield className="h-14 w-14 text-[#138c5a]" />
             </div>
 
-            <div className="mx-auto mt-8 max-w-[300px] rounded-2xl bg-[#0f7a4e] p-5 text-center text-white/90">
+            <div className="mx-auto mt-8 max-w-75 rounded-2xl bg-[#0f7a4e] p-5 text-center text-white/90">
               <p className="text-sm uppercase tracking-[0.15em] text-white/70">MFA Security</p>
               <p className="mt-2 text-lg font-semibold">Your account stays protected with OTP verification</p>
             </div>
           </div>
 
           <div className="mx-auto mt-4 h-4 w-56 rounded-full bg-white/45" />
-          <div className="mx-auto mt-3 h-[3px] w-72 rounded-full bg-white/70" />
+          <div className="mx-auto mt-3 h-0.75 w-72 rounded-full bg-white/70" />
         </div>
       </div>
     </aside>
@@ -190,9 +190,9 @@ export default function AccountVerificationPage() {
     <div className="min-h-screen bg-[#eef8f2]">
       <div className="grid min-h-screen lg:grid-cols-2">
         <section className="flex items-center justify-center px-6 py-10 sm:px-10 lg:px-16 xl:px-20">
-          <div className="w-full max-w-[520px]">
+          <div className="w-full max-w-130">
             <Link href="/" className="mb-10 inline-flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#12935f] to-[#33c481] text-white shadow-lg shadow-[#12935f]/35">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-[#12935f] to-[#33c481] text-white shadow-lg shadow-[#12935f]/35">
                 <Heart className="h-6 w-6" />
               </span>
               <span className="text-[2rem] font-semibold tracking-tight text-[#111f1a]">BioTrack</span>
@@ -217,7 +217,7 @@ export default function AccountVerificationPage() {
 
             {healthCenterName || healthCenterLocation ? (
               <div className="mt-4 rounded-xl border border-[#d4e8dd] bg-white px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#5b786d]">Selected healthcare location</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-[#5b786d]">Selected healthcare location</p>
                 <p className="mt-1 text-sm font-semibold text-[#163428]">{healthCenterName || 'Healthcare Provider'}</p>
                 {healthCenterLocation ? <p className="mt-1 text-xs text-[#5d7b70]">{healthCenterLocation}</p> : null}
               </div>
@@ -241,7 +241,7 @@ export default function AccountVerificationPage() {
                   <p className="text-sm text-[#5a766c]">Verification session is missing. Please register your patient account again.</p>
                   <Button
                     onClick={() => router.push('/register')}
-                    className="h-[3rem] w-full rounded-xl bg-[#0f8f60] text-white hover:bg-[#0c7a52]"
+                    className="h-12 w-full rounded-xl bg-[#0f8f60] text-white hover:bg-[#0c7a52]"
                   >
                     Go to Register
                   </Button>
@@ -349,7 +349,7 @@ export default function AccountVerificationPage() {
                     variant="outline"
                     onClick={() => setStep('method')}
                     disabled={isLoading}
-                    className="h-[3rem] w-full rounded-xl border-[#cfe5d9] bg-white text-[#1f3c30] hover:bg-white"
+                    className="h-12 w-full rounded-xl border-[#cfe5d9] bg-white text-[#1f3c30] hover:bg-white"
                   >
                     Change Method
                   </Button>

@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 
-export default function AboutPage(){
+export default function AboutPage() {
   return (
     <div className="space-y-6">
       <div>

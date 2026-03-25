@@ -103,7 +103,7 @@ export default function BlockchainVerificationPage() {
         <Card className="border-green-200 bg-green-50">
           <CardHeader>
             <div className="flex gap-3">
-              <Shield className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <Shield className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
               <div>
                 <CardTitle className="text-base text-green-900">Immutable and Tamper-Resistant</CardTitle>
                 <CardDescription className="text-green-800 mt-2">

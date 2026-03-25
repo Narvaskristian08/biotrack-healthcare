@@ -46,13 +46,12 @@ export default function AlertsPanel() {
             className="flex items-start gap-3 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-all cursor-pointer group"
           >
             <div
-              className={`p-2 rounded-lg transition-colors ${
-                alert.severity === "critical"
+              className={`p-2 rounded-lg transition-colors ${alert.severity === "critical"
                   ? "bg-destructive/20 text-destructive group-hover:bg-destructive/30"
                   : alert.severity === "high"
                     ? "bg-orange-500/20 text-orange-400 group-hover:bg-orange-500/30"
                     : "bg-yellow-500/20 text-yellow-400 group-hover:bg-yellow-500/30"
-              }`}
+                }`}
             >
               {alert.icon}
             </div>
@@ -62,13 +61,12 @@ export default function AlertsPanel() {
             </div>
             <Badge
               variant={alert.severity === "critical" ? "destructive" : "secondary"}
-              className={`text-xs flex-shrink-0 ${
-                alert.severity === "critical"
+              className={`text-xs shrink-0 ${alert.severity === "critical"
                   ? "bg-destructive/20 text-destructive"
                   : alert.severity === "high"
                     ? "bg-orange-500/20 text-orange-400"
                     : "bg-yellow-500/20 text-yellow-400"
-              }`}
+                }`}
             >
               {alert.severity}
             </Badge>

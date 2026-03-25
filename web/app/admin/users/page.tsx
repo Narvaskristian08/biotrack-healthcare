@@ -762,12 +762,12 @@ export default function AdminUsersPage() {
     const providerCreationSnapshot =
       form.role === 'provider'
         ? {
-            email: form.email.trim(),
-            barangayName: form.barangayName.trim(),
-            cityMunicipality: providerCityMunicipality,
-            healthCenterName: form.healthCenterName.trim(),
-            status: form.status,
-          }
+          email: form.email.trim(),
+          barangayName: form.barangayName.trim(),
+          cityMunicipality: providerCityMunicipality,
+          healthCenterName: form.healthCenterName.trim(),
+          status: form.status,
+        }
         : null;
     setSaving(true);
     setError('');
@@ -970,22 +970,22 @@ export default function AdminUsersPage() {
   const roleSetupSteps =
     form.role === 'provider'
       ? [
-          '1. Choose the barangay account type and lifecycle status.',
-          '2. Set the login credentials that will be sent to the provider.',
-          '3. Fill in facility identity, location, and staffing details.',
-          '4. Create the account, then verify whether it should already appear in patient registration.',
-        ]
+        '1. Choose the barangay account type and lifecycle status.',
+        '2. Set the login credentials that will be sent to the provider.',
+        '3. Fill in facility identity, location, and staffing details.',
+        '4. Create the account, then verify whether it should already appear in patient registration.',
+      ]
       : form.role === 'patient'
         ? [
-            '1. Select the patient account type.',
-            '2. Enter login credentials and the linked health center.',
-            '3. Confirm the basic patient identity fields before creation.',
-          ]
+          '1. Select the patient account type.',
+          '2. Enter login credentials and the linked health center.',
+          '3. Confirm the basic patient identity fields before creation.',
+        ]
         : [
-            '1. Select the admin account type.',
-            '2. Enter secure login credentials.',
-            '3. Create the account only for trusted operators who need system governance access.',
-          ];
+          '1. Select the admin account type.',
+          '2. Enter secure login credentials.',
+          '3. Create the account only for trusted operators who need system governance access.',
+        ];
   const providerScopeCity = isMunicipalAdmin ? adminCityMunicipality.trim() : form.cityMunicipality.trim();
   const providerSetupLocation = [form.barangayName.trim(), providerScopeCity].filter(Boolean).join(', ') || 'Not set yet';
   const providerSetupStatus = formatStatusLabel(form.status);
@@ -1108,11 +1108,10 @@ export default function AdminUsersPage() {
                   </div>
 
                   <div
-                    className={`rounded-2xl border p-5 ${
-                      String(providerCreationConfirmation?.status ?? '').trim().toLowerCase() === 'active'
+                    className={`rounded-2xl border p-5 ${String(providerCreationConfirmation?.status ?? '').trim().toLowerCase() === 'active'
                         ? 'border-emerald-200 bg-emerald-50/80'
                         : 'border-amber-200 bg-amber-50/80'
-                    }`}
+                      }`}
                   >
                     <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">What Happens Next</p>
                     <p className="mt-3 text-sm leading-6 text-slate-700">{providerAccessNote}</p>
@@ -1231,9 +1230,8 @@ export default function AdminUsersPage() {
                 ) : null}
                 {form.role === 'provider' ? (
                   <div
-                    className={`md:col-span-2 xl:col-span-4 lg:col-span-2 rounded-xl border p-3 text-sm ${
-                      providerWillAppearInRegistration ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'
-                    }`}
+                    className={`md:col-span-2 xl:col-span-4 lg:col-span-2 rounded-xl border p-3 text-sm ${providerWillAppearInRegistration ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'
+                      }`}
                   >
                     {providerWillAppearInRegistration
                       ? 'Patient registration will be able to select this provider immediately.'

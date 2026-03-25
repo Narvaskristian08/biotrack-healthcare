@@ -127,7 +127,7 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden border-b border-border/40 bg-gradient-to-br from-background via-background to-primary/5">
+      <section className="relative overflow-hidden border-b border-border/40 bg-linear-to-br from-background via-background to-primary/5">
         <div className="absolute inset-0 -z-10 overflow-hidden">
           <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
           <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-accent/10 blur-3xl" />
@@ -194,12 +194,12 @@ export default function LandingPage() {
                   {ACCESS_CARDS.map((card) => (
                     <Link key={card.title} href={card.href}>
                       <div className="flex items-start gap-3 rounded-lg border border-border/50 bg-muted/30 p-4 transition-all hover:border-primary/50 hover:bg-muted/50">
-                        <card.icon className="mt-1 h-5 w-5 flex-shrink-0 text-primary" />
+                        <card.icon className="mt-1 h-5 w-5 shrink-0 text-primary" />
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-sm">{card.title}</p>
                           <p className="text-xs text-muted-foreground line-clamp-2">{card.description}</p>
                         </div>
-                        <ArrowRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                        <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                       </div>
                     </Link>
                   ))}
@@ -256,7 +256,7 @@ export default function LandingPage() {
             {FLOW_STEPS.map((step, index) => (
               <div key={step.title} className="relative">
                 {index < FLOW_STEPS.length - 1 && (
-                  <div className="hidden md:block absolute top-24 left-[60%] w-[40%] h-0.5 bg-gradient-to-r from-primary/30 to-transparent" />
+                  <div className="hidden md:block absolute top-24 left-[60%] w-[40%] h-0.5 bg-linear-to-r from-primary/30 to-transparent" />
                 )}
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
@@ -302,11 +302,10 @@ export default function LandingPage() {
             {TIERS.map((tier) => (
               <Card
                 key={tier.id}
-                className={`border-border/50 bg-card ${
-                  tier.featured
+                className={`border-border/50 bg-card ${tier.featured
                     ? 'md:scale-105 ring-2 ring-primary/50 shadow-lg'
                     : 'hover:border-primary/50 transition-colors'
-                }`}
+                  }`}
               >
                 <CardHeader>
                   <div className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary w-fit">
@@ -320,7 +319,7 @@ export default function LandingPage() {
                   <div className="space-y-3 border-t border-border/50 pt-6">
                     {tier.highlights.map((item) => (
                       <div key={item} className="flex items-start gap-3">
-                        <span className="mt-1 h-2 w-2 rounded-full bg-primary flex-shrink-0" />
+                        <span className="mt-1 h-2 w-2 rounded-full bg-primary shrink-0" />
                         <span className="text-sm">{item}</span>
                       </div>
                     ))}
@@ -332,7 +331,7 @@ export default function LandingPage() {
         </section>
 
         {/* CTA Section */}
-        <section className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-primary/2 to-background p-8 md:p-16">
+        <section className="rounded-2xl border border-primary/20 bg-linear-to-br from-primary/5 via-primary/2 to-background p-8 md:p-16">
           <div className="space-y-6 text-center">
             <div className="space-y-4">
               <h2 className="text-4xl font-bold tracking-tight md:text-5xl">Ready to onboard?</h2>

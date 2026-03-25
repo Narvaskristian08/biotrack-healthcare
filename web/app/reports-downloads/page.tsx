@@ -241,10 +241,10 @@ function buildChartCommands(points: HeartRatePoint[], x: number, y: number, widt
     points.length === 0
       ? ['No heart-rate values available for charting yet.']
       : [
-          `Heart-rate chart range: ${Math.round(minRaw)} to ${Math.round(maxRaw)} bpm`,
-          `Latest charted value: ${latest !== null ? `${Math.round(latest)} bpm` : 'N/A'}`,
-          `Data points plotted: ${points.length}`,
-        ];
+        `Heart-rate chart range: ${Math.round(minRaw)} to ${Math.round(maxRaw)} bpm`,
+        `Latest charted value: ${latest !== null ? `${Math.round(latest)} bpm` : 'N/A'}`,
+        `Data points plotted: ${points.length}`,
+      ];
 
   return { commands, legendLines };
 }

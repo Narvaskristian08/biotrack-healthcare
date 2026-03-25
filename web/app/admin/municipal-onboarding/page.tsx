@@ -306,7 +306,7 @@ export default function MunicipalOnboardingAdminPage() {
             <Label htmlFor="decision-note">Decision note (optional)</Label>
             <textarea
               id="decision-note"
-              className="min-h-[110px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="min-h-27.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               placeholder="Add a brief note for the applicant (optional)."
               value={decisionNote}
               onChange={(event) => setDecisionNote(event.target.value)}

@@ -72,7 +72,7 @@ export default function PolicyModal() {
   return (
     <Dialog open={mode !== null} onOpenChange={(open) => setMode(open ? activeMode : null)}>
       <DialogContent className="w-full max-w-4xl overflow-hidden rounded-2xl border border-[#c7e6d7] bg-white p-0 shadow-[0_30px_70px_rgba(8,35,25,0.24)]">
-        <div className="border-b border-[#d9ede2] bg-gradient-to-r from-[#effaf4] to-[#ffffff] px-6 py-5">
+        <div className="border-b border-[#d9ede2] bg-linear-to-r from-[#effaf4] to-[#ffffff] px-6 py-5">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
               <DialogTitle className="text-xl text-[#15392b]">
@@ -95,22 +95,20 @@ export default function PolicyModal() {
             <button
               type="button"
               onClick={() => setMode('privacy')}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
-                activeMode === 'privacy'
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${activeMode === 'privacy'
                   ? 'bg-[#0f8f60] text-white'
                   : 'text-[#567368] hover:bg-[#f3faf6]'
-              }`}
+                }`}
             >
               Privacy Policy
             </button>
             <button
               type="button"
               onClick={() => setMode('terms')}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
-                activeMode === 'terms'
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${activeMode === 'terms'
                   ? 'bg-[#0f8f60] text-white'
                   : 'text-[#567368] hover:bg-[#f3faf6]'
-              }`}
+                }`}
             >
               Terms of Service
             </button>

@@ -279,19 +279,19 @@ export default function AdminLogsPage() {
               ) : null}
               {!loading
                 ? (
-                    <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-                      {highlightedLogs.map((log) => (
-                        <div key={log._id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium">{log.action}</p>
-                            <Badge variant={log.outcome === 'failure' ? 'destructive' : 'secondary'}>{log.outcome}</Badge>
-                          </div>
-                          <p className="mt-1 text-xs text-muted-foreground">{new Date(log.createdAt).toLocaleString()}</p>
-                          <p className="mt-2 text-sm text-slate-700">{log.reason || 'No reason provided.'}</p>
+                  <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+                    {highlightedLogs.map((log) => (
+                      <div key={log._id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">{log.action}</p>
+                          <Badge variant={log.outcome === 'failure' ? 'destructive' : 'secondary'}>{log.outcome}</Badge>
                         </div>
-                      ))}
-                    </div>
-                  )
+                        <p className="mt-1 text-xs text-muted-foreground">{new Date(log.createdAt).toLocaleString()}</p>
+                        <p className="mt-2 text-sm text-slate-700">{log.reason || 'No reason provided.'}</p>
+                      </div>
+                    ))}
+                  </div>
+                )
                 : null}
             </CardContent>
           </Card>

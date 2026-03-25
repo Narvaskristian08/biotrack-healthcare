@@ -22,7 +22,7 @@ const sections = [
 export default function PrivacyPage() {
   return (
     <div className="mx-auto w-full max-w-4xl space-y-5 p-6 md:p-8">
-      <section className="rounded-2xl border border-[#c7e6d7] bg-gradient-to-r from-[#effaf4] to-white px-6 py-5">
+      <section className="rounded-2xl border border-[#c7e6d7] bg-linear-to-r from-[#effaf4] to-white px-6 py-5">
         <h1 className="text-3xl font-bold text-[#123527]">Privacy Policy</h1>
         <p className="mt-1 text-sm text-[#5a766c]">Last updated: February 16, 2026</p>
       </section>

@@ -266,11 +266,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [isMunicipalAdmin, municipalTierId])
   const filteredNavigationGroups = isMunicipalAdmin
     ? navigationGroups
-        .map((group) => ({
-          ...group,
-          items: group.items.filter((item) => !municipalHiddenPaths.has(item.href)),
-        }))
-        .filter((group) => group.items.length > 0)
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => !municipalHiddenPaths.has(item.href)),
+      }))
+      .filter((group) => group.items.length > 0)
     : navigationGroups
   const navigationItems = filteredNavigationGroups.flatMap((group) => group.items)
   const roleLabel = getRoleLabel(role)
@@ -313,11 +313,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               href={homeHref}
               className="flex items-center gap-3 rounded-xl border border-sidebar-border/70 bg-background/70 px-3 py-3 shadow-sm transition-colors hover:bg-background"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-primary to-accent shadow-sm">
                 <Heart className="h-6 w-6 text-white" />
               </div>
               <div className="flex flex-col">
-                <span className="font-bold text-lg bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                <span className="font-bold text-lg bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
                   BioTrack
                 </span>
                 <span className="text-xs text-muted-foreground">{roleLabel}</span>
@@ -464,11 +464,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       variant="ghost"
                       className="h-10 rounded-xl border border-border/70 bg-background px-2 pr-3 shadow-sm hover:bg-muted/40"
                     >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-accent/20">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-primary/20 to-accent/20">
                         <span className="text-xs font-semibold text-primary">{displayInitials}</span>
                       </div>
                       <div className="hidden sm:flex min-w-0 flex-col items-start text-left">
-                        <span className="max-w-[10rem] truncate text-sm font-medium">{displayName}</span>
+                        <span className="max-w-40 truncate text-sm font-medium">{displayName}</span>
                         <span className="text-xs text-muted-foreground">{pageTitle}</span>
                       </div>
                     </Button>
@@ -501,7 +501,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </header>
 
           {/* Page Content */}
-          <main className="flex-1 overflow-auto bg-gradient-to-br from-background to-muted/30">
+          <main className="flex-1 overflow-auto bg-linear-to-br from-background to-muted/30">
             <div className="p-6 md:p-8">{children}</div>
           </main>
         </div>

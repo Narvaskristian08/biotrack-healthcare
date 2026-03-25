@@ -389,17 +389,17 @@ export default function AdminDashboardPage() {
             ) : null}
             {!loading && !monitoringLocked
               ? recentSecurity.map((log) => (
-                  <div key={log._id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium">{log.action}</p>
-                      <span className={`text-xs font-semibold uppercase ${log.outcome === 'failure' ? 'text-red-600' : 'text-emerald-600'}`}>
-                        {log.outcome}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{formatTimestamp(log.createdAt)}</p>
-                    <p className="mt-2 text-sm text-slate-700">{log.reason || 'No reason provided.'}</p>
+                <div key={log._id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium">{log.action}</p>
+                    <span className={`text-xs font-semibold uppercase ${log.outcome === 'failure' ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {log.outcome}
+                    </span>
                   </div>
-                ))
+                  <p className="mt-1 text-xs text-muted-foreground">{formatTimestamp(log.createdAt)}</p>
+                  <p className="mt-2 text-sm text-slate-700">{log.reason || 'No reason provided.'}</p>
+                </div>
+              ))
               : null}
           </CardContent>
         </Card>

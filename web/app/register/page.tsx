@@ -70,15 +70,15 @@ function buildHealthCenterSecondaryLabel(center: HealthCenter): string {
 
 function RegisterHeroPanel() {
   return (
-    <aside className="relative hidden overflow-hidden bg-gradient-to-br from-[#33c481] via-[#1fae6e] to-[#0f7a4e] lg:flex lg:items-center lg:justify-center lg:p-12">
+    <aside className="relative hidden overflow-hidden bg-linear-to-br from-[#33c481] via-[#1fae6e] to-[#0f7a4e] lg:flex lg:items-center lg:justify-center lg:p-12">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_12%,rgba(255,255,255,0.26),transparent_36%),radial-gradient(circle_at_86%_86%,rgba(255,255,255,0.14),transparent_46%)]" />
       <img
         src="/assets/sdg/sdg-wheel-official.svg"
         alt="Official UN SDG wheel"
-        className="pointer-events-none absolute -right-24 top-8 h-[24rem] w-[24rem] opacity-20 auth-wheel-spin"
+        className="pointer-events-none absolute -right-24 top-8 h-96 w-[24rem] opacity-20 auth-wheel-spin"
       />
 
-      <div className="relative z-10 w-full max-w-[560px] auth-enter-right">
+      <div className="relative z-10 w-full max-w-140 auth-enter-right">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-white/90 backdrop-blur-sm">
           <ShieldCheck className="h-3.5 w-3.5" />
           Official Health Goal Artwork
@@ -349,9 +349,9 @@ export default function RegisterPage() {
     <div className="h-screen overflow-hidden bg-[#eef8f2]">
       <div className="grid h-full lg:grid-cols-2">
         <section className="flex h-full items-center justify-center px-6 py-6 sm:px-10 lg:px-16 xl:px-20">
-          <div className="flex h-full w-full max-w-[560px] flex-col auth-enter-left">
+          <div className="flex h-full w-full max-w-140 flex-col auth-enter-left">
             <Link href="/" className="mb-6 inline-flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#12935f] to-[#33c481] text-white shadow-lg shadow-[#12935f]/30">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-[#12935f] to-[#33c481] text-white shadow-lg shadow-[#12935f]/30">
                 <Heart className="h-6 w-6" />
               </span>
               <span className="text-[1.95rem] font-semibold tracking-tight text-[#111f1a]">BioTrack</span>
@@ -374,7 +374,7 @@ export default function RegisterPage() {
 
               <div className="mt-4 rounded-2xl border border-[#c7e6d7] bg-white p-4 shadow-sm">
                 <div className="mb-3 h-2.5 w-full overflow-hidden rounded-full bg-[#e6f4ed]">
-                  <div className="h-full rounded-full bg-gradient-to-r from-[#12935f] to-[#22b573] transition-all duration-500" style={{ width: progressWidth }} />
+                  <div className="h-full rounded-full bg-linear-to-r from-[#12935f] to-[#22b573] transition-all duration-500" style={{ width: progressWidth }} />
                 </div>
                 <div className="flex items-center justify-between gap-2 text-xs">
                   {STEP_LABELS.map((label, index) => {
@@ -446,7 +446,7 @@ export default function RegisterPage() {
                               }
                             />
                           </SelectTrigger>
-                          <SelectContent className="z-[140] max-h-72">
+                          <SelectContent className="z-140 max-h-72">
                             {healthCentersForDisplay.map((hc) => (
                               <SelectItem key={hc._id} value={hc._id}>
                                 {buildHealthCenterPrimaryLabel(hc)}

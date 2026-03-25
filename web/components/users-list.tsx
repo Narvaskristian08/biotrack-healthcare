@@ -40,9 +40,8 @@ export default function UsersList() {
               <td className="py-4">
                 <Badge
                   variant={user.status === "Alert" ? "destructive" : "default"}
-                  className={`${
-                    user.status === "Alert" ? "bg-destructive/20 text-destructive" : "bg-primary/20 text-primary"
-                  }`}
+                  className={`${user.status === "Alert" ? "bg-destructive/20 text-destructive" : "bg-primary/20 text-primary"
+                    }`}
                 >
                   {user.status}
                 </Badge>
