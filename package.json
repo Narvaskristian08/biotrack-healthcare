@@ -1,0 +1,44 @@
+{
+    "name":  "biotrack-healthcare",
+    "version":  "1.0.0",
+    "private":  true,
+    "main":  "desktop/main.cjs",
+    "workspaces":  [
+                       "backend",
+                       "web"
+                   ],
+    "scripts":  {
+                    "dev:backend":  "npm --workspace backend run dev",
+                    "start:backend":  "npm --workspace backend run start",
+                    "dev:web":  "npm --workspace web run dev",
+                    "build:web":  "npm --workspace web run build",
+                    "start:web":  "npm --workspace web run start",
+                    "desktop":  "node desktop/launch.cjs",
+                    "dev:desktop:electron":  "wait-on tcp:127.0.0.1:3001 && node desktop/launch.cjs",
+                    "dev:desktop":  "concurrently -k -n backend,web,electron -c cyan,green,yellow \"npm run dev:backend\" \"npm --workspace web run dev -- --hostname 127.0.0.1 --port 3001\" \"npm run dev:desktop:electron\"",
+                    "desktop:icon":  "node desktop/scripts/generate-ico.cjs",
+                    "desktop:build:win":  "npm run desktop:icon && node desktop/scripts/package-win.cjs",
+                    "desktop:icon:mac":  "node desktop/scripts/generate-icns.cjs",
+                    "desktop:build:mac":  "npm run desktop:icon:mac && node desktop/scripts/package-mac.cjs",
+                    "desktop:icons":  "npm run desktop:icon && npm run desktop:icon:mac",
+                    "desktop:installer":  "npm run desktop:icons && node desktop/scripts/build-installer.cjs",
+                    "desktop:installer:win":  "npm run desktop:icons && node desktop/scripts/build-installer.cjs win",
+                    "desktop:installer:mac":  "npm run desktop:icons && node desktop/scripts/build-installer.cjs mac",
+                    "zap:web":  "bash scripts/zap-baseline.sh http://127.0.0.1:3001 docs/zap zap-web-baseline",
+                    "zap:api":  "bash scripts/zap-baseline.sh http://127.0.0.1:3000/api docs/zap zap-api-baseline",
+                    "zap:report":  "bash scripts/zap-report.sh"
+                },
+    "devDependencies":  {
+                            "@electron/get":  "^2.0.3",
+                            "@electron/packager":  "^18.3.6",
+                            "concurrently":  "^9.1.2",
+                            "electron":  "^30.0.9",
+                            "electron-builder":  "^24.13.3",
+                            "png-to-ico":  "^2.1.8",
+                            "png2icons":  "^2.0.1",
+                            "resedit":  "^2.0.3",
+                            "sharp":  "^0.34.4",
+                            "wait-on":  "^8.0.1"
+                        },
+    "type":  "module"
+}

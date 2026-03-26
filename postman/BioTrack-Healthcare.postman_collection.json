@@ -1,0 +1,232 @@
+{
+  "info": {
+    "name": "BioTrack Healthcare API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Admin - Register (bootstrap)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/admin/register", "host": ["{{baseUrl}}"], "path": ["api", "admin", "register"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@biotrack.local\",\n  \"password\": \"AdminStrongPassword123!\"\n}\n"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json && json.accessToken) { pm.environment.set('ADMIN_TOKEN', json.accessToken); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/admin/login", "host": ["{{baseUrl}}"], "path": ["api", "admin", "login"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@biotrack.local\",\n  \"password\": \"AdminStrongPassword123!\"\n}\n"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json && json.accessToken) { pm.environment.set('ADMIN_TOKEN', json.accessToken); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Create HealthCenter",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{ADMIN_TOKEN}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/api/admin/healthcenters", "host": ["{{baseUrl}}"], "path": ["api", "admin", "healthcenters"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"sanfabian.provider@example.com\",\n  \"password\": \"StrongPassword123!\",\n  \"status\": \"active\",\n  \"barangayName\": \"Longos Barangay\",\n  \"cityMunicipality\": \"San Fabian\",\n  \"healthCenterName\": \"Longos Health Center\",\n  \"officialContactInfo\": \"09171234567\",\n  \"latitude\": 16.1554,\n  \"longitude\": 120.4128,\n  \"assignedHealthcareProviders\": [\n    { \"name\": \"Nurse 1\" }\n  ]\n}\n"
+        }
+      }
+    },
+    {
+      "name": "HealthCenter - Register",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/healthcenters/register", "host": ["{{baseUrl}}"], "path": ["api", "healthcenters", "register"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"sanfabiam@gmail.com\",\n  \"password\": \"StrongPassword123!\",\n  \"name\": \"San Fabian Barangay Health Center\",\n  \"holderName\": \"Dr. John Doe\",\n  \"address\": \"San Fabian, Pangasinan\",\n  \"contactNumber\": \"09171234567\"\n}\n"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json && json.accessToken) { pm.environment.set('HEALTHCENTER_TOKEN', json.accessToken); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "HealthCenter - Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/healthcenters/login", "host": ["{{baseUrl}}"], "path": ["api", "healthcenters", "login"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"sanfabian.provider@example.com\",\n  \"password\": \"StrongPassword123!\"\n}\n"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json && json.accessToken) { pm.environment.set('HEALTHCENTER_TOKEN', json.accessToken); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Session - Start (Shared)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{HEALTHCENTER_TOKEN}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/api/sessions/start", "host": ["{{baseUrl}}"], "path": ["api", "sessions", "start"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{}\n"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json && json.sessionToken) { pm.environment.set('SESSION_TOKEN', json.sessionToken); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Patient - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{SESSION_TOKEN}}" },
+          { "key": "X-Barangay", "value": "San Fabian" },
+          { "key": "X-Actor-Name", "value": "Nurse Ana" }
+        ],
+        "url": { "raw": "{{baseUrl}}/api/patients", "host": ["{{baseUrl}}"], "path": ["api", "patients"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mrn\": \"SF-0001\",\n  \"lastName\": \"Dela Cruz\",\n  \"firstName\": \"Juan\",\n  \"middleInitial\": \"D\",\n  \"email\": \"juan.cruz@example.com\",\n  \"password\": \"PatientPassword123!\",\n  \"birthDate\": \"1992-03-10\",\n  \"sex\": \"male\",\n  \"address\": \"Purok 2, San Fabian\",\n  \"contactNumber\": \"09990001111\"\n}\n"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json && json.patient && json.patient._id) { pm.environment.set('PATIENT_ID', json.patient._id); }",
+              "if (json && json.patient && json.patient.id) { pm.environment.set('PATIENT_ID', json.patient.id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Patient - List",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{SESSION_TOKEN}}" }, { "key": "X-Barangay", "value": "San Fabian" }],
+        "url": { "raw": "{{baseUrl}}/api/patients", "host": ["{{baseUrl}}"], "path": ["api", "patients"] }
+      }
+    },
+    {
+      "name": "PatientRecord - Add",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{SESSION_TOKEN}}" },
+          { "key": "X-Barangay", "value": "San Fabian" },
+          { "key": "X-Actor-Name", "value": "Nurse Ana" }
+        ],
+        "url": { "raw": "{{baseUrl}}/api/patients/{{PATIENT_ID}}/records", "host": ["{{baseUrl}}"], "path": ["api", "patients", "{{PATIENT_ID}}", "records"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"consultation\",\n  \"data\": {\n    \"complaint\": \"Fever and cough\",\n    \"temperatureC\": 38.2,\n    \"assessment\": \"URI\",\n    \"plan\": \"Paracetamol, fluids, rest\"\n  },\n  \"blockchain\": { \"enabled\": true }\n}\n"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json && json.record && json.record._id) { pm.environment.set('RECORD_ID', json.record._id); }",
+              "if (json && json.record && json.record.id) { pm.environment.set('RECORD_ID', json.record.id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PatientRecord - Verify Integrity",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{SESSION_TOKEN}}" }],
+        "url": { "raw": "{{baseUrl}}/api/patients/{{PATIENT_ID}}/records/{{RECORD_ID}}/verify", "host": ["{{baseUrl}}"], "path": ["api", "patients", "{{PATIENT_ID}}", "records", "{{RECORD_ID}}", "verify"] }
+      }
+    },
+    {
+      "name": "AuditLogs - List",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{SESSION_TOKEN}}" }, { "key": "X-Barangay", "value": "San Fabian" }],
+        "url": { "raw": "{{baseUrl}}/api/auditlogs", "host": ["{{baseUrl}}"], "path": ["api", "auditlogs"] }
+      }
+    },
+    {
+      "name": "Session - Logout",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{SESSION_TOKEN}}" }],
+        "url": { "raw": "{{baseUrl}}/api/sessions/logout", "host": ["{{baseUrl}}"], "path": ["api", "sessions", "logout"] }
+      }
+    }
+  ]
+}
+

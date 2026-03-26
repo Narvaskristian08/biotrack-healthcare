@@ -1,0 +1,100 @@
+# =========================
+# Dependencies
+# =========================
+node_modules/
+.pnpm-debug.log*
+
+# =========================
+# Environment files
+# =========================
+.env
+.env*
+!.env.example
+!**/.env.example
+
+# =========================
+# Logs
+# =========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# Build / Production
+# =========================
+build/
+.next/
+out/
+coverage/
+dist-desktop/
+dist-installer/
+playwright-report/
+test-results/
+docs/zap/
+
+# Desktop build temp/generated assets
+desktop/assets/icon.iconset/
+desktop/assets/.iconset-tmp/
+
+# =========================
+# Next.js
+# =========================
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# =========================
+# Flutter / Dart
+# =========================
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+
+# =========================
+# Android
+# =========================
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# =========================
+# IDE / Editors
+# =========================
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+.atom/
+
+# =========================
+# System Files
+# =========================
+.DS_Store
+*.swp
+.history
+.svn/
+.swiftpm/
+.build/
+.buildlog/
+migrate_working_dir/
+
+# =========================
+# Misc
+# =========================
+postman/
+*.class
+*.pyc
+app.*.symbols
+app.*.map.json
+.vercel
+.codex-run/
+.mongo-data/
+backups/
+backend/backups/
+backend/uploads/

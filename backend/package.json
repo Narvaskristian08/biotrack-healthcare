@@ -1,0 +1,53 @@
+{
+  "name": "biotrack-healthcare-backend",
+  "version": "1.0.0",
+  "description": "BioTrack Healthcare backend",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "ai:timing": "node scripts/ai-track-timing.js",
+    "ai:evaluate": "node scripts/ai-evaluate.mjs",
+    "blockchain:deploy": "node scripts/deploy-registries.mjs",
+    "blockchain:repair": "node scripts/repair-blockchain-state.mjs",
+    "test": "node --test test/**/*.test.js",
+    "gas:benchmark": "node scripts/gas-benchmark.mjs",
+    "test:pack": "node scripts/performance-security-pack.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dev-jsc0f1eld/biotrack-healthcare.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/dev-jsc0f1eld/biotrack-healthcare/issues"
+  },
+  "homepage": "https://github.com/dev-jsc0f1eld/biotrack-healthcare#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.4",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^7.5.1",
+    "ethers": "^6.16.0",
+    "express": "^5.2.1",
+    "google-auth-library": "^9.15.1",
+    "helmet": "^8.1.0",
+    "hpp": "^0.2.3",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.1.5",
+    "nodemailer": "^8.0.1",
+    "openai": "^6.18.0",
+    "twilio": "^5.12.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "ganache": "^7.9.2",
+    "nodemon": "^3.1.11",
+    "solc": "^0.8.30"
+  }
+}

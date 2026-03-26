@@ -1,0 +1,24 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    command: sleep infinity
+    depends_on:
+      - mongo
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    volumes:
+      - ..:/workspaces/biotrack-healthcare:cached
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - biotrack-mongo-data:/data/db
+
+volumes:
+  biotrack-mongo-data:
